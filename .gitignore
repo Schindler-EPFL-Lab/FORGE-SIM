@@ -1,0 +1,7 @@
+*.egg-info
+__pycache__/
+config.json
+/.venv
+mlruns/
+outputs/
+run_experiment/

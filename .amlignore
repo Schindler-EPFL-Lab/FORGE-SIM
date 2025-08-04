@@ -1,0 +1,9 @@
+.egg-info
+__pycache__/
+.git
+.vscode
+/tests
+/data
+.venv
+/outputs
+/mlruns

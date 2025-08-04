@@ -1,0 +1,296 @@
+"""
+This script assumes that shape optimization has already been performed and
+takes in an optimized mesh. It proceeds to inpaint thermal information onto the
+reconstructed mesh vertices using the thermal images from the ThermoScenes scene.
+"""
+
+import sys
+from dataclasses import dataclass
+from pathlib import Path
+
+import mitsuba as mi
+import mlflow
+import tyro
+
+# This is a hack so that the script work with azure sdkv2.
+# The root folder is _not_ added to the python path as it was in sdkv1
+# and thus, local imports of rebel_nerf are not found.
+# Remove when https://github.com/Azure/azure-sdk-for-python/issues/29724 is fixed
+sys.path.append("./src/rebel-shape")
+sys.path.append("./dataclasses-reverse-cli")
+
+from dataclasses_reverse_cli.reverse_cli import ReverseCli
+
+from rebel_shape import logger
+from rebel_shape.data_processing.thermoscenes_loader import ThermoScenesLoader
+from rebel_shape.loss_evaluators.image_loss_l1 import ImageLossL1
+from rebel_shape.plugin_wrappers.diffuse_bsdf import DiffuseBSDF
+from rebel_shape.plugin_wrappers.prb_integrator import GuidingOptions, PRBIntegrator
+from rebel_shape.plugin_wrappers.sampler import Sampler
+from rebel_shape.property_optimizers.attribute_texture_optimizer import (
+    AttributeTextureOptimizer,
+)
+from rebel_shape.scene_optimizers.optimization_events import OptimizationEvents
+from rebel_shape.scene_optimizers.scene_adam_sequential import SceneAdamSequential
+from rebel_shape.schedulers.constant_scheduler import ConstantScheduler
+
+
+@dataclass
+class ThermalInpaintingParameters(ReverseCli):
+    """
+    Parameters used for inpainting thermal information onto mesh vertices.
+
+    For details about the name "inpainting", see the `inpaint_thermal_information`
+    function.
+    """
+
+    thermoscenes_scene_path: Path
+    """
+    Path to the ThermoScenes scene that is optimized. The thermal image foreground
+    does not have to be extracted.
+    """
+    mesh_path: Path
+    """Path to the reconstructed mesh that will receive the thermal vertex data."""
+
+    texture_projection_steepness: float = 1.0
+    """Steepness of the sigmoid projection for texture optimization"""
+    continuous_samples: int = 16
+    """Number of samples per pixel used for continuous derivatives"""
+    optimization_iterations: int = 20
+    """How many times all images in the dataset are used for optimization"""
+    texture_learning_rate: float = 0.01
+    """Adam learning rate for texture"""
+    texture_batch_size: int = 1
+    """Number of images used for texture gradient computation"""
+
+    output_folder: Path = Path("./outputs/")
+    """Where to save the model and outputs (created if it does not exist)"""
+    num_of_images_to_save: int = 6
+    """
+    Number of images to save after each optimization step. The images are taken from 
+    the evaluation set.
+    """
+
+    use_gpu: bool = True
+    """
+    Whether to use GPU for rendering or not. Note that the compute instance
+    must have GPU support for this to work. For local testing, set to False.
+    """
+
+    def __post_init__(self) -> None:
+        if self.texture_projection_steepness <= 0.0:
+            raise ValueError(
+                "`texture_projection_steepness` must be a positive real number."
+            )
+
+        if self.texture_projection_steepness <= 0.0:
+            raise ValueError(
+                "`texture_projection_steepness` must be a positive real number."
+            )
+        if self.continuous_samples < 1:
+            raise ValueError("`continuous_samples` must be a positive integer.")
+        if self.optimization_iterations < 1:
+            raise ValueError("`first_pass_iterations` must be a positive integer.")
+        if self.texture_learning_rate < 0.0:
+            raise ValueError("`texture_learning_rate` must be non-negative.")
+        if self.texture_batch_size < 1:
+            raise ValueError("`batch_size` must be a positive integer")
+        if self.num_of_images_to_save < 1:
+            raise ValueError("`num_of_images_to_save` must be a positive integer.")
+
+
+def initialize_scene(
+    continuous_samples: int,
+    thermoscenes_scene_path: Path,
+    mesh_path: Path,
+) -> tuple[
+    "mi.Scene",
+    list["mi.Sensor"],
+    list["mi.TensorXf"],
+    list["mi.Sensor"],
+    list["mi.TensorXf"],
+]:
+    """
+    Creates and loads Mitsuba dictionary that represents the scene, as well as
+    providing the reference images and sensor views.
+
+    `thermoscenes_scene_path` is a `Path` to a scene that can be loaded
+    with `ThermoScenesLoader`. `mesh_path` specifies a path to the mesh
+    file that will receive the thermal vertex data. `continuous_samples` is the number
+    of samples per pixel used for continuous derivatives.
+
+    Thermal information is stored in mesh vertices, so the resolution is directly
+    tied to the number of triangles.
+
+    The scene is expected to be grayscale (thermal information is a single channel
+    value) so the sensors returned by method have a luminosity pixel format.
+
+    :returns: A tuple containing:
+
+        - `scene`: The Mitsuba scene dictionary representing the scene.
+        - `train_sensors`: A list of Mitsuba sensors for training cameras.
+        - `train_images`: A list of training images loaded from ThermoScenes.
+        - `evaluation_sensors`: A list of Mitsuba sensors for evaluation cameras.
+        - `evaluation_images`: A list of evaluation images loaded from ThermoScenes.
+
+    """
+
+    integrator = PRBIntegrator(
+        max_bounces=2,
+        bounces_without_russian_roulette=2,
+        spp_continuous=continuous_samples,
+        spp_projective=1,
+        spp_indirect=1,
+        guiding=GuidingOptions.NONE,
+    )
+
+    mlflow.log_param("spp_continuous", continuous_samples)
+    mlflow.log_param("spp_projective", 1)
+    mlflow.log_param("spp_indirect", 1)
+
+    sampler = Sampler(type=Sampler.Type.INDEPENDENT, sample_count=continuous_samples)
+
+    loader = ThermoScenesLoader(
+        scene_path=thermoscenes_scene_path, sensor_sampler=sampler
+    )
+
+    mesh = mi.load_dict(
+        {
+            "type": "ply",
+            "filename": str(mesh_path),
+            "bsdf": DiffuseBSDF(
+                reflectance=DiffuseBSDF.Albedo(albedo=0.0),
+            ).mitsuba_dict,
+            "emitter": {
+                "type": "area",
+                "radiance": {
+                    "type": "mesh_attribute",
+                    "name": "vertex_temperature",
+                },
+            },
+        },
+    )
+
+    # 1 value per vertex (we are in the thermal domain)
+    attribute_size = mesh.vertex_count()
+    mesh.add_attribute("vertex_temperature", 1, [0.5] * attribute_size)
+
+    scene_dict = {"type": "scene", "integrator": integrator.mitsuba_dict, "shape": mesh}
+    scene_source: "mi.Scene" = mi.load_dict(scene_dict)
+
+    train_sensors: list["mi.Sensor"] = [
+        mi.load_dict(camera.mitsuba_dict) for camera in loader.train_cameras_thermal
+    ]
+    eval_sensors: list["mi.Sensor"] = [
+        mi.load_dict(camera.mitsuba_dict) for camera in loader.eval_cameras_thermal
+    ]
+
+    return (
+        scene_source,
+        train_sensors,
+        loader.train_images_thermal,
+        eval_sensors,
+        loader.eval_images_thermal,
+    )
+
+
+def inpaint_thermal_information(params: ThermalInpaintingParameters) -> None:
+    """
+    Assigns thermal values to vertices of the input mesh.
+
+    The function first loads and prepares the mesh by adding a thermal attribute
+    to the vertices, then optimizes the thermal data using the provided images
+    as reference. The thermal information is stored directly in mesh vertices as
+    a temperature value per vertex.
+
+    In the spirit of the thermal modality, the temperature is simulated as a glow
+    (area light) and the background is set to black. The optimization is done using
+    the `TextureOptimizer` class. Word "inpainting" signifies that the
+    thermal information is not used during mesh optimization, but is "painted"
+    onto the final mesh.
+
+    Optionally, images and meshes can be saved to `params.output_folder`. The path
+    should be a directory where the images will be saved. If the directory does not
+    exist, it will be created, while if a `None` value is provided, nothing is saved.
+
+    For details on available parameters, see `ThermalInpaintingParameters`.
+
+    :raises ValueError: If `params.thermoscenes_scene_path` is not a valid path, or
+        it is not a directory.
+    """
+    if not params.thermoscenes_scene_path.exists():
+        raise ValueError(f"Path {params.thermoscenes_scene_path} does not exist.")
+    if not params.thermoscenes_scene_path.is_dir():
+        raise ValueError(f"Path {params.thermoscenes_scene_path} is not a directory.")
+
+    if params.use_gpu:
+        mi.set_variant("cuda_ad_mono")
+        logger.info("Using the GPU for rendering.")
+    else:
+        mi.set_variant("llvm_ad_mono")
+        logger.info("Using the CPU for rendering.")
+
+    # Initialize the scene, reference images and cameras
+    scene_source, sensors, ref_images, eval_sensors, eval_images = initialize_scene(
+        continuous_samples=params.continuous_samples,
+        thermoscenes_scene_path=params.thermoscenes_scene_path,
+        mesh_path=params.mesh_path,
+    )
+
+    temperature_scheduler = ConstantScheduler(
+        learning_rate=params.texture_learning_rate
+    )
+
+    optimizer = AttributeTextureOptimizer(
+        scene=scene_source,
+        scene_params=mi.traverse(scene_source),
+        optimization_events=OptimizationEvents(),
+        shape_key="shape",
+        attribute_key="vertex_temperature",
+        texture_scheduler=temperature_scheduler,
+        texture_loss=ImageLossL1(),
+    )
+
+    save_path = (
+        params.output_folder / "Initial_state.png"
+        if params.output_folder is not None
+        else None
+    )
+    optimizer.show_comparison_with_reference(
+        ref_images=eval_images,
+        sensors=eval_sensors,
+        samples_per_pixel=params.continuous_samples * 4,
+        save_path=save_path,
+    )
+    logger.info("Rendered initial state.")
+
+    optimizer.optimize(
+        sensors=sensors,
+        ref_images=ref_images,
+        scene_optimizer=SceneAdamSequential(
+            batch_size=params.texture_batch_size, uniform=False
+        ),
+        num_iters=params.optimization_iterations,
+        views_to_render=eval_sensors[: params.num_of_images_to_save],
+        save_directory_path=params.output_folder,
+    )
+    logger.info("Finished optimization, rendering final state.")
+
+    optimizer.show_comparison_with_reference(
+        ref_images=ref_images,
+        sensors=sensors,
+        samples_per_pixel=params.continuous_samples * 4,
+        save_path=params.output_folder / "Final_comparison.png",
+    )
+
+    # Save the final state of the scene
+    optimizer.scene.shapes()[0].write_ply(
+        str(params.output_folder / "thermal_mesh.ply")
+    )
+
+
+if __name__ == "__main__":
+    parameters = tyro.cli(ThermalInpaintingParameters)
+    mlflow.log_params(parameters.loggable_dict)
+
+    inpaint_thermal_information(params=parameters)
