@@ -12,7 +12,7 @@ from rebel_shape.loss_evaluators.image_loss_ssim import ImageLossSSIM
 
 class TestImageLossFunctions(unittest.TestCase):
     def setUp(self):
-        mi.set_variant("llvm_ad_rgb")
+        mi.set_variant("scalar_rgb")
 
         self.image_1 = mi.TensorXf([[[0.1], [0.2]], [[0.3], [0.4]]])
         self.image_2 = mi.TensorXf([[[0.0], [0.4]], [[0.3], [0.8]]])
