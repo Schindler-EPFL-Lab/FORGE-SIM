@@ -1,0 +1,40 @@
+name: Python application
+
+on:
+  workflow_dispatch:
+  pull_request:
+    types: [ labeled ]
+
+jobs:
+  build:
+    name: Python Build
+    if: github.event_name == 'workflow_dispatch' || github.event.label.name == 'trigger_pipeline'
+    runs-on: ubuntu-24.04
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - uses: https://github.com/astral-sh/ruff-action@v3
+
+      - name: Install uv
+        uses: https://github.com/astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+          prune-cache: false
+          cache-dependency-glob: "uv.lock"
+
+      - name: "Set up Python"
+        uses: actions/setup-python@v5
+        with:
+          python-version-file: ".python-version"
+
+      - name: Install the project
+        run: |
+          uv venv && \
+          uv pip install torch torchvision setuptools && \
+          uv sync --all-extras
+
+      - name: Run tests
+        run: uv run --frozen python -m unittest discover tests
