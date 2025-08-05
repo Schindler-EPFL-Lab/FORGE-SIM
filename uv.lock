@@ -4141,6 +4141,7 @@ dependencies = [
     { name = "jsonpickle" },
     { name = "matplotlib" },
     { name = "mitsuba" },
+    { name = "tyro" },
 ]
 
 [package.optional-dependencies]
@@ -4173,6 +4174,7 @@ requires-dist = [
     { name = "matplotlib", specifier = ">=3.10.0" },
     { name = "mitsuba", specifier = ">=3.6.4" },
     { name = "segment-anything", marker = "extra == 'extraction'", git = "https://github.com/facebookresearch/segment-anything?rev=dca509fe793f601edb92606367a655c15ac00fdf" },
+    { name = "tyro", specifier = ">=0.9.27" },
 ]
 provides-extras = ["extraction", "azure", "azure-local"]
 
