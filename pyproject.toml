@@ -14,6 +14,7 @@ dependencies = [
     "cholespy>=2.1.0",
     "gpytoolbox>=0.3.3",
     "jsonpickle>=4.0.2",
+    "dataclasses-reverse-cli>=0.0.5",
 ]
 
 [tool.uv]
