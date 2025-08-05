@@ -30,4 +30,5 @@
         "info",
         "hint"
     ],
+    "git.inputValidation": true,
 }
