@@ -16,7 +16,7 @@ from rebel_shape.splines.bspline_patch import BSplinePatch
 
 class TestCompositeSplineSurface(unittest.TestCase):
     def setUp(self):
-        mi.set_variant("scalar_rgb")
+        mi.set_variant("llvm_ad_rgb")
         # Use BSplinePatch for testing, not mocks, too complex to mock properly
         # Unit square with 1 knot span in each direction = Bezier patch
         self.patch1 = BSplinePatch.unit_square(

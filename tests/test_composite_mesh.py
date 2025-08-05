@@ -11,7 +11,7 @@ from rebel_shape.meshing.rectangular_mesh import RectangularMesh
 
 class TestCompositeMesh(unittest.TestCase):
     def setUp(self):
-        mi.set_variant("scalar_rgb")
+        mi.set_variant("llvm_ad_rgb")
 
         self.num_subdivisions = 2
         # Create simple rectangular meshes for testing

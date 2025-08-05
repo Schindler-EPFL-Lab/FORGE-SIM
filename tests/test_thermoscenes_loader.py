@@ -10,7 +10,7 @@ from rebel_shape.plugin_wrappers.perspective_camera import PerspectiveCamera
 class TestThermoScenesDataloader(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        mi.set_variant("scalar_rgb")
+        mi.set_variant("llvm_ad_rgb")
 
         local_dir = Path(__file__).parent.resolve()
         dataset_path = local_dir / "data/thermoscenes_example/buildingA_winter"

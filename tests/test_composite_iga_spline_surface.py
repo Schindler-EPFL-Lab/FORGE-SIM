@@ -20,7 +20,7 @@ class TestCompositeSplineSurface(unittest.TestCase):
         in they can also be interpolated to get the surface, just like any other
         field values.
         """
-        mi.set_variant("scalar_rgb")
+        mi.set_variant("llvm_ad_rgb")
         # Use BSplinePatch for testing, not mocks, too complex to mock properly
         # Unit square with 1 knot span in each direction = Bezier patch
         patch1 = BSplinePatch.unit_square(

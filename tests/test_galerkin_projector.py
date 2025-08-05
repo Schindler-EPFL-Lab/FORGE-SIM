@@ -15,7 +15,7 @@ from rebel_shape.splines.iga_spline_patch import IGASplinePatch
 class TestGalerkinProjector(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        mi.set_variant("scalar_rgb")
+        mi.set_variant("llvm_ad_rgb")
 
     def setUp(self) -> None:
         self.bezier_2_surface = BSplinePatch.unit_square(

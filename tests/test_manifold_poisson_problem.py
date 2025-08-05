@@ -68,7 +68,7 @@ def compute_and_print_symbolic_forcing_term() -> None:
 
 class TestManifoldPoissonProblem(unittest.TestCase):
     def setUp(self) -> None:
-        mi.set_variant("scalar_rgb")
+        mi.set_variant("llvm_ad_rgb")
 
         self.bezier_2_u_knots = [0.0, 0.0, 0.0, 1.0, 1.0, 1.0]
         self.bezier_2_v_knots = [0.0, 0.0, 0.0, 1.0, 1.0, 1.0]

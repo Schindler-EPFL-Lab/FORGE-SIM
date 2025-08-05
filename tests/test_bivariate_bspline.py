@@ -21,7 +21,7 @@ class TestBivariateBSpline(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         """Set up an example `BivariateBSpline` for testing."""
-        mi.set_variant("scalar_rgb")
+        mi.set_variant("llvm_ad_rgb")
         # Create simple uniform B-splines for testing
         cls.knots_u = [0.0, 0.0, 0.0, 1.0, 2.0, 3.0, 3.0, 3.0]
         cls.knots_v = [0.0, 0.0, 0.0, 1.0, 2.0, 2.0, 2.0]

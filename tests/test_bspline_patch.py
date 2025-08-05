@@ -11,7 +11,7 @@ from rebel_shape.splines.bspline_patch import BSplinePatch
 class TestBSplinePatch(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
-        mi.set_variant("scalar_rgb")
+        mi.set_variant("llvm_ad_rgb")
 
         # Simple Bezier surface for a unit square
         cls.bezier_1_knots = [0.0, 0.0, 1.0, 1.0]

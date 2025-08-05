@@ -50,7 +50,7 @@ class TestPatchManagerFactory(unittest.TestCase):
 
     def setUp(self):
         # Create mock patches for testing
-        mi.set_variant("scalar_rgb")
+        mi.set_variant("llvm_ad_rgb")
 
         self.patch1 = self.TestPatch(
             name="patch1",

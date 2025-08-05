@@ -15,7 +15,7 @@ from rebel_shape.splines.iga_spline_patch import IGASplinePatch
 class TestIGAManifoldProblem(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
-        mi.set_variant("scalar_rgb")
+        mi.set_variant("llvm_ad_rgb")
 
         # Use BSplinePatch for testing, not mocks, too complex to mock properly
         # Degree 1 patches are used for simplicity and have different knot span

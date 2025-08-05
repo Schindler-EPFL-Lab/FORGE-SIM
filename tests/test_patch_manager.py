@@ -40,7 +40,7 @@ class TestPatchManager(unittest.TestCase):
 
     def setUp(self):
         """Set up test patches and connections for the PatchManager."""
-        mi.set_variant("scalar_rgb")
+        mi.set_variant("llvm_ad_rgb")
 
         self.patch1 = self.TestPatch(
             name="patch1",

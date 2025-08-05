@@ -669,26 +669,17 @@ class BivariateBSpline(InterpolatingSpline):
             np.linalg.inv(transformation_matrices.numpy().astype(np.float64)),
             function_values.numpy(),
         )
-        dr.scatter_add(
-            target=cp_values.array,
-            value=dr.ravel(mi.TensorXf(product)),
-            index=dr.ravel(dofs_per_span),
-            mode=dr.ReduceMode.Direct,
-        )
 
-        # Divide by the number of times each basis function was sampled
-        ones = dr.ones(dtype=mi.TensorXf, shape=product.shape)
-        repeat = dr.zeros(dtype=mi.TensorXf, shape=(self.num_basis_functions, 1))
-        dr.scatter_add(
-            target=repeat.array,
-            value=dr.ravel(ones),
-            index=dr.ravel(dofs_per_span),
-            mode=dr.ReduceMode.Direct,
-        )
+        cp_values = np.zeros(shape=(self.num_basis_functions, 1), dtype=np.float32)
+        np.add.at(cp_values, dofs_per_span.numpy().flatten(), product.reshape(-1, 1))
 
-        cp_values /= repeat
+        # Count how many times each basis function was sampled to normalize the
+        # control point values.
+        repeat = np.zeros(shape=(self.num_basis_functions, 1), dtype=np.float32)
+        ones = np.ones(shape=dofs_per_span.shape, dtype=np.float32)
+        np.add.at(repeat, dofs_per_span.numpy().flatten(), ones.reshape(-1, 1))
 
-        return cp_values
+        return mi.TensorXf(cp_values / repeat)
 
     @property
     def num_basis_functions(self) -> int:

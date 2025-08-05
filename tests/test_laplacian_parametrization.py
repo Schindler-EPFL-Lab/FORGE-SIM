@@ -11,7 +11,7 @@ from rebel_shape.property_optimizers.laplacian_parametrization import (
 
 class TestLaplacianParametrization(unittest.TestCase):
     def setUp(self):
-        mi.set_variant("scalar_rgb")
+        mi.set_variant("llvm_ad_rgb")
 
     def test_initialization(self):
         """

@@ -10,7 +10,7 @@ from rebel_shape.meshing.rectangular_mesh import RectangularMesh
 class TestRectangularMesh(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        mi.set_variant("scalar_rgb")
+        mi.set_variant("llvm_ad_rgb")
         # Create a simple test mesh
         cls.vertices = np.array(
             [[-0.5, -0.5, 0], [0.5, -0.5, 0], [-0.5, 0.5, 0], [0.5, 0.5, 0]],

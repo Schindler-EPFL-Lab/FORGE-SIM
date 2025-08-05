@@ -10,7 +10,7 @@ from rebel_shape.property_optimizers.sigmoid_parametrization import (
 
 class TestSigmoidParametrization(unittest.TestCase):
     def setUp(self):
-        mi.set_variant("scalar_rgb")
+        mi.set_variant("llvm_ad_rgb")
         self.sigmoid_epsilon = SigmoidParametrization.SIGMOID_EPSILON
 
     def test_initialization(self):

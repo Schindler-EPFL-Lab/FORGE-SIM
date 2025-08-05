@@ -9,7 +9,7 @@ from rebel_shape.plugin_wrappers.sampler import Sampler
 class TestPerspectiveCamera(unittest.TestCase):
     def setUp(self):
         """Initialize Mitsuba variant"""
-        mi.set_variant("scalar_rgb")
+        mi.set_variant("llvm_ad_rgb")
 
     def test_invalid_origin(self):
         """Test that an invalid origin raises ValueError."""

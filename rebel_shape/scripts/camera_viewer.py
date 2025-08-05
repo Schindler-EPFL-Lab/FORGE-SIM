@@ -100,7 +100,7 @@ def render_cameras(params: CameraViewerParams) -> None:
     rendered with `params.samples_per_pixel` samples. The rendered views are saved to
     directory `params.image_output_folder` (created if it does not exist).
     """
-    mi.set_variant("scalar_rgb")
+    mi.set_variant("llvm_ad_rgb")
 
     loader = ThermoScenesLoader(scene_path=params.thermoscenes_scene_path)
 

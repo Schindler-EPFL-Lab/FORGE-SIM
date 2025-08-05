@@ -15,7 +15,7 @@ from rebel_shape.utils.mesh_utils import (
 class TestMeshUtils(unittest.TestCase):
     def setUp(self):
         """Initialize Mitsuba variant for testing."""
-        mi.set_variant("scalar_rgb")
+        mi.set_variant("llvm_ad_rgb")
 
     def test_create_cube(self):
         """Test generation of cube vertices and faces."""

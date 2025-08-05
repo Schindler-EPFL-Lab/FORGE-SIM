@@ -18,7 +18,7 @@ class TestBSpline(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls) -> None:
-        mi.set_variant("scalar_rgb")
+        mi.set_variant("llvm_ad_rgb")
 
         # Typical example of a B-spline curve, taken from the NURBS book
         cls.knots_1 = [0.0, 0.0, 0.0, 1.0, 2.0, 3.0, 4.0, 4.0, 5.0, 5.0, 5.0]

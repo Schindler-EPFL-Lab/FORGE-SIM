@@ -2,6 +2,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
+import drjit as dr
 import mitsuba as mi
 import numpy as np
 
@@ -13,7 +14,7 @@ class TestMesh(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         """Set up the Mitsuba variant and test data."""
-        mi.set_variant("scalar_rgb")
+        mi.set_variant("llvm_ad_rgb")
 
         cls.vertices = np.array([[0, 0, 0], [1, 0, 0], [0, 1, 0]], dtype=np.float64)
         cls.faces = np.array([[0, 1, 2]], dtype=np.uint32)
@@ -206,21 +207,25 @@ class TestMesh(unittest.TestCase):
 
         # Set new vertex at index 1
         new_vertices = mi.TensorXf(np.array([[0, 1, 1]], dtype=np.float64))
-        mesh.set_vertices_at(mi.ArrayXu(1), new_vertices)
+        mesh.set_vertices_at(indices=dr.ravel(mi.TensorXu(1)), vertices=new_vertices)
 
         # Check if the vertex was updated correctly
         np.testing.assert_array_equal(mesh.vertices[1].numpy(), new_vertices[0].numpy())
 
         # Test invalid index
         with self.assertRaises(IndexError):
-            mesh.set_vertices_at(mi.ArrayXu(3), new_vertices)
-
-        with self.assertRaises(ValueError):
-            mesh.set_vertices_at(mi.ArrayXu([0, 1]), new_vertices)
+            mesh.set_vertices_at(
+                indices=dr.ravel(mi.TensorXu(3)), vertices=new_vertices
+            )
 
         with self.assertRaises(ValueError):
             mesh.set_vertices_at(
-                indices=mi.ArrayXu(1),
+                indices=dr.ravel(mi.TensorXu([0, 1])), vertices=new_vertices
+            )
+
+        with self.assertRaises(ValueError):
+            mesh.set_vertices_at(
+                indices=dr.ravel(mi.TensorXu(1)),
                 vertices=mi.TensorXf(np.array([[0, 1]], dtype=np.float64)),
             )
 
@@ -236,7 +241,9 @@ class TestMesh(unittest.TestCase):
 
         # Set new vertex normals at index 1
         new_normals = mi.TensorXf(np.array([[0, 1, 0]], dtype=np.float64))
-        mesh.set_vertex_normals_at(indices=mi.ArrayXu(1), normals=new_normals)
+        mesh.set_vertex_normals_at(
+            indices=dr.ravel(mi.TensorXu(1)), normals=new_normals
+        )
 
         # Check if the vertex normal was updated correctly
         np.testing.assert_array_equal(
@@ -246,18 +253,18 @@ class TestMesh(unittest.TestCase):
         # Test invalid index
         with self.assertRaises(IndexError):
             mesh.set_vertex_normals_at(
-                indices=mi.ArrayXu(3),
+                indices=dr.ravel(mi.TensorXu(3)),
                 normals=new_normals,
             )
 
         with self.assertRaises(ValueError):
             mesh.set_vertex_normals_at(
-                indices=mi.ArrayXu([0, 1]), normals=new_normals
+                indices=dr.ravel(mi.TensorXu([0, 1])), normals=new_normals
             )
 
         with self.assertRaises(ValueError):
             mesh.set_vertex_normals_at(
-                indices=mi.ArrayXu(1),
+                indices=dr.ravel(mi.TensorXu(1)),
                 normals=mi.TensorXf(np.array([[0, 1]], dtype=np.float64)),
             )
 

@@ -8,7 +8,7 @@ from rebel_shape.data_processing.input_preprocessing import preprocess_rgb_image
 
 class TestInputPreprocessing(unittest.TestCase):
     def test_input_preprocessing(self):
-        mi.set_variant("scalar_rgb")
+        mi.set_variant("llvm_ad_rgb")
 
         local_dir = Path(__file__).parent.resolve()
 

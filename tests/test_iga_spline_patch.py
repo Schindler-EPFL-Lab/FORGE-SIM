@@ -12,7 +12,7 @@ from rebel_shape.splines.iga_spline_patch import IGASplinePatch
 class TestBSplinePatch(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
-        mi.set_variant("scalar_rgb")
+        mi.set_variant("llvm_ad_rgb")
         cls.parametric_coords = mi.TensorXf(
             [[0.0, 0.0], [1.0, 0.0], [0.0, 1.0], [1.0, 1.0], [0.5, 0.5]]
         )

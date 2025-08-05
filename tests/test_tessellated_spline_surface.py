@@ -17,7 +17,7 @@ class TestTessellatedSplineSurface(unittest.TestCase):
 
     def setUp(self):
         """Set up a simple tessellated spline surface for testing."""
-        mi.set_variant("scalar_rgb")
+        mi.set_variant("llvm_ad_rgb")
         # Use BSplinePatch for testing, not mocks, too complex to mock properly
         # Unit square with 1 knot span in each direction = Bezier patch
         self.patch1 = BSplinePatch.unit_square(

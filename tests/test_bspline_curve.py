@@ -10,7 +10,7 @@ from rebel_shape.splines.bspline_curve import BSplineCurve
 class TestBSplineCurve(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
-        mi.set_variant("scalar_rgb")
+        mi.set_variant("llvm_ad_rgb")
 
         cls.knots_linear = [0.0, 0.0, 1.0, 1.0]
         cls.degree_linear = 1
