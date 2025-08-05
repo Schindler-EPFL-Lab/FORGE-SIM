@@ -18,8 +18,7 @@ from segment_anything import SamPredictor, sam_model_registry
 # The root folder is _not_ added to the python path as it was in sdkv1
 # and thus, local imports of rebel_nerf are not found.
 # Remove when https://github.com/Azure/azure-sdk-for-python/issues/29724 is fixed
-sys.path.append("./src/rebel-shape")
-sys.path.append("./dataclasses-reverse-cli")
+sys.path.append("./")
 
 from dataclasses_reverse_cli.reverse_cli import ReverseCli
 
