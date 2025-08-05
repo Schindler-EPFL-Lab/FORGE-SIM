@@ -45,10 +45,7 @@ def main() -> None:
     )
 
     parameters.experiment_name = parameters.scene_name + "-training-job"
-    cmd = (
-        "python3.10 src/rebel-shape/rebel_shape/scripts/"
-        "optimize_suzanne_mesh_texture.py "
-    )
+    cmd = "python3.10 rebel_shape/scripts/optimize_suzanne_mesh_texture.py "
     cmd += parameters.script_params.to_command_string("")
 
     if parameters.environment_version.isnumeric():
