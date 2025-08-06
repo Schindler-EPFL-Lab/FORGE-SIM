@@ -33,12 +33,10 @@ jobs:
       - name: Install LLVM
         run: | 
           sudo apt-get update && \
-          sudo apt-get install -y llvm llvm-dev clang libclang-dev lldb lld
+          sudo apt-get install -y llvm llvm-dev clang libclang-dev
 
       - name: Install the project
         run: |
-          uv venv && \
-          uv pip install torch torchvision setuptools && \
           uv sync --frozen
 
       - name: Run tests
