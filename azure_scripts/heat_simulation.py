@@ -6,7 +6,7 @@ import tyro
 from azure.ai.ml import command
 from azure_ml_utils.azure_connect import get_client
 
-from rebel_shape.scripts.run_heat_simulation import HeatSimulationParameters
+from rebel_shape.scripts.heat_simulation.heat_simulation import HeatSimulationParameters
 
 
 @dataclass
@@ -44,7 +44,7 @@ def main() -> None:
 
     parameters.experiment_name = parameters.scene_name + "-heat-simulation"
 
-    cmd = "python3.12 rebel_shape/scripts/run_heat_simulation.py "
+    cmd = "python3.12 rebel_shape/scripts/heat_simulation/heat_simulation.py "
     cmd += parameters.script_params.to_command_string("")
 
     if parameters.environment_version.isnumeric():

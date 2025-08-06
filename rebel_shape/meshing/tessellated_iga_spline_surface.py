@@ -1,4 +1,5 @@
 from collections.abc import Sequence
+from pathlib import Path
 
 import mitsuba as mi
 
@@ -58,6 +59,31 @@ class TessellatedIGASplineSurface(TessellatedSplineSurface):
             per_patch_bsdf=per_patch_bsdf,
             global_mesh_bsdf=global_mesh_bsdf,
         )
+
+    @classmethod
+    def from_file(
+        cls,
+        composite_spline_surface_path: Path,
+    ) -> "TessellatedIGASplineSurface":
+        """
+        Loads a tessellated spline surface from file and sets the bsdf for each patch
+        as a default DiffuseBSDF.
+
+        This class method deserializes a previously saved `TessellatedSplineSurface`
+        from a JSON file. Since BSDF information is not preserved during serialization,
+        the result spline has the default textures.
+
+        :returns: A decoded `TessellatedSplineSurface` instance with default textures
+
+        :raises FileNotFoundError: If the surface file does not exist.
+            JSONDecodeError: If the surface file contains invalid JSON.
+        """
+        tessellated_iga_spline_surface = super().from_file(
+            composite_spline_surface_path=composite_spline_surface_path
+        )
+        assert isinstance(tessellated_iga_spline_surface, TessellatedIGASplineSurface)
+
+        return tessellated_iga_spline_surface
 
     @classmethod
     def from_tessellated_spline_surface(

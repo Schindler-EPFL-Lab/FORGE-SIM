@@ -287,7 +287,7 @@ The optimized mesh/spline is then provided as an input to inpainting script.
 It can either be stored as a data asset on Azure or put into the [optimized_scenes](data/optimized_scenes) folder.
 The latter is a good solution for validating scripts and debugging purposes while the former is a more long term solution. 
 
-### Thermal Inpainting
+### Inpainting
 
 After the shape has been reconstructed from RGB images, the initial condition for thermal simulation are obtained from thermal images.
 This procedure is referred to as thermal inpainting. 
@@ -297,7 +297,11 @@ Mitsuba supports vertex-based textures while for the spline-based representation
 This difference again necessitates two different inpainting scripts.
 
 Since the stanford PLY format is quite flexible it is possible to store the per vertex temperature data directly in the PLY format.
-For splines, the output is a serialized `TessellatedIGASplineSurface` that contains the per control point thermal information and can be directly used for heat simulation
+For splines, the output is a serialized `TessellatedIGASplineSurface` that contains the per control point thermal information and can be directly used for heat simulation.
+
+Additionally, if other information, like material properties, need to be assigned to the shape, the same procedure can be applied. 
+A concrete example is the two-material heat simulation that requires assigning one of two materials to each control point.
+Windows are segmented using the same procedure as for the RGB images and then the obtained masks are projected onto control points.
 
 ### Thermal Simulation (IGA)
 
@@ -305,8 +309,8 @@ Thermal simulation is currently only supported for splines.
 The simulation is done using the isogeometric analysis (IGA) framework.
 
 Two heat simulation options are available at the time of writing:
-1. Heat simulation with a single material and no heat sources [(here)](rebel_shape/scripts/run_heat_simulation.py)
-2. Heat simulation with two materials and no heat sources [Soon](rebel_shape/scripts/run_heat_simulation_v2.py)
+1. Heat simulation with a single material and no heat sources [(here)](rebel_shape/scripts/heat_simulation/run_heat_simulation.py)
+2. Heat simulation with two materials and no heat sources [(here)](rebel_shape/scripts/heat_simulation/run_heat_simulation_two_materials.py)
 
 The first script takes as input just the spline surface obtained via thermal inpainting, while the second one also requires 6 masked facades.
 The facades are masked the same way as the ThermoScenes input data; it is accomplished by calling the [`segment_facade.py`](rebel_shape/scripts/segmentation/segment_facade.py) script with the path to the facade images. 

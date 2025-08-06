@@ -31,8 +31,10 @@ class HeatSimulation(IGAManifoldProblem):
     governed by linear operators.
 
     3. Weak Formulation: Find u in H^1(M) such that for all v in H^1(M) it holds that
+        ```math
         int_M (v rho c d partial_t u) - int_M d (grad_M u) dot(k grad_M v) dA
         = int_M f v dA
+        ```
 
     4. Galerkin Method: Approximate u with phi_j spline basis functions:
         u_h(x, t) = sum_j c_j(t) phi_j(x),
@@ -536,6 +538,7 @@ class HeatSimulation(IGAManifoldProblem):
             local_vectors_list=patch_local_vectors,
         )
 
+    @property
     def total_heat(self) -> "mi.TensorXd":
         """
         Computes the total heat in the system by integrating the temperature field
@@ -546,8 +549,8 @@ class HeatSimulation(IGAManifoldProblem):
         used for the integration is:
 
             total_heat = sum_p sum_e area_e sum_q w_q (
-                rho_p(xi_q) c_p(xi_q) d_p(xi_q) u_h(xi_q)
-            sqrt(det(G_p(xi_q)))),
+                rho_p(xi_q) c_p(xi_q) d_p(xi_q) u_h(xi_q) sqrt(det(G_p(xi_q)))
+            ),
 
         where p is the patch index, e is the knot span index, w_q are the Gauss-Legendre
         quadrature weights, xi_q are the quadrature points in the parametric domain,
@@ -614,6 +617,68 @@ class HeatSimulation(IGAManifoldProblem):
                 )
 
         return total_heat
+
+    @property
+    def heat_generation_rate(self) -> "mi.TensorXd":
+        r"""
+        Computes the total heat generation rate in the system by integrating the
+        source term over the entire spline surface.
+
+        The total heat generation rate is computed using the Gauss-Legendre
+        quadrature over the parametric domain of each patch in the composite spline
+        surface. The formula used for the integration is:
+        ```math
+            total_heat_generation_rate = \sum_p \sum_e A_e \sum_q w_q (
+                f_p(xi_q) \sqrt(\det(G_p(xi_q)))
+            ),
+        ```
+        where p is the patch index, e is the knot span index, w_q are the Gauss-Legendre
+        quadrature weights, xi_q are the quadrature points in the parametric domain,
+        area_e is the area of the element's knot span in the parametric domain,
+        f_p(xi_q) is the source term at the quadrature point of patch p
+        and G_p(xi_q) is the metric tensor at the quadrature point of patch p.
+
+        The expression effectively iterates over all patches and knot spans, evaluating
+        the source term at the predetermined quadrature points and accumulates the
+        resulting contributions. This is done in double precision to offset
+        accumulation errors.
+
+        Time complexity: O(n_patches * n_knot_spans * n_quadrature_points^2), where
+        n_quadrature_points is the number of quadrature points per knot span. Plugging
+        in the default quadrature order (degree + 1), we obtain
+        O(n_patches * n_knot_spans * degree^2), which is faster than local vector
+        assembly and much faster than local matrix assembly.
+
+        :returns: A double precision tensor of shape (1,) that contains the total
+            heat generation rate in the system.
+        """
+        # Use double precision to offset accumulation errors
+        total_heat_generation_rate = mi.TensorXd(0.0)
+
+        for patch, mapping in self._composite_iga_spline.patches_with_mapping:
+            interp_spline = patch.interpolating_spline
+
+            knot_span_handler = self.KnotSpanHandler(
+                patch=patch, integration_order=self._integration_order
+            )
+
+            local_source_term = self._source_term[dr.ravel(mi.TensorXu(mapping))]
+
+            for param_coords, weight in knot_span_handler.gl_coords_and_weights():
+                source_term = interp_spline.interpolate(
+                    values=local_source_term, parametric_coords=param_coords
+                )
+
+                jacobian = patch.evaluate_jacobian(param_coords)
+                metric = patch.metric_tensor(jacobian)
+                _, det_metric = patch.inv_metric_tensor(metric)
+
+                integrand = source_term
+                total_heat_generation_rate += dr.sum(
+                    mi.TensorXd(integrand * (weight * dr.sqrt(det_metric))[:, None])
+                )
+
+        return total_heat_generation_rate
 
     @property
     def spline(self) -> CompositeIGASplineSurface:
