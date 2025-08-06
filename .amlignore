@@ -1,9 +1,9 @@
 .egg-info
 __pycache__/
 .git
+.forgejo
 .vscode
-/tests
-/data
 .venv
+/tests
 /outputs
 /mlruns
