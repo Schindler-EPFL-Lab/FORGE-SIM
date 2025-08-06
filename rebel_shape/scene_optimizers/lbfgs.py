@@ -353,8 +353,7 @@ class LBFGS(mi.ad.Optimizer):
             )
 
             new_objective = objective_function(candidate_params_dict)
-            if use_wolfe_curvature:
-                dr.backward(new_objective)
+            """Objective value for the candidate parameters."""
 
             # Compute the directional derivative with respect to all variables.
             g_dot_z = mi.Float(0.0)
@@ -369,28 +368,28 @@ class LBFGS(mi.ad.Optimizer):
                 g_dot_z += g_dot_z_variable
 
             armijo_condition = new_objective <= objective + armijo_const * alpha_g_dot_z
+            condition_satisfied = armijo_condition
 
-            # If only Armijo has to be satisfied, we can stop here.
-            if not use_wolfe_curvature and dr.all(armijo_condition):
+            # If Wolfe curvature condition is enabled, both the Armijo and Wolfe
+            # condition have to be satisfied.
+            if use_wolfe_curvature:
+                # Wolfe curvature condition requires the new gradient to be computed
+                dr.backward(new_objective)
+                g_new_dot_z = mi.Float(0.0)
+
+                for variable_key, params in candidate_params_dict.items():
+                    g_new_dot_z += dr.dot(
+                        dr.ravel(params.grad), search_directions[variable_key]
+                    )
+
+                wolfe_curvature_condition = g_new_dot_z >= wolfe_const * g_dot_z
+
+                condition_satisfied &= wolfe_curvature_condition
+
+            # Accept step size if the condition is satisfied
+            if dr.all(condition_satisfied):
                 logger.info(
-                    f"Line search iteration {it + 1}, Armijo condition satisfied: "
-                    f"f_new = {new_objective}, f_old = {objective}."
-                )
-                break
-
-            # Wolfe curvature condition requires the new gradient to be computed
-            g_new_dot_z = mi.Float(0.0)
-
-            for variable_key, params in candidate_params_dict.items():
-                g_new_dot_z += dr.dot(
-                    dr.ravel(params.grad), search_directions[variable_key]
-                )
-
-            wolfe_curvature_condition = g_new_dot_z >= wolfe_const * g_dot_z
-
-            if dr.all(armijo_condition & wolfe_curvature_condition):
-                logger.info(
-                    f"Line search iteration {it + 1}, Wolfe conditions satisfied: "
+                    f"Line search iteration {it + 1} (Wolfe = {use_wolfe_curvature}) - "
                     f"f_new = {new_objective}, f_old = {objective}."
                 )
                 break

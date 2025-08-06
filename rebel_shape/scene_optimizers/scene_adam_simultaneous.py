@@ -87,18 +87,20 @@ class SceneAdamSimultaneous(SceneAdam):
         total_loss = mi.TensorXf(0.0)
         total_reg_loss = mi.TensorXf(0.0)
 
-        for param_config in param_optimization_configs:
-            ordered_indices = (
-                np.arange(sensor_count)
-                if not self._randomize_image_order
-                else np.random.permutation(sensor_count)
-            )
+        ordered_indices = (
+            np.arange(sensor_count)
+            if not self._randomize_image_order
+            else np.random.permutation(sensor_count)
+        )
+        for start_idx in range(0, sensor_count, self._batch_size):
+            end_idx = min(start_idx + self._batch_size, sensor_count)
+            batch_indices = ordered_indices[start_idx:end_idx]
 
-            for start_idx in range(0, sensor_count, self._batch_size):
-                end_idx = min(start_idx + self._batch_size, sensor_count)
-                batch_indices = ordered_indices[start_idx:end_idx]
+            batch_image_loss = mi.TensorXf(0.0)
+            batch_reg_loss = mi.TensorXf(0.0)
 
-                batch_image_loss, batch_reg_loss = self._objective_function(
+            for param_config in param_optimization_configs:
+                image_loss, reg_loss = self._objective_function(
                     scene=scene,
                     scene_params=scene_params,
                     sensors=[sensors[i] for i in batch_indices],
@@ -107,18 +109,21 @@ class SceneAdamSimultaneous(SceneAdam):
                     parameters=self.parameters[param_config.parameter_key],
                     seed=seed,
                 )
-                total_batch_loss = batch_image_loss + batch_reg_loss
+                batch_image_loss += image_loss
+                batch_reg_loss += reg_loss
 
-                dr.backward(total_batch_loss)
-                self._adam.step()
+            batch_image_loss /= len(param_optimization_configs)
+            batch_reg_loss /= len(param_optimization_configs)
 
-                weight = len(batch_indices) / sensor_count
+            total_batch_loss = batch_image_loss + batch_reg_loss
 
-                total_loss += weight * batch_image_loss
-                total_loss += weight * batch_reg_loss
-                total_reg_loss += weight * batch_reg_loss
+            dr.backward(total_batch_loss)
+            self._adam.step()
 
-        total_loss /= len(param_optimization_configs)
-        total_reg_loss /= len(param_optimization_configs)
+            weight = len(batch_indices) / sensor_count
+
+            total_loss += weight * batch_image_loss
+            total_loss += weight * batch_reg_loss
+            total_reg_loss += weight * batch_reg_loss
 
         return total_loss, total_reg_loss
