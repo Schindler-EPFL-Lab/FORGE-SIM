@@ -28,7 +28,6 @@ from rebel_shape import logger
 from rebel_shape.data_processing.masked_pose_image import MaskedPoseImage
 from rebel_shape.data_processing.thermoscenes_loader import ThermoScenesLoader
 from rebel_shape.loss_evaluators.image_loss_l1 import ImageLossL1
-from rebel_shape.meshing.composite_iga_spline_surface import CompositeIGASplineSurface
 from rebel_shape.meshing.tessellated_iga_spline_surface import (
     TessellatedIGASplineSurface,
 )
@@ -61,7 +60,13 @@ class ThermalSplineInpaintingParameters(ReverseCli):
     spline_path: Path
     """Path to the reconstructed spline surface mesh that will receive thermal data."""
 
-    texture_projection_steepness: float = 1.0
+    h_refinement_factor: int = 4
+    """
+    How many times to refine the mesh along each patch direction.
+    Since most splines have few control points, this is used to increase the
+    resolution of the thermal information that can be stored in the control points.
+    """
+    texture_projection_steepness: float = 4.0
     """Steepness of the sigmoid projection for texture optimization"""
     continuous_samples: int = 16
     """Number of samples per pixel used for continuous derivatives"""
@@ -115,6 +120,7 @@ class ThermalSplineInpaintingParameters(ReverseCli):
 def initialize_scene(
     thermoscenes_scene_path: Path,
     spline_path: Path,
+    h_refinement_factor: int,
     continuous_samples: int,
     texture_resolution: int = 512,
 ) -> tuple[
@@ -169,18 +175,20 @@ def initialize_scene(
             tessellated_spline_file.read()
         )
 
-    spline_surface = tessellated_spline_surface.composite_spline
-
     initial_field_values = [
         0.5 * dr.ones(dtype=mi.TensorXf, shape=(spline.control_points.shape[0], 1))
-        for spline in spline_surface
+        for spline in tessellated_spline_surface.composite_spline
     ]
 
-    iga_spline_surface = CompositeIGASplineSurface.from_spline_surface(
-        spline_surface=tessellated_spline_surface.composite_spline,
-        per_patch_field_values=initial_field_values,
+    tessellated_iga_spline_surface = (
+        TessellatedIGASplineSurface.from_tessellated_spline_surface(
+            tessellated_spline_surface=tessellated_spline_surface,
+            per_patch_field_values=initial_field_values,
+        )
     )
-    iga_spline_surface.h_refinement(factor=4)
+    tessellated_iga_spline_surface.composite_spline.h_refinement(
+        factor=h_refinement_factor
+    )
 
     scene_dict = {"type": "scene", "integrator": integrator.mitsuba_dict}
 
@@ -192,16 +200,6 @@ def initialize_scene(
             texture_output_path=initial_texture_path,
             width=texture_resolution,
             height=texture_resolution,
-        )
-
-        iga_spline_surface._bsdf = DiffuseBSDF(
-            DiffuseBSDF.Texture(texture_path=initial_texture_path)
-        )
-        tessellated_iga_spline_surface = TessellatedIGASplineSurface(
-            composite_spline_surface=iga_spline_surface,
-            tessellation_subdivisions_per_patch=(
-                tessellated_spline_surface._triangle_subdivisions
-            ),
         )
 
         for mesh in tessellated_iga_spline_surface:
@@ -269,7 +267,7 @@ def inpaint_thermal_information(params: ThermalSplineInpaintingParameters) -> No
         logger.info("Using the CPU for rendering.")
 
     # Initialize the scene, reference images and cameras
-    (scene_source, ref_images, eval_images, spline) = initialize_scene(
+    scene_source, ref_images, eval_images, spline = initialize_scene(
         continuous_samples=params.continuous_samples,
         thermoscenes_scene_path=params.thermoscenes_scene_path,
         spline_path=params.spline_path,

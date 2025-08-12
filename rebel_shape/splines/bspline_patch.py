@@ -315,10 +315,8 @@ class BSplinePatch(SplinePatch):
         normals[:, 1] = dr.ravel(du[:, 2] * dv[:, 0] - du[:, 0] * dv[:, 2])
         normals[:, 2] = dr.ravel(du[:, 0] * dv[:, 1] - du[:, 1] * dv[:, 0])
 
-        magnitudes = dr.sqrt(dr.sum(normals * normals, axis=1))
-        magnitudes = dr.reshape(
-            dtype=mi.TensorXf, value=magnitudes, shape=(n_points, 1)
-        )
+        magnitudes = dr.safe_sqrt(dr.sum(normals * normals, axis=1))[:, None]
+
         safe_magnitudes = dr.select(
             magnitudes > BSpline.ZERO_TOL,
             magnitudes,

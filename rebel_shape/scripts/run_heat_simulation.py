@@ -185,16 +185,6 @@ def initialize_scene(
             height=texture_resolution,
         )
 
-        tessellated_spline_surface.composite_spline._bsdf = DiffuseBSDF(
-            DiffuseBSDF.Texture(texture_path=initial_texture_path)
-        )
-
-        tessellated_spline_surface._tessellated_mesh = (
-            tessellated_spline_surface.composite_spline.composite_mesh_tesselation(
-                subdivisions_per_patch=tessellated_spline_surface._triangle_subdivisions
-            )
-        )
-
         for mesh in tessellated_spline_surface:
             mesh.save_to_ply(output_dir=Path(temp_dir), save_name=mesh.name)
 
@@ -208,7 +198,7 @@ def initialize_scene(
                     "type": "area",
                     "radiance": {
                         "type": "bitmap",
-                        "filename": temp_dir + "/initial_texture.exr",
+                        "filename": str(initial_texture_path),
                     },
                 },
             }

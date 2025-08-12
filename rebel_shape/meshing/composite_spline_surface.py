@@ -50,23 +50,16 @@ class CompositeSplineSurface(PatchManager):
         composite_spline_name: str,
         patch_list: Sequence[SplinePatch],
         connection_list: Sequence[PatchManager.PatchConnections],
-        bsdf: DiffuseBSDF | None = None,
     ) -> None:
         """
         Creates a new composite spline surface with unique name `composite_spline_name`.
 
         The composite spline surface is built from a list of `SplinePatch` objects
         (`patch_list`) and their connections (`connection_list`).
-        The `bsdf` parameter is optional and can be used to specify a BSDF for the
-        global mesh created by `CompositeMesh`.
 
         :raises ValueError: If the number of patches and connection lists do not match,
             or if they are empty.
         """
-        if bsdf is None:
-            bsdf = DiffuseBSDF()
-        self._bsdf = bsdf
-
         super().__init__(
             name=composite_spline_name,
             patch_list=patch_list,
@@ -96,11 +89,9 @@ class CompositeSplineSurface(PatchManager):
         )
         global_quads: list[npt.NDArray[np.uint32]] = []
 
-        for patch_idx, patch in enumerate(self._patch_list):
-            local_to_global = self._patch_to_global_map[patch_idx]
-
-            global_cps[local_to_global] = patch.control_points.numpy()
-            global_quads.extend(local_to_global[patch.quads.numpy()])
+        for patch, mapping in self.patches_with_mapping:
+            global_cps[mapping] = patch.control_points.numpy()
+            global_quads.extend(mapping[patch.quads.numpy()])
 
         self._global_control_points = mi.TensorXf(global_cps)
         self._global_quads = mi.TensorXu(np.array(global_quads, dtype=np.uint32))
@@ -137,6 +128,11 @@ class CompositeSplineSurface(PatchManager):
         global_quads = state.pop("_global_quads")
         averaging_weights = state.pop("_averaging_weights")
 
+        # For compatibility with legacy serialized objects that still contain this
+        # attribute, we remove it if it exists.
+        if "_bsdf" in state:
+            _ = state.pop("_bsdf")
+
         self.__dict__.update(state)
 
         self._global_control_points = mi.TensorXf(global_control_points)
@@ -154,11 +150,11 @@ class CompositeSplineSurface(PatchManager):
         new_cps = dr.zeros(dtype=mi.TensorXf, shape=self.global_control_points.shape)
         assert new_cps.shape[0] == len(self._global_to_patches_map)
 
-        for patch_idx, patch in enumerate(self._patch_list):
-            local_to_global = mi.TensorXu(self._patch_to_global_map[patch_idx])
-
+        for patch, mapping in self.patches_with_mapping:
             self._scatter_values(
-                target=new_cps, values=patch.control_points, indices=local_to_global
+                target=new_cps,
+                values=patch.control_points,
+                indices=mi.TensorXu(mapping),
             )
 
         self.global_control_points = self._averaging_weights * new_cps
@@ -173,12 +169,6 @@ class CompositeSplineSurface(PatchManager):
             raise IndexError("Mesh index out of range.")
 
         return self._patch_list[item]
-
-    def __len__(self) -> int:
-        """
-        Returns the number of patches in the composite spline surface.
-        """
-        return len(self._patch_list)
 
     def __iter__(self) -> Iterator[SplinePatch]:
         """
@@ -258,8 +248,21 @@ class CompositeSplineSurface(PatchManager):
         """
         return self._global_quads
 
+    @property
+    def patches_with_mapping(
+        self,
+    ) -> Iterator[tuple[SplinePatch, npt.NDArray[np.uint32]]]:
+        """
+        Returns an iterator of tuples containing the spline patches with the
+        corresponding local-to-global mapping.
+        """
+        return zip(self._patch_list, self._patch_to_global_map)
+
     def composite_mesh_tesselation(
-        self, subdivisions_per_patch: int = 32
+        self,
+        subdivisions_per_patch: int = 32,
+        per_patch_bsdf: Sequence[DiffuseBSDF] | None = None,
+        global_mesh_bsdf: DiffuseBSDF | None = None,
     ) -> CompositeMesh:
         """
         Creates a `CompositeMesh` from tessellated spline patches of the composite
@@ -278,27 +281,47 @@ class CompositeSplineSurface(PatchManager):
         The tessellated mesh has the same name as the composite spline surface with
         "_tessellated" appended to it.
 
+        `per_patch_bsdf` is an optional sequence of BSDFs that are assigned to each
+        patch mesh in the tessellated surface. It must match the number of patches
+        in the composite spline surface and be ordered in the same way as the
+        patches. If not provided, the patches will receive a default DiffuseBSDF.
+
+        The `global_mesh_bsdf` is an optional BSDF that is assigned to the
+        global tessellated mesh (union of all patch meshes). If not provided,
+        the global mesh will receive a default DiffuseBSDF.
+
+
         :returns: A `CompositeMesh` built from the tessellated patches of the
                   composite spline surface.
-        :raises ValueError: If `subdivisions_per_patch` is less than 1.
+
+        :raises ValueError: If `subdivisions_per_patch` is less than 1 or if the
+            number of BSDFs provided does not match the number of patches.
         """
         if subdivisions_per_patch < 1:
             raise ValueError("The number of subdivisions per patch must be at least 1.")
+
+        if per_patch_bsdf is not None and len(per_patch_bsdf) != len(self._patch_list):
+            raise ValueError(
+                "The number of BSDFs provided must match the number of patches."
+            )
+
+        if per_patch_bsdf is None:
+            per_patch_bsdf = [DiffuseBSDF()] * len(self._patch_list)
 
         tessellated_patches = [
             patch.tessellate(
                 u_subdivisions=subdivisions_per_patch,
                 v_subdivisions=subdivisions_per_patch,
-                bsdf=self._bsdf,
+                bsdf=bsdf,
             )
-            for patch in self._patch_list
+            for patch, bsdf in zip(self._patch_list, per_patch_bsdf)
         ]
 
         composite_mesh = CompositeMesh(
             composite_mesh_name=self.name + "_tessellated",
             patch_list=tessellated_patches,
             connection_list=self._connection_list,
-            bsdf=self._bsdf,
+            global_bsdf=global_mesh_bsdf,
         )
 
         return composite_mesh

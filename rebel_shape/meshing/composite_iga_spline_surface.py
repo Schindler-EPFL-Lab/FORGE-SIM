@@ -8,7 +8,6 @@ import numpy.typing as npt
 
 from rebel_shape.meshing.composite_spline_surface import CompositeSplineSurface
 from rebel_shape.meshing.patch_manager import PatchManager
-from rebel_shape.plugin_wrappers.diffuse_bsdf import DiffuseBSDF
 from rebel_shape.splines.iga_spline_patch import IGASplinePatch
 
 
@@ -44,7 +43,6 @@ class CompositeIGASplineSurface(CompositeSplineSurface):
         composite_spline_name: str,
         patch_list: Sequence[IGASplinePatch],
         connection_list: Sequence[PatchManager.PatchConnections],
-        bsdf: DiffuseBSDF | None = None,
     ) -> None:
         """
         Creates a new composite IGA spline surface with unique name
@@ -52,8 +50,6 @@ class CompositeIGASplineSurface(CompositeSplineSurface):
 
         The composite spline surface is built from a list of `IGASplinePatch` objects
         (`patch_list`) and their connections (`connection_list`).
-        The `bsdf` parameter is optional and can be used to specify a BSDF for the
-        global mesh created by `CompositeMesh`.
 
         :raises ValueError: If the number of patches and connection lists do not
             match, or if any of the patches does not have the same number of
@@ -73,14 +69,13 @@ class CompositeIGASplineSurface(CompositeSplineSurface):
             composite_spline_name=composite_spline_name,
             patch_list=patch_list,
             connection_list=connection_list,
-            bsdf=bsdf,
         )
 
     @classmethod
     def from_spline_surface(
         cls,
         spline_surface: CompositeSplineSurface,
-        per_patch_field_values: list["mi.TensorXf"],
+        per_patch_field_values: Sequence["mi.TensorXf"],
     ) -> "CompositeIGASplineSurface":
         """
         Creates a `CompositeIGASplineSurface` from an existing `CompositeSplineSurface`
@@ -92,7 +87,7 @@ class CompositeIGASplineSurface(CompositeSplineSurface):
 
         :returns: An instance of `CompositeIGASplineSurface`.
         """
-        if len(spline_surface._patch_list) != len(per_patch_field_values):
+        if len(spline_surface) != len(per_patch_field_values):
             raise ValueError(
                 "The number of patches in the spline surface must match the number "
                 "of provided field values."
@@ -109,7 +104,6 @@ class CompositeIGASplineSurface(CompositeSplineSurface):
             composite_spline_name=spline_surface.name,
             patch_list=iga_patch_list,
             connection_list=spline_surface._connection_list,
-            bsdf=spline_surface._bsdf,
         )
 
     def _build_global_representation(self) -> None:
@@ -136,9 +130,8 @@ class CompositeIGASplineSurface(CompositeSplineSurface):
             dtype=np.float32,
         )
 
-        for patch_idx, patch in enumerate(self._patch_list):
-            local_to_global = self._patch_to_global_map[patch_idx]
-            global_values[local_to_global] = patch.field_values.numpy()
+        for patch, mapping in self.patches_with_mapping:
+            global_values[mapping] = patch.field_values.numpy()
 
         self._global_field_values = mi.TensorXf(global_values)
 
@@ -160,11 +153,11 @@ class CompositeIGASplineSurface(CompositeSplineSurface):
         new_values = dr.zeros(dtype=mi.TensorXf, shape=self._global_field_values.shape)
         assert new_values.shape[0] == len(self._global_to_patches_map)
 
-        for patch_idx, patch in enumerate(self._patch_list):
-            local_to_global = mi.TensorXu(self._patch_to_global_map[patch_idx])
-
+        for patch, mapping in self.patches_with_mapping:
             self._scatter_values(
-                target=new_values, values=patch.field_values, indices=local_to_global
+                target=new_values,
+                values=patch.field_values,
+                indices=mi.TensorXu(mapping),
             )
 
         self.global_field_values = self._averaging_weights * new_values
@@ -216,17 +209,15 @@ class CompositeIGASplineSurface(CompositeSplineSurface):
         """
         return iter(self._patch_list)
 
+    @property
     def patches_with_mapping(
         self,
-    ) -> list[tuple[npt.NDArray[np.uint32], IGASplinePatch]]:
+    ) -> Iterator[tuple[IGASplinePatch, npt.NDArray[np.uint32]]]:
         """
         Returns a list of tuples containing the local-to-global mapping and the
         corresponding `IGASplinePatch` for each patch in the composite spline surface.
         """
-        return [
-            (self._patch_to_global_map[i], patch)
-            for i, patch in enumerate(self._patch_list)
-        ]
+        return zip(self._patch_list, self._patch_to_global_map)
 
     @property
     def global_field_values(self) -> "mi.TensorXf":
@@ -260,11 +251,10 @@ class CompositeIGASplineSurface(CompositeSplineSurface):
 
         self._global_field_values = field_values
 
-        for patch_idx, patch in enumerate(self._patch_list):
-            local_to_global = dr.ravel(
-                mi.TensorXf(self._patch_to_global_map[patch_idx])
-            )
-            patch.field_values = self._global_field_values[local_to_global]
+        for patch, mapping in self.patches_with_mapping:
+            patch.field_values = self._global_field_values[
+                dr.ravel(mi.TensorXf(mapping))
+            ]
 
     @property
     def degree(self):

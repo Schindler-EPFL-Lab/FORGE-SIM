@@ -2,7 +2,6 @@ import abc
 
 from rebel_shape.meshing.patch import Patch
 from rebel_shape.meshing.patch_manager import PatchManager
-from rebel_shape.plugin_wrappers.diffuse_bsdf import DiffuseBSDF
 
 
 class PatchManagerFactory(abc.ABC):
@@ -16,7 +15,7 @@ class PatchManagerFactory(abc.ABC):
     `PatchManager` instance (required to be implemented by concrete implementations).
     """
 
-    def __init__(self, manager_name: str, bsdf: DiffuseBSDF | None = None) -> None:
+    def __init__(self, manager_name: str) -> None:
         """
         Initialize the CompositeMeshFactory.
 
@@ -28,15 +27,11 @@ class PatchManagerFactory(abc.ABC):
         self._manager_name: str = str(manager_name)
         self._patch_list: list[Patch] = []
         self._connection_list: list[PatchManager.PatchConnections] = []
-        self._bsdf = bsdf
 
         self._name_to_index_map: dict[str, int] = {}
         """A mapping from unique patch names to their indices in the patch list."""
 
-    def add_patch(
-        self,
-        patch: Patch,
-    ) -> None:
+    def add_patch(self, patch: Patch) -> None:
         """
         Adds a new patch to the list of patches.
 

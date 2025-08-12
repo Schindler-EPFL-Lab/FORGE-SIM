@@ -8,6 +8,7 @@ from rebel_shape.meshing.composite_iga_spline_surface import CompositeIGASplineS
 from rebel_shape.meshing.composite_iga_spline_surface_factory import (
     CompositeIGASplineSurfaceFactory,
 )
+from rebel_shape.meshing.composite_spline_surface import CompositeSplineSurface
 from rebel_shape.meshing.patch import Patch
 from rebel_shape.splines.bspline_patch import BSplinePatch
 from rebel_shape.splines.iga_spline_patch import IGASplinePatch
@@ -75,12 +76,33 @@ class TestCompositeSplineSurface(unittest.TestCase):
         self.connections = self.composite_factory._connection_list
 
         self.iga_surface = self.composite_factory.build()
+        self.spline_surface = CompositeSplineSurface(
+            composite_spline_name="test_composite_spline",
+            patch_list=[patch1, patch2, patch3],
+            connection_list=self.connections,
+        )
 
     def test_init(self):
         """Test the initialization of CompositeSplineSurface"""
         self.assertIsInstance(self.iga_surface, CompositeIGASplineSurface)
         self.assertEqual(self.iga_surface.name, "test_composite")
         self.assertEqual(self.iga_surface.global_field_values.shape, (21, 3))
+
+    def test_from_spline_surface(self):
+        """Test initialization from CompositeSplineSurface"""
+        iga_surface_from_spline = CompositeIGASplineSurface.from_spline_surface(
+            spline_surface=self.spline_surface,
+            per_patch_field_values=[patch.field_values for patch in self.patches],
+        )
+
+        self.assertIsInstance(iga_surface_from_spline, CompositeIGASplineSurface)
+        self.assertEqual(iga_surface_from_spline.name, "test_composite_spline")
+
+        # Field values should match the constructed IGA surface
+        np.testing.assert_array_almost_equal(
+            iga_surface_from_spline.global_field_values.numpy(),
+            self.iga_surface.global_field_values.numpy(),
+        )
 
     def test_build_global_representation(self):
         """Test building of global control points"""

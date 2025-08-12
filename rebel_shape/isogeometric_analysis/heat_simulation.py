@@ -230,7 +230,7 @@ class HeatSimulation(IGAManifoldProblem):
         patch_local_matrices: list[mi.TensorXf] = []
         patch_local_indices: list[mi.TensorXu] = []
 
-        for mapping, patch in self._composite_iga_spline.patches_with_mapping():
+        for patch, mapping in self._composite_iga_spline.patches_with_mapping:
             interp_spline = patch.interpolating_spline
 
             knot_span_handler = self.KnotSpanHandler(
@@ -356,7 +356,7 @@ class HeatSimulation(IGAManifoldProblem):
         patch_local_indices: list[mi.TensorXu] = []
         patch_local_matrices: list[mi.TensorXf] = []
 
-        for mapping, patch in self._composite_iga_spline.patches_with_mapping():
+        for patch, mapping in self._composite_iga_spline.patches_with_mapping:
             interp_spline = patch.interpolating_spline
 
             knot_span_handler = self.KnotSpanHandler(
@@ -493,7 +493,7 @@ class HeatSimulation(IGAManifoldProblem):
         patch_local_indices: list["mi.TensorXu"] = []
         patch_local_vectors: list["mi.TensorXf"] = []
 
-        for mapping, patch in self._composite_iga_spline.patches_with_mapping():
+        for patch, mapping in self._composite_iga_spline.patches_with_mapping:
             interp_spline = patch.interpolating_spline
 
             knot_span_handler = self.KnotSpanHandler(
@@ -578,7 +578,7 @@ class HeatSimulation(IGAManifoldProblem):
         # Use double precision to offset accumulation errors
         total_heat = mi.TensorXd(0.0)
 
-        for mapping, patch in self._composite_iga_spline.patches_with_mapping():
+        for patch, mapping in self._composite_iga_spline.patches_with_mapping:
             interp_spline = patch.interpolating_spline
 
             knot_span_handler = self.KnotSpanHandler(

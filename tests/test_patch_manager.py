@@ -1,4 +1,6 @@
 import unittest
+import tempfile
+from pathlib import Path
 
 import drjit as dr
 import mitsuba as mi
@@ -176,6 +178,29 @@ class TestPatchManager(unittest.TestCase):
         side = patch_manager._get_neighbor_side(2, 1)
         self.assertEqual(side, Patch.Side.BOTTOM)
 
+    def test_iterator_support(self):
+        """Test __len__, __iter__, and __getitem__ methods of PatchManager."""
+
+        patch_manager = self.TestPatchManager(
+            name="test_patch_manager",
+            patch_list=self.patch_list,
+            connection_list=self.connection_list,
+        )
+
+        # Length of the patch manager should match the number of patches
+        self.assertEqual(len(patch_manager), 3)
+
+        # Iterating through the patch manager should yield patches
+        patches = list(patch_manager)
+        self.assertEqual(patches, self.patch_list)
+
+        # Test accessing patches by index
+        for i in range(len(patch_manager)):
+            self.assertEqual(patch_manager[i], self.patch_list[i])
+
+        with self.assertRaises(IndexError):
+            _ = patch_manager[3]
+
     def test_get_neighbor_side_error(self):
         """Test _get_neighbor_side method if the connection is not defined."""
         patch_manager = self.TestPatchManager(
@@ -195,7 +220,7 @@ class TestPatchManager(unittest.TestCase):
         )
 
         # Check shared edges between patch1 and patch2
-        shared_edges = patch_manager.shared_edges()
+        shared_edges = patch_manager.shared_edges
         self.assertEqual(len(shared_edges), 2)
 
         self.assertEqual(
@@ -297,3 +322,103 @@ class TestPatchManager(unittest.TestCase):
             patch_manager._averaging_weights.numpy(),
             np.array(expected_weights, dtype=np.float32).reshape(-1, 1),
         )
+
+    def test_match_files_to_patches_success(self):
+        """Test successful matching of file paths to patches."""
+
+        patch_manager = self.TestPatchManager(
+            name="test_patch_manager",
+            patch_list=self.patch_list,
+            connection_list=self.connection_list,
+        )
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+
+            # Create test files with patch names
+            file1 = temp_path / "texture_patch1_data.txt"
+            file2 = temp_path / "mesh_patch2_config.json"
+            file3 = temp_path / "patch3_vertices.obj"
+
+            # Create the files
+            file1.touch()
+            file2.touch()
+            file3.touch()
+
+            patch_paths = [file3, file2, file1]
+
+            # Test matching
+            sorted_paths = patch_manager.match_files_to_patches(patch_paths)
+
+            # Verify correct order matching patch list order
+            self.assertEqual(len(sorted_paths), 3)
+            self.assertEqual(sorted_paths[0], file1)  # patch1
+            self.assertEqual(sorted_paths[1], file2)  # patch2
+            self.assertEqual(sorted_paths[2], file3)  # patch3
+
+    def test_match_files_to_patches_matching_errors(self):
+        """Test patch name matching errors in match_files_to_patches method."""
+        patch_manager = self.TestPatchManager(
+            name="test_patch_manager",
+            patch_list=self.patch_list,
+            connection_list=self.connection_list,
+        )
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+
+            # Test missing patch name
+            file1 = temp_path / "random_file1.txt"
+            file2 = temp_path / "random_file2.txt"
+            file3 = temp_path / "random_file3.txt"
+
+            file1.touch()
+            file2.touch()
+            file3.touch()
+
+            with self.assertRaises(ValueError):
+                patch_manager.match_files_to_patches([file1, file2, file3])
+
+            # Test duplicate patch name
+            file1_dup = temp_path / "texture_patch1_data.txt"
+            file2_dup = temp_path / "backup_patch1_config.json"
+            file3_ok = temp_path / "patch3_vertices.obj"
+
+            file1_dup.touch()
+            file2_dup.touch()
+            file3_ok.touch()
+
+            with self.assertRaises(ValueError):
+                patch_manager.match_files_to_patches([file1_dup, file2_dup, file3_ok])
+
+    def test_match_files_to_patches_validation_errors(self):
+        """Test various validation errors in match_files_to_patches method."""
+        patch_manager = self.TestPatchManager(
+            name="test_patch_manager",
+            patch_list=self.patch_list,
+            connection_list=self.connection_list,
+        )
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+
+            # Test wrong count
+            file1 = temp_path / "patch1.txt"
+            file1.touch()
+
+            with self.assertRaises(ValueError):
+                patch_manager.match_files_to_patches([file1])
+
+            # Test nonexistent file
+            nonexistent_file = Path("/nonexistent/path/patch1.txt")
+            with self.assertRaises(FileNotFoundError) :
+                patch_manager.match_files_to_patches(
+                    [nonexistent_file, nonexistent_file, nonexistent_file]
+                )
+
+            # Test directory instead of file
+            dir_path = temp_path / "patch1_dir"
+            dir_path.mkdir()
+            with self.assertRaises(ValueError):
+                patch_manager.match_files_to_patches([dir_path, dir_path, dir_path])
+

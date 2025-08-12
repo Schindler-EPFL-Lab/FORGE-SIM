@@ -69,6 +69,10 @@ def unit_cube(
     in this case it will not capture the spline surface well enough, resulting in
     potential errors in optimization or rendering.
 
+    The `bsdf` parameter is optional and can be used to specify a BSDF for the
+    downstream mesh. It is applied to all patches of the cube. If not provided,
+    a default `DiffuseBSDF` is used.
+
     :returns: A tessellated spline surface representing unit cube with bounding box
               [-0.5, -0.5, -0.5] to [0.5, 0.5, 0.5].
 
@@ -171,7 +175,7 @@ def unit_cube(
         + np.array([[0.0, 0.0, 0.5]])
     )
 
-    composite_factory = CompositeSplineSurfaceFactory(manager_name=name, bsdf=bsdf)
+    composite_factory = CompositeSplineSurfaceFactory(manager_name=name)
 
     composite_factory.add_patch(left_patch)
     composite_factory.add_patch(right_patch)
@@ -224,6 +228,7 @@ def unit_cube(
     return TessellatedSplineSurface(
         composite_spline_surface=composite_mesh,
         tessellation_subdivisions_per_patch=tessellation_subdivisions,
+        per_patch_bsdf=[bsdf] * len(composite_mesh)
     )
 
 

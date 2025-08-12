@@ -1,14 +1,19 @@
 import unittest
+import tempfile
+from json import JSONDecodeError
+from pathlib import Path
 
 import mitsuba as mi
 import numpy as np
 import jsonpickle
+from PIL import Image
 
 from rebel_shape.meshing.composite_spline_surface_factory import (
     CompositeSplineSurfaceFactory,
 )
 from rebel_shape.meshing.patch import Patch
 from rebel_shape.meshing.tessellated_spline_surface import TessellatedSplineSurface
+from rebel_shape.plugin_wrappers.diffuse_bsdf import DiffuseBSDF
 from rebel_shape.splines.bspline_patch import BSplinePatch
 
 
@@ -218,3 +223,81 @@ class TestTessellatedSplineSurface(unittest.TestCase):
             np.testing.assert_array_almost_equal(
                 mesh.texcoords.numpy(), decoded_mesh.texcoords.numpy()
             )
+
+    def test_from_file_with_textures_success(self):
+        """Test successful loading of tessellated spline surface with textures."""
+        # First save the current tessellated surface to a file
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+
+            # Save tessellated surface
+            surface_file = temp_path / "test_surface.json"
+            with open(surface_file, "w") as f:
+                f.write(jsonpickle.encode(self.tessellated_surface))
+
+            # Create texture files matching patch names
+            texture1 = temp_path / "diffuse_patch1_texture.png"
+            texture2 = temp_path / "material_patch2_albedo.jpg"
+            texture3 = temp_path / "patch3_color.bmp"
+
+            # Create dummy texture files
+            for texture_path in (texture1, texture2, texture3):
+                img = Image.fromarray(np.array([
+                    [[255, 0, 0], [0, 255, 0]],
+                    [[0, 0, 255], [255, 255, 0]]
+                ], dtype=np.uint8))
+                img.save(texture_path)
+
+            texture_paths = (texture3, texture1, texture2)
+
+            # Load tessellated surface with textures
+            loaded_surface = TessellatedSplineSurface.from_file_with_textures(
+                composite_spline_surface_path=surface_file, texture_paths=texture_paths
+            )
+
+            # Verify the surface was loaded correctly
+            self.assertEqual(loaded_surface.spline_name, "test_composite")
+            self.assertEqual(len(loaded_surface), 3)
+
+            # Verify textures were applied in correct order (patch1, patch2, patch3)
+            expected_texture_order = [texture1, texture2, texture3]
+            for patch, texture_path in zip(loaded_surface, expected_texture_order):
+                self.assertIsInstance(patch.bsdf, DiffuseBSDF)
+
+                expected_mitsuba_dict = {
+                    "type": "diffuse",
+                    "reflectance": {
+                        "type": "bitmap",
+                        "filename": str(texture_path),
+                    },
+                }
+                self.assertEqual(patch.bsdf.mitsuba_dict, expected_mitsuba_dict)
+
+    def test_from_file_with_textures_file_errors(self):
+        """Test error handling for file-related issues."""
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+
+            # Test nonexistent surface file
+            nonexistent_file = temp_path / "nonexistent.json"
+            texture_file = temp_path / "patch1.png"
+            texture_file.touch()
+
+            with self.assertRaises(FileNotFoundError):
+                TessellatedSplineSurface.from_file_with_textures(
+                    composite_spline_surface_path=nonexistent_file,
+                    texture_paths=[texture_file, texture_file, texture_file],
+                )
+
+            # Test invalid JSON file
+            invalid_file = temp_path / "invalid.json"
+            with open(invalid_file, "w") as f:
+                f.write("invalid json content")
+
+            with self.assertRaises(JSONDecodeError):
+                TessellatedSplineSurface.from_file_with_textures(
+                    composite_spline_surface_path=invalid_file,
+                    texture_paths=[texture_file, texture_file, texture_file]
+                )

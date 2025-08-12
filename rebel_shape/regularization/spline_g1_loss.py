@@ -66,7 +66,7 @@ class SplineG1Loss(Regularization):
         """
         self._coord_lists.clear()
 
-        for edge in self._tessellated_spline.composite_spline.shared_edges():
+        for edge in self._tessellated_spline.composite_spline.shared_edges:
             mesh_1 = self._tessellated_spline[edge.first_index]
             mesh_2 = self._tessellated_spline[edge.second_index]
 

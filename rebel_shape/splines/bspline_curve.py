@@ -159,10 +159,7 @@ class BSplineCurve(CoordinateSpline):
         )
         n_points = derivatives.shape[0]
 
-        magnitudes = dr.sqrt(dr.sum(derivatives * derivatives, axis=1))
-        magnitudes = dr.reshape(
-            dtype=mi.TensorXf, value=magnitudes, shape=(n_points, 1)
-        )
+        magnitudes = dr.safe_sqrt(dr.sum(derivatives * derivatives, axis=1))[:, None]
         safe_magnitudes = dr.select(
             magnitudes > BSpline.ZERO_TOL,
             magnitudes,

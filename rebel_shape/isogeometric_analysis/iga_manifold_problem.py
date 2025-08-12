@@ -331,7 +331,7 @@ class IGAManifoldProblem(IGAProblem):
             dtype=mi.TensorXu, shape=(offsets[-1], local_indices_list[0].shape[1])
         )
         mappings = [
-            mapping for mapping, _ in composite_iga_spline.patches_with_mapping()
+            mapping for _, mapping in composite_iga_spline.patches_with_mapping
         ]
 
         for i, (local_indices, local_matrices, mapping) in enumerate(
@@ -418,7 +418,7 @@ class IGAManifoldProblem(IGAProblem):
             dtype=mi.TensorXu, shape=(offsets[-1], local_indices_list[0].shape[1])
         )
         mappings = [
-            mapping for mapping, _ in composite_iga_spline.patches_with_mapping()
+            mapping for _, mapping in composite_iga_spline.patches_with_mapping
         ]
 
         for i, (local_indices, local_vectors, mapping) in enumerate(

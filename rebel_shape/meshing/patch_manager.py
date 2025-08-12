@@ -2,6 +2,7 @@ import abc
 import logging
 from collections.abc import Iterator, Sequence
 from dataclasses import dataclass
+from pathlib import Path
 
 import drjit as dr
 import mitsuba as mi
@@ -148,6 +149,7 @@ class PatchManager(abc.ABC):
         vertex positions and normals when updating the global mesh.
         """
 
+    @property
     def shared_edges(self) -> list[SharedEdge]:
         """
         Returns a list of shared edges between patches.
@@ -363,10 +365,105 @@ class PatchManager(abc.ABC):
             mode=dr.ReduceMode.Direct,
         )
 
+    def match_files_to_patches(self, patch_paths: Sequence[Path]) -> list[Path]:
+        """
+        Matches file paths to patches based on patch names contained in file names.
+
+        For each patch in the patch list, this method finds the first file path whose
+        name contains the patch name as a substring. The returned list maintains the
+        same order as the patches in the patch list.
+
+        This method is used for matching texture files to patches which can be
+        mixed up when reloading the patch manager. Any other file that might be
+        matched with a patch should also contain the patch name in its file name.
+
+        :returns: List of file paths ordered to match the order of the patch list,
+            with one path per patch.
+
+        :raises FileNotFoundError: if any path in `patch_paths` does not exist.
+
+        :raises ValueError: if the number of elements in `patch_paths` does not match
+            the number of patches, if any path is invalid (does not exist or is not a
+            file), if a patch name is not found in any file path,
+            or if a patch name is found in multiple file paths.
+        """
+        if len(patch_paths) != len(self._patch_list):
+            raise ValueError(
+                "The number of elements in `patch_paths` must match the number of "
+                "patches that the `PatchManager` manages."
+            )
+
+        for patch_path in patch_paths:
+            if not patch_path.exists():
+                raise FileNotFoundError(
+                    f"Patch path {patch_path} does not exist. "
+                    "Ensure all patch paths are valid."
+                )
+            if not patch_path.is_file():
+                raise ValueError(
+                    f"Patch path {patch_path} is not a file. "
+                    "Ensure all patch paths point to files."
+                )
+
+        sorted_paths: list[Path] = []
+
+        for patch in self._patch_list:
+            found_patch = False
+
+            for texture_path in patch_paths:
+                # Ensure the path is unique
+                if patch.name in texture_path.name and not found_patch:
+                    sorted_paths.append(texture_path)
+                    found_patch = True
+                    break
+                elif patch.name in texture_path.name and found_patch:
+                    raise ValueError(
+                        f"Patch name '{patch.name}' is found in multiple file paths. "
+                        "Ensure that each patch name is unique in the provided paths."
+                    )
+
+            if not found_patch:
+                raise ValueError(
+                    f"No file path contains patch name '{patch.name}' as a substring"
+                )
+
+        return sorted_paths
+
+    def __getitem__(self, item: int) -> Patch:
+        """
+        Returns the mesh patch with the specified index.
+
+        :raises IndexError: If the index is out of range.
+        """
+        if item < 0 or item >= len(self._patch_list):
+            raise IndexError("Mesh index out of range.")
+
+        return self._patch_list[item]
+
+    def __len__(self) -> int:
+        """
+        Returns the number of patches.
+        """
+        return len(self._patch_list)
+
+    def __iter__(self) -> Iterator[Patch]:
+        """
+        Returns an iterator over the patches managed by this patch manager.
+        """
+        return iter(self._patch_list)
+
+    @property
+    def patches_with_mapping(self) -> Iterator[tuple[Patch, npt.NDArray[np.uint32]]]:
+        """
+        Returns an iterator of tuples containing the patches with the corresponding
+        local-to-global mapping
+        """
+        return zip(self._patch_list, self._patch_to_global_map)
+
     @property
     def name(self) -> str:
         """
-        Name of the composite mesh.
+        Unique name of the patch manager.
         """
         return self._name
 

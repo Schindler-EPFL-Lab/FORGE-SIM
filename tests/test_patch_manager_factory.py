@@ -93,7 +93,6 @@ class TestPatchManagerFactory(unittest.TestCase):
         self.assertEqual(factory._patch_list, [])
         self.assertEqual(factory._connection_list, [])
         self.assertEqual(factory._name_to_index_map, {})
-        self.assertIsNone(factory._bsdf)
 
     def test_add_patch(self):
         """Test adding patches to the factory."""

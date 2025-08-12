@@ -25,7 +25,11 @@ class CompositeMeshFactory(PatchManagerFactory):
         optional and can be used to specify a BSDF for the global mesh created by
         `CompositeMesh`.
         """
-        super().__init__(manager_name, bsdf)
+        super().__init__(manager_name)
+
+        if bsdf is None:
+            bsdf = DiffuseBSDF()
+        self._bsdf = bsdf
 
     def build(self) -> CompositeMesh:
         """
@@ -40,5 +44,5 @@ class CompositeMeshFactory(PatchManagerFactory):
             composite_mesh_name=self._manager_name,
             patch_list=self._patch_list,
             connection_list=self._connection_list,
-            bsdf=self._bsdf,
+            global_bsdf=self._bsdf,
         )

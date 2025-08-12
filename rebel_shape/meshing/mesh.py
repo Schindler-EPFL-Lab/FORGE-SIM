@@ -438,6 +438,23 @@ class Mesh(MitsubaPlugin):
         )
 
     @property
+    def bsdf(self) -> DiffuseBSDF:
+        """
+        Returns the BSDF of the mesh.
+        """
+        return self._bsdf
+
+    @bsdf.setter
+    def bsdf(self, bsdf: DiffuseBSDF) -> None:
+        """
+        Sets the BSDF of the mesh to the given `bsdf`.
+
+        The BSDF is used to control the appearance of the mesh in the scene.
+        """
+        self._bsdf = bsdf
+        self._set_mesh_bsdf()
+
+    @property
     def name(self) -> str:
         """
         Name of the mesh.

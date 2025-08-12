@@ -47,7 +47,7 @@ class CompositeMesh(PatchManager):
         composite_mesh_name: str,
         patch_list: Sequence[RectangularMesh],
         connection_list: Sequence[PatchManager.PatchConnections],
-        bsdf: DiffuseBSDF | None = None,
+        global_bsdf: DiffuseBSDF | None = None,
     ) -> None:
         """
         Creates a new composite mesh object with a unique name `composite_mesh_name`.
@@ -55,11 +55,17 @@ class CompositeMesh(PatchManager):
         This method is not intended to be called directly, but rather through the
         `CompositeMeshFactory` class. The factory class is responsible for adding
         patches and establishing connections between them. It calls this method
-        with appropriate `patch_list`, connection_list, and `bsdf` parameters.
+        with appropriate `patch_list`, and connection_list parameters.
+
+        Additionally, the `global_bsdf` parameter can be used to set the BSDF of the
+        global mesh that represents the entire composite mesh. If not provided, a
+        default `DiffuseBSDF` is used.
+
+        :raises ValueError:  If the number of patches and connection lists do not match,
+            or if they are empty.
         """
-        if bsdf is None:
-            bsdf = DiffuseBSDF()
-        self._bsdf = bsdf
+        if global_bsdf is None:
+            global_bsdf = DiffuseBSDF()
 
         super().__init__(
             name=composite_mesh_name,
@@ -67,10 +73,10 @@ class CompositeMesh(PatchManager):
             connection_list=connection_list,
         )
 
-        self._build_global_mesh()
+        self._build_global_mesh(global_bsdf)
         self.update_global_representation()
 
-    def _build_global_mesh(self) -> None:
+    def _build_global_mesh(self, global_bsdf: DiffuseBSDF) -> None:
         """
         Builds the global mesh representation from the patches and builds a Mitsuba
         mesh object that can be used in the Mitsuba scene.
@@ -78,6 +84,11 @@ class CompositeMesh(PatchManager):
         Unlike building the mapping, this method is less expensive as it can be
         vectorized, but it still requires to go through all the patches to
         construct the global mesh.
+
+        `global_bsdf` is the BSDF that will be assigned to the global mesh.
+        It is used to define the material properties of the entire composite mesh.
+        This state might not be consistent with the patches, as the BSDF is not
+        propagated to the patches during updates.
 
         The position of the vertices on the edges is not averaged but rather the
         last patch that was inserted is used to determine the position of the
@@ -93,10 +104,9 @@ class CompositeMesh(PatchManager):
         )
         global_faces: list[npt.NDArray[np.uint32]] = []
 
-        for patch_idx, patch in enumerate(self._patch_list):
-            local_to_global = self._patch_to_global_map[patch_idx]
-            global_vertices[local_to_global] = patch.vertices.numpy()
-            global_faces.extend(local_to_global[patch.faces.numpy()])
+        for patch, mapping in self.patches_with_mapping:
+            global_vertices[mapping] = patch.vertices.numpy()
+            global_faces.extend(mapping[patch.faces.numpy()])
 
         # The vertices here might not be averaged properly, call `update_global_mesh`
         self._global_mesh = Mesh(
@@ -105,7 +115,7 @@ class CompositeMesh(PatchManager):
             faces=np.array(global_faces, dtype=np.uint32),
             vertex_normals=None,
             texture_coordinates=None,
-            bsdf=self._bsdf,
+            bsdf=global_bsdf,
         )
 
     def __getitem__(self, item: int) -> RectangularMesh:
@@ -118,12 +128,6 @@ class CompositeMesh(PatchManager):
             raise IndexError("Mesh index out of range.")
 
         return self._patch_list[item]
-
-    def __len__(self) -> int:
-        """
-        Returns the number of patches in the composite mesh.
-        """
-        return len(self._patch_list)
 
     def __iter__(self) -> Iterator[RectangularMesh]:
         """
@@ -149,8 +153,8 @@ class CompositeMesh(PatchManager):
         assert new_vertices.shape[0] == len(self._global_to_patches_map)
         assert new_normals.shape[0] == len(self._global_to_patches_map)
 
-        for patch_idx, patch in enumerate(self._patch_list):
-            local_to_global = mi.TensorXu(self._patch_to_global_map[patch_idx])
+        for patch, mapping in self.patches_with_mapping:
+            local_to_global = mi.TensorXu(mapping)
 
             self._scatter_values(
                 target=new_vertices, values=patch.vertices, indices=local_to_global
@@ -162,10 +166,9 @@ class CompositeMesh(PatchManager):
         self.global_vertices = self._averaging_weights * new_vertices
 
         new_normals = self._averaging_weights * new_normals
-        magnitudes = dr.sqrt(dr.sum(new_normals * new_normals, axis=1))
-        magnitudes = dr.reshape(dtype=mi.TensorXf, value=magnitudes, shape=(-1, 1))
+        magnitudes = dr.safe_sqrt(dr.sum(new_normals * new_normals, axis=1))
 
-        self.global_vertex_normals = new_normals / magnitudes
+        self.global_vertex_normals = new_normals / magnitudes[:, None]
 
     @property
     def global_vertices(self) -> "mi.TensorXf":
@@ -194,11 +197,8 @@ class CompositeMesh(PatchManager):
         """
         self._global_mesh.vertices = vertices
 
-        for patch_idx, patch in enumerate(self._patch_list):
-            local_to_global = dr.ravel(
-                mi.TensorXf(self._patch_to_global_map[patch_idx])
-            )
-            patch.vertices = vertices[local_to_global]
+        for patch, mapping in self.patches_with_mapping:
+            patch.vertices = vertices[dr.ravel(mi.TensorXf(mapping))]
 
     @property
     def global_faces(self) -> "mi.TensorXi":
@@ -229,11 +229,30 @@ class CompositeMesh(PatchManager):
         """
         self._global_mesh.vertex_normals = normals
 
-        for patch_idx, patch in enumerate(self._patch_list):
-            local_to_global = dr.ravel(
-                mi.TensorXf(self._patch_to_global_map[patch_idx])
-            )
-            patch.vertex_normals = normals[local_to_global]
+        for patch, mapping in self.patches_with_mapping:
+            patch.vertex_normals = normals[dr.ravel(mi.TensorXf(mapping))]
+
+    @property
+    def global_mesh_bsdf(self) -> DiffuseBSDF:
+        """
+        Returns the BSDF of the global mesh
+        """
+        return self._global_mesh.bsdf
+
+    @global_mesh_bsdf.setter
+    def global_mesh_bsdf(self, global_bsdf: DiffuseBSDF) -> None:
+        """
+        Sets the BSDF of the global mesh to the new `bsdf` value.
+        """
+        self._global_mesh.bsdf = global_bsdf
+
+    @property
+    def patches_with_mapping(self) -> Iterator[tuple[Mesh, npt.NDArray[np.uint32]]]:
+        """
+        Returns an iterator of tuples containing the mesh patches with the corresponding
+        local-to-global mapping.
+        """
+        return zip(self._patch_list, self._patch_to_global_map)
 
     def visualize(
         self,
