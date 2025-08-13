@@ -5,6 +5,7 @@ from typing import Any
 
 import mitsuba as mi
 
+from rebel_shape.data_processing.masked_pose_image import MaskedPoseImage
 from rebel_shape.scene_optimizers.optimization_events import OptimizationEvents
 from rebel_shape.scene_optimizers.scene_optimizer import SceneOptimizer
 from rebel_shape.utils.image_utils import (
@@ -56,8 +57,7 @@ class PropertyOptimizer(abc.ABC):
 
     def optimize(
         self,
-        sensors: list["mi.Sensor"],
-        ref_images: list["mi.TensorXf"],
+        ref_images: list["MaskedPoseImage"],
         scene_optimizer: SceneOptimizer,
         num_iters: int = 100,
         views_to_render: list["mi.Sensor"] | None = None,
@@ -69,8 +69,8 @@ class PropertyOptimizer(abc.ABC):
 
         Images are rendered based on `scene` and `scene_params`.
         Optimization proceeds for `num_iters` and each iteration considers all
-        views specified by `sensors`. `image_loss` is computed by comparing the
-        rendered images to corresponding `ref_images`.
+        views specified by sensors of `ref_images`. `image_loss` is computed by
+        comparing the rendered images to corresponding `ref_images`.
 
         Optionally, `views_to_render` can be used to render the current state of
         the scene and save it to `save_directory_path`. If `save_directory_path`
@@ -103,7 +103,6 @@ class PropertyOptimizer(abc.ABC):
             scene=self.scene,
             scene_params=self.scene_params,
             param_optimization_configs=self.parameter_optimization_configs,
-            sensors=sensors,
             ref_images=ref_images,
             num_iters=num_iters,
             optimization_events=self.optimization_events,
@@ -160,8 +159,7 @@ class PropertyOptimizer(abc.ABC):
 
         The `iteration` is used to generate unique filenames for all saves from that
         iteration. If `output_directory` is provided, the file is saved there. If
-        not, it is not saved. For redundancy, it is advised to log the results
-        with mlflow.
+        not, it is not saved.
 
         If the save files are large, it is simple to save every N-th iteration by
         checking if `(iteration + 1) % N == 0` inside of this method.
@@ -207,8 +205,7 @@ class PropertyOptimizer(abc.ABC):
 
     def show_comparison_with_reference(
         self,
-        ref_images: list["mi.TensorXf"],
-        sensors: list["mi.Sensor"],
+        ref_images: list[MaskedPoseImage],
         samples_per_pixel: int = 256,
         save_path: Path | None = None,
     ) -> None:
@@ -216,7 +213,8 @@ class PropertyOptimizer(abc.ABC):
         Show a comparison between current scene and reference.
 
         Current `scene_params`are used to render images with `samples_per_pixel`
-        samples for all views in `sensors` and compare them with `ref_images`.
+        samples for all views in `sensors` of `ref_images` and compare them with
+        `ref_images`.
         If a `save_path` is provided the figure is saved.
 
         :raises ValueError: If the `ref_images` or `sensor` lists are empty,
@@ -225,22 +223,21 @@ class PropertyOptimizer(abc.ABC):
         if len(ref_images) == 0:
             raise ValueError("At least one image is required in 'ref_images' list")
 
-        if len(sensors) != len(ref_images):
-            raise ValueError("There has to be as many 'ref_images' as there 'sensors'")
-
         rendered_views: list[mi.Bitmap] = []
-        for sensor in sensors:
+        for image in ref_images:
             rendered_image = mi.render(
                 scene=self.scene,
                 params=self.scene_params,
-                sensor=sensor,
+                sensor=image.sensor,
                 spp=samples_per_pixel,
             )
             rendered_views.append(mi.util.convert_to_bitmap(rendered_image))
 
         show_comparison_with_reference(
             rendered_views=rendered_views,
-            reference_views=[mi.util.convert_to_bitmap(image) for image in ref_images],
+            reference_views=[
+                mi.util.convert_to_bitmap(image.original_image) for image in ref_images
+            ],
             save_path=save_path,
         )
 
@@ -257,7 +254,7 @@ class PropertyOptimizer(abc.ABC):
         `iteration` is the current iteration of the optimization
         and is used to generate a unique filename and seed for rendering.
 
-        views_to_render` is a list of sensors that may or may not be one of the
+        `views_to_render` is a list of sensors that may or may not be one of the
         `sensors` used for optimization. It is often the case that the validation
         views are used to render the current state of the scene. By default, this
         method is called in `SceneOptimizer.optimize` at each iteration.

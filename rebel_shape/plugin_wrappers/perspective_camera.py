@@ -190,3 +190,10 @@ class PerspectiveCamera(MitsubaPlugin):
             },
             "sampler": self._sampler.mitsuba_dict,
         }
+
+    @property
+    def mitsuba_sensor(self) -> "mi.Sensor":
+        """
+        Returns a mitsuba sensor corresponding to `self`
+        """
+        return mi.load_dict(self.mitsuba_dict)

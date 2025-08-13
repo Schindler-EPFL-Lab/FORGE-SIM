@@ -8,8 +8,8 @@ from rebel_shape.loss_evaluators.image_loss_l2 import ImageLossL2
 from rebel_shape.property_optimizers.bitmap_texture_optimizer import (
     BitmapTextureOptimizer,
 )
-from rebel_shape.property_optimizers.property_optimizer import PropertyOptimizer
 from rebel_shape.property_optimizers.mesh_optimizer import MeshOptimizer
+from rebel_shape.property_optimizers.property_optimizer import PropertyOptimizer
 from rebel_shape.scene_optimizers.optimization_events import OptimizationEvents
 from rebel_shape.scene_optimizers.scene_optimizer import SceneOptimizer
 from rebel_shape.schedulers.optimization_scheduler import OptimizationScheduler

@@ -25,6 +25,7 @@ sys.path.append("./")
 from dataclasses_reverse_cli.reverse_cli import ReverseCli
 
 from rebel_shape import logger
+from rebel_shape.data_processing.masked_pose_image import MaskedPoseImage
 from rebel_shape.data_processing.thermoscenes_loader import ThermoScenesLoader
 from rebel_shape.loss_evaluators.image_loss_l1 import ImageLossL1
 from rebel_shape.meshing.composite_iga_spline_surface import CompositeIGASplineSurface
@@ -118,10 +119,8 @@ def initialize_scene(
     texture_resolution: int = 512,
 ) -> tuple[
     "mi.Scene",
-    list["mi.Sensor"],
-    list["mi.TensorXf"],
-    list["mi.Sensor"],
-    list["mi.TensorXf"],
+    list[MaskedPoseImage],
+    list[MaskedPoseImage],
     TessellatedIGASplineSurface,
 ]:
     """
@@ -140,9 +139,7 @@ def initialize_scene(
     :returns: A tuple containing:
 
         - `scene_source`: A Mitsuba scene object that contains the loaded scene.
-        - `train_sensors`: A list of Mitsuba sensors for training images.
         - `train_images`: A list of training images loaded from the scene.
-        - `eval_sensors`: A list of Mitsuba sensors for evaluation images.
         - `eval_images`: A list of evaluation images loaded from the scene.
         - `tessellated_iga_spline_surface`: A `TessellatedIGASplineSurface` object
             that represents the tessellated IGA spline surface with thermal data.
@@ -227,18 +224,9 @@ def initialize_scene(
 
         scene_source: "mi.Scene" = mi.load_dict(scene_dict)
 
-    train_sensors: list["mi.Sensor"] = [
-        mi.load_dict(camera.mitsuba_dict) for camera in loader.train_cameras_thermal
-    ]
-    eval_sensors: list["mi.Sensor"] = [
-        mi.load_dict(camera.mitsuba_dict) for camera in loader.eval_cameras_thermal
-    ]
-
     return (
         scene_source,
-        train_sensors,
         loader.train_images_thermal,
-        eval_sensors,
         loader.eval_images_thermal,
         tessellated_iga_spline_surface,
     )
@@ -281,12 +269,10 @@ def inpaint_thermal_information(params: ThermalSplineInpaintingParameters) -> No
         logger.info("Using the CPU for rendering.")
 
     # Initialize the scene, reference images and cameras
-    (scene_source, sensors, ref_images, eval_sensors, eval_images, spline) = (
-        initialize_scene(
-            continuous_samples=params.continuous_samples,
-            thermoscenes_scene_path=params.thermoscenes_scene_path,
-            spline_path=params.spline_path,
-        )
+    (scene_source, ref_images, eval_images, spline) = initialize_scene(
+        continuous_samples=params.continuous_samples,
+        thermoscenes_scene_path=params.thermoscenes_scene_path,
+        spline_path=params.spline_path,
     )
 
     temperature_scheduler = ConstantScheduler(
@@ -310,27 +296,26 @@ def inpaint_thermal_information(params: ThermalSplineInpaintingParameters) -> No
     )
     optimizer.show_comparison_with_reference(
         ref_images=eval_images,
-        sensors=eval_sensors,
         samples_per_pixel=params.continuous_samples * 4,
         save_path=save_path,
     )
     logger.info("Rendered initial state")
 
     optimizer.optimize(
-        sensors=sensors,
         ref_images=ref_images,
         scene_optimizer=SceneAdamSequential(
             batch_size=params.texture_batch_size, uniform=False
         ),
         num_iters=params.optimization_iterations,
-        views_to_render=eval_sensors[: params.num_of_images_to_save],
+        views_to_render=[
+            image.sensor for image in eval_images[: params.num_of_images_to_save]
+        ],
         save_directory_path=params.output_folder,
     )
     logger.info("Finished optimization, rendering final results.")
 
     optimizer.show_comparison_with_reference(
         ref_images=ref_images,
-        sensors=sensors,
         samples_per_pixel=params.continuous_samples * 4,
         save_path=params.output_folder / "Final_comparison.png",
     )

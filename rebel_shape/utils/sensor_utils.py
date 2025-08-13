@@ -5,14 +5,14 @@ from rebel_shape.plugin_wrappers.perspective_camera import PerspectiveCamera
 from rebel_shape.plugin_wrappers.sampler import Sampler
 
 
-def create_sensors_fibonacci(
+def create_cameras_fibonacci(
     sensor_count: int = 8,
     radial_distance: float = 5.0,
     target_coords: tuple[float, float, float] = (0.0, 0.0, 0.0),
     sensor_resolution: tuple[int, int] = (256, 256),
     sensor_fov: float = 45,
     sampler: Sampler = Sampler(),
-) -> list["mi.Sensor"]:
+) -> list[PerspectiveCamera]:
     """
     Creates a list of `sensor_count` sensors placed on the surface of a sphere
     following the Fibonacci lattice.
@@ -27,7 +27,7 @@ def create_sensors_fibonacci(
     by `sensor_fov`. Finally, the sampler information is provided by `sampler`
     which returns a compatible dict.
 
-    :returns: A list of Mitsuba sensor object instances
+    :returns: A list of PerspectiveCamera object instances
 
     :raises ValueError: If `radial_distance` or `sensor_count` is non-positive
     """
@@ -38,7 +38,7 @@ def create_sensors_fibonacci(
     if radial_distance <= 0.0:
         raise ValueError("The 'radial_distance' of the sphere has to be positive.")
 
-    sensors: list["mi.Sensor"] = []
+    cameras: list[PerspectiveCamera] = []
     golden_ratio = (1 + 5**0.5) / 2
 
     for i in range(sensor_count):
@@ -59,9 +59,9 @@ def create_sensors_fibonacci(
             sampler=sampler,
         )
 
-        sensors.append(mi.load_dict(perspective_camera.mitsuba_dict))
+        cameras.append(perspective_camera)
 
-    return sensors
+    return cameras
 
 
 def create_sensors_radial(

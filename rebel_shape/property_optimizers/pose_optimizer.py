@@ -6,6 +6,7 @@ import drjit as dr
 import mitsuba as mi
 import numpy as np
 
+from rebel_shape.data_processing.masked_pose_image import MaskedPoseImage
 from rebel_shape.loss_evaluators.image_loss import ImageLoss
 from rebel_shape.loss_evaluators.image_loss_l2 import ImageLossL2
 from rebel_shape.property_optimizers.property_optimizer import PropertyOptimizer
@@ -138,8 +139,7 @@ class PoseOptimizer(PropertyOptimizer):
 
     def optimize(
         self,
-        sensors: list["mi.Sensor"],
-        ref_images: list["mi.TensorXf"],
+        ref_images: list[MaskedPoseImage],
         scene_optimizer: SceneOptimizer,
         num_iters: int = 10,
         views_to_render: list["mi.Sensor"] | None = None,
@@ -148,10 +148,9 @@ class PoseOptimizer(PropertyOptimizer):
         """
         Executes pose optimization for `num_iters` steps.
 
-        The user provides a list of reference images `ref_images` in a
-        Mitsuba-native format as well as a list `sensors` for camera poses/views.
-        `scene_optimizer` determines the underlying scene optimization algorithm
-        (e.g. `SceneAdam`).
+        The user provides a list of MaskedPose reference images `ref_images`.
+        `scene_optimizer` determines the underlying scene optimization
+        algorithm (e.g. `SceneAdam`).
 
         Optionally, `views_to_render` can be used to render the current state of
         the scene for provided views and optionally save it to `save_directory_path`.
@@ -159,12 +158,14 @@ class PoseOptimizer(PropertyOptimizer):
         Parameter checking occurs in `SceneOptimizer.optimize` method. At each
         iteration the mesh is saved to `save_directory_path` (if the path is not
         provided it is saved at the current directory level).
+
         """
-        convergence_point = self.compute_camera_convergence_point(sensors=sensors)
+        convergence_point = self.compute_camera_convergence_point(
+            sensors=[image.sensor for image in ref_images]
+        )
         self._initial_position_guess = convergence_point
 
         super().optimize(
-            sensors=sensors,
             ref_images=ref_images,
             scene_optimizer=scene_optimizer,
             num_iters=num_iters,

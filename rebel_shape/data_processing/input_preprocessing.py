@@ -2,6 +2,7 @@ from pathlib import Path
 
 import mitsuba as mi
 
+from rebel_shape.data_processing.masked_pose_image import MaskedPoseImage
 from rebel_shape.data_processing.thermoscenes_loader import ThermoScenesLoader
 from rebel_shape.plugin_wrappers.sampler import Sampler
 
@@ -13,7 +14,7 @@ def preprocess_rgb_images(
     spp: int = 16,
     train: bool = True,
     sampler: Sampler = Sampler(),
-) -> tuple[list["mi.Sensor"], list["mi.TensorXf"]]:
+) -> list[MaskedPoseImage]:
     """
     Blends the environment map used in optimization with foreground object that is
     reconstructed from RGBA images.
@@ -57,8 +58,7 @@ def preprocess_rgb_images(
     }
     scene = mi.load_dict(scene_dict)
 
-    composited_images: list["mi.TensorXf"] = []
-    sensors: list["mi.Sensor"] = []
+    composited_images: list[MaskedPoseImage] = []
 
     if output_dir is not None:
         output_dir.mkdir(exist_ok=True)
@@ -73,6 +73,12 @@ def preprocess_rgb_images(
             image = rgba_image[:, :, :3]
 
             composited_image = image * alpha + background * (1.0 - alpha)
+
+            composited_image_masked_pose = MaskedPoseImage(
+                image=composited_image,
+                camera=camera,
+                mask=alpha,
+            )
         else:
             raise RuntimeError("Image does not have an alpha channel")
 
@@ -81,7 +87,6 @@ def preprocess_rgb_images(
             filename = f"composited_frame_{'train' if train else 'eval'}{idx:05d}.exr"
             bitmap.write(str(output_dir / filename))
 
-        composited_images.append(composited_image)
-        sensors.append(sensor)
+        composited_images.append(composited_image_masked_pose)
 
-    return sensors, composited_images
+    return composited_images

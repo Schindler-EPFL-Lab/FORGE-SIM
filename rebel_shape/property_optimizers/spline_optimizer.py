@@ -3,9 +3,8 @@ from pathlib import Path
 from typing import Any
 
 import drjit as dr
-import mitsuba as mi
-import mlflow
 import jsonpickle
+import mitsuba as mi
 
 from rebel_shape.loss_evaluators.image_loss import ImageLoss
 from rebel_shape.loss_evaluators.image_loss_l2 import ImageLossL2
@@ -220,8 +219,7 @@ class SplineOptimizer(PropertyOptimizer):
         during optimization are also saved in the same directory.
 
         If `output_directory` is None, the spline and the meshes are not saved and the
-        method returns immediately. The spline is also logged by mlflow in
-        directory `logged_splines`. So are the meshes, in directory `logged_meshes`.
+        method returns immediately.
         """
         if output_directory is None:
             return
@@ -236,17 +234,7 @@ class SplineOptimizer(PropertyOptimizer):
         with open(output_directory / save_name, "w") as spline_file:
             spline_file.write(encoded_spline)
 
-        mlflow.log_artifact(
-            local_path=str(output_directory / save_name),
-            artifact_path="logged_splines",
-        )
-
         for mesh in self._tessellated_spline:
             mesh_name = f"{mesh.name}_{timestamp}_iteration-{iteration:03}"
 
-            mesh_output_path_str = str(output_directory / (mesh_name + ".ply"))
             mesh.save_to_ply(output_dir=output_directory, save_name=mesh_name)
-
-            mlflow.log_artifact(
-                local_path=mesh_output_path_str, artifact_path="logged_meshes"
-            )

@@ -7,6 +7,7 @@ import mitsuba as mi
 import mlflow
 import numpy as np
 
+from rebel_shape.data_processing.masked_pose_image import MaskedPoseImage
 from rebel_shape.loss_evaluators.image_loss import ImageLoss
 from rebel_shape.regularization.regularization import Regularization
 from rebel_shape.scene_optimizers.optimization_events import OptimizationEvents
@@ -133,8 +134,7 @@ class SceneOptimizer(abc.ABC):
     def _objective_function(
         scene: "mi.Scene",
         scene_params: "mi.SceneParams",
-        sensors: list["mi.Sensor"],
-        ref_images: list["mi.TensorXf"],
+        ref_images: list[MaskedPoseImage],
         param_config: "SceneOptimizer.ParamOptimizationConfig",
         parameters: MitsubaOptimizationType,
         seed: int,
@@ -143,9 +143,9 @@ class SceneOptimizer(abc.ABC):
         Common objective function for optimization.
 
         This function computes the total loss and regularization loss for a given
-        `scene` and its `scene_params. It renders images for all `sensors`, computes the
-        image loss based on the `ref_images`, and applies regularization if
-        specified in `param_config`.
+        `scene` and its `scene_params`. It renders images for all sensors of
+        `ref_images`, computes the image loss based on the `ref_images`, and applies
+        regularization if specified in `param_config`.
 
         `parameters` are the current state of the variable that is being optimized, and
         it is passed to the `scene_update_callback` closure to update the scene
@@ -157,26 +157,26 @@ class SceneOptimizer(abc.ABC):
 
         :returns: A tuple of tensors of shape (1,) that contain the total image loss and
             the regularization loss for the provided parameters.
-        :raises ValueError: if `sensors` or `ref_images` are empty, or if they have
-            different lengths.
         """
-        if len(sensors) == 0:
-            raise ValueError("At least one sensor is required in 'sensors' list")
-        if len(sensors) != len(ref_images):
-            raise ValueError(
-                "There has to be as many 'ref_images' as there are 'sensors'"
-            )
+        if len(ref_images) == 0:
+            raise ValueError("At least one image is required `ref_images` list")
 
         param_config.scene_update_callback(parameters)
 
         batch_reg_loss = mi.TensorXf(0.0)
         batch_image_loss = mi.TensorXf(0.0)
 
-        for sensor, ref_image in zip(sensors, ref_images):
+        for ref_image in ref_images:
             image = mi.render(
-                scene=scene, params=scene_params, sensor=sensor, seed=seed
+                scene=scene,
+                params=scene_params,
+                sensor=ref_image.sensor,
+                seed=seed,
             )
-            loss = param_config.image_loss.evaluate(image=image, ref_image=ref_image)
+            image = ref_image.apply_mask(image)
+            loss = param_config.image_loss.evaluate(
+                image=image, ref_image=ref_image.image
+            )
             batch_image_loss += loss
 
         if param_config.regularization is not None:
@@ -184,7 +184,7 @@ class SceneOptimizer(abc.ABC):
             batch_reg_loss += reg_loss
 
         # Normalize the image loss by the number of sensors
-        batch_image_loss /= len(sensors)
+        batch_image_loss /= len(ref_images)
 
         return batch_image_loss, batch_reg_loss
 
@@ -193,8 +193,7 @@ class SceneOptimizer(abc.ABC):
         scene: "mi.Scene",
         scene_params: "mi.SceneParams",
         param_optimization_configs: list[ParamOptimizationConfig],
-        ref_images: list["mi.TensorXf"],
-        sensors: list["mi.Sensor"],
+        ref_images: list[MaskedPoseImage],
         optimization_events: OptimizationEvents,
         num_iters: int,
     ) -> None:
@@ -203,7 +202,8 @@ class SceneOptimizer(abc.ABC):
 
         Images are rendered based on `scene` and `scene_params`.
         Optimization proceeds for `num_iters`; each iteration considers all
-        `sensors` and computes a loss based on the rendered images and `ref_images`.
+        sensors of `ref_images` and computes a loss based on the rendered images and
+        `ref_images`.
 
         No assumptions are made about which parameter(s) of the scene are optimized.
         Each has unique properties, defined by the `param_optimization_configs` list.
@@ -230,14 +230,12 @@ class SceneOptimizer(abc.ABC):
             `optimize` - this is detected by checking if all parameters in
             `param_optimization_configs` are initialized in the optimizer.
 
-        :raises ValueError: if `ref_images` and `sensors` do not have the same length,
-            or they are empty, if `param_optimization_configs` is empty,
+        :raises ValueError: if `ref_images` is empty,
+            or if `param_optimization_configs` is empty,
             or if `num_iters` is less than 1.
         """
         if len(ref_images) == 0:
             raise ValueError("At least one image is required in 'ref_images' list.")
-        if len(sensors) != len(ref_images):
-            raise ValueError("There has to be as many 'ref_images' as there 'sensors'.")
         if num_iters < 1:
             raise ValueError("`num_iters` has to be at least 1.")
         if len(param_optimization_configs) == 0:
@@ -268,7 +266,6 @@ class SceneOptimizer(abc.ABC):
                 scene=scene,
                 scene_params=scene_params,
                 param_optimization_configs=param_optimization_configs,
-                sensors=sensors,
                 ref_images=ref_images,
                 seed=iteration,
             )
@@ -292,17 +289,16 @@ class SceneOptimizer(abc.ABC):
         scene: "mi.Scene",
         scene_params: "mi.SceneParams",
         param_optimization_configs: list["SceneOptimizer.ParamOptimizationConfig"],
-        sensors: list["mi.Sensor"],
-        ref_images: list["mi.TensorXf"],
+        ref_images: list[MaskedPoseImage],
         seed: int,
     ) -> tuple["mi.TensorXf", "mi.TensorXf"]:
         """
         Execute a single optimization step.
 
         Images are rendered based on `scene` and `scene_params`.
-        All views specified by `sensors` are considered and `image_loss`
-        is computed for the rendered images and `ref_images` for every internal
-        parameter of the scene. The regularization loss is computed after each
+        All views specified by sensors of `ref_images` are considered and
+        `image_loss` is computed between the rendered images and `ref_images` for every
+        internal parameter of the scene. The regularization loss is computed after each
         update (at the end of the batch) and added to the total loss.
 
         How the scene parameters should be updated is specified and which loss is

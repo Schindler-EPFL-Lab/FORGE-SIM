@@ -3,7 +3,6 @@ from pathlib import Path
 from typing import Any
 
 import mitsuba as mi
-import mlflow
 
 from rebel_shape.loss_evaluators.image_loss import ImageLoss
 from rebel_shape.loss_evaluators.image_loss_l2 import ImageLossL2
@@ -160,7 +159,3 @@ class AttributeTextureOptimizer(PropertyOptimizer):
 
         mesh_output_path_str = str(output_directory / mesh_name)
         mesh.write_ply(mesh_output_path_str)
-
-        mlflow.log_artifact(
-            local_path=mesh_output_path_str, artifact_path="logged_meshes"
-        )

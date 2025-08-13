@@ -5,7 +5,6 @@ from typing import Any
 import drjit as dr
 import jsonpickle
 import mitsuba as mi
-import mlflow
 
 from rebel_shape.loss_evaluators.image_loss import ImageLoss
 from rebel_shape.loss_evaluators.image_loss_l2 import ImageLossL2
@@ -154,8 +153,7 @@ class FieldTextureOptimizer(BitmapTextureOptimizer):
         and saves it to `output_directory` with a name that includes the current
         timestamp and `iteration` number.
 
-        If `output_directory` is None, the method does nothing. The spline is also
-        logged as an artifact in mlflow in directory `logged_splines`.
+        If `output_directory` is None, the method does nothing.
         """
         if output_directory is None:
             return
@@ -171,8 +169,3 @@ class FieldTextureOptimizer(BitmapTextureOptimizer):
         )
         with open(output_directory / save_name, "w") as spline_file:
             spline_file.write(encoded_spline)
-
-        mlflow.log_artifact(
-            local_path=str(output_directory / save_name),
-            artifact_path="logged_splines",
-        )

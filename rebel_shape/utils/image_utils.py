@@ -2,7 +2,6 @@ from pathlib import Path
 
 import matplotlib.pyplot as plt
 import mitsuba as mi
-import mlflow
 
 
 def show_rendered_views(
@@ -48,8 +47,6 @@ def show_rendered_views(
     if save_path is not None:
         save_path.parent.mkdir(exist_ok=True)
         plt.savefig(save_path, bbox_inches="tight", dpi=200)
-
-        mlflow.log_figure(figure=fig, artifact_file=f"logged_images/{save_path.name}")
 
     plt.show()
     plt.close(fig)
@@ -97,7 +94,3 @@ def show_comparison_with_reference(
 
     plt.show()
     plt.close(fig)
-
-    mlflow.log_figure(
-        figure=fig, artifact_file=save_path.name if save_path else "comparison.png"
-    )

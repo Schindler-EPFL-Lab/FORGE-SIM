@@ -21,6 +21,7 @@ sys.path.append("./")
 from dataclasses_reverse_cli.reverse_cli import ReverseCli
 
 from rebel_shape import logger
+from rebel_shape.data_processing.masked_pose_image import MaskedPoseImage
 from rebel_shape.data_processing.thermoscenes_loader import ThermoScenesLoader
 from rebel_shape.loss_evaluators.image_loss_l1 import ImageLossL1
 from rebel_shape.plugin_wrappers.diffuse_bsdf import DiffuseBSDF
@@ -104,10 +105,8 @@ def initialize_scene(
     mesh_path: Path,
 ) -> tuple[
     "mi.Scene",
-    list["mi.Sensor"],
-    list["mi.TensorXf"],
-    list["mi.Sensor"],
-    list["mi.TensorXf"],
+    list[MaskedPoseImage],
+    list[MaskedPoseImage],
 ]:
     """
     Creates and loads Mitsuba dictionary that represents the scene, as well as
@@ -127,9 +126,7 @@ def initialize_scene(
     :returns: A tuple containing:
 
         - `scene`: The Mitsuba scene dictionary representing the scene.
-        - `train_sensors`: A list of Mitsuba sensors for training cameras.
         - `train_images`: A list of training images loaded from ThermoScenes.
-        - `evaluation_sensors`: A list of Mitsuba sensors for evaluation cameras.
         - `evaluation_images`: A list of evaluation images loaded from ThermoScenes.
 
     """
@@ -177,18 +174,9 @@ def initialize_scene(
     scene_dict = {"type": "scene", "integrator": integrator.mitsuba_dict, "shape": mesh}
     scene_source: "mi.Scene" = mi.load_dict(scene_dict)
 
-    train_sensors: list["mi.Sensor"] = [
-        mi.load_dict(camera.mitsuba_dict) for camera in loader.train_cameras_thermal
-    ]
-    eval_sensors: list["mi.Sensor"] = [
-        mi.load_dict(camera.mitsuba_dict) for camera in loader.eval_cameras_thermal
-    ]
-
     return (
         scene_source,
-        train_sensors,
         loader.train_images_thermal,
-        eval_sensors,
         loader.eval_images_thermal,
     )
 
@@ -230,7 +218,7 @@ def inpaint_thermal_information(params: ThermalInpaintingParameters) -> None:
         logger.info("Using the CPU for rendering.")
 
     # Initialize the scene, reference images and cameras
-    scene_source, sensors, ref_images, eval_sensors, eval_images = initialize_scene(
+    scene_source, ref_images, eval_images = initialize_scene(
         continuous_samples=params.continuous_samples,
         thermoscenes_scene_path=params.thermoscenes_scene_path,
         mesh_path=params.mesh_path,
@@ -257,27 +245,26 @@ def inpaint_thermal_information(params: ThermalInpaintingParameters) -> None:
     )
     optimizer.show_comparison_with_reference(
         ref_images=eval_images,
-        sensors=eval_sensors,
         samples_per_pixel=params.continuous_samples * 4,
         save_path=save_path,
     )
     logger.info("Rendered initial state.")
 
     optimizer.optimize(
-        sensors=sensors,
         ref_images=ref_images,
         scene_optimizer=SceneAdamSequential(
             batch_size=params.texture_batch_size, uniform=False
         ),
         num_iters=params.optimization_iterations,
-        views_to_render=eval_sensors[: params.num_of_images_to_save],
+        views_to_render=[
+            image.sensor for image in eval_images[: params.num_of_images_to_save]
+        ],
         save_directory_path=params.output_folder,
     )
     logger.info("Finished optimization, rendering final state.")
 
     optimizer.show_comparison_with_reference(
         ref_images=ref_images,
-        sensors=sensors,
         samples_per_pixel=params.continuous_samples * 4,
         save_path=params.output_folder / "Final_comparison.png",
     )

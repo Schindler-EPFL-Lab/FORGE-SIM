@@ -22,6 +22,7 @@ from dataclasses_reverse_cli.reverse_cli import ReverseCli
 
 from rebel_shape import logger
 from rebel_shape.data_processing.input_preprocessing import preprocess_rgb_images
+from rebel_shape.data_processing.masked_pose_image import MaskedPoseImage
 from rebel_shape.loss_evaluators.composite_loss import CompositeImageLoss
 from rebel_shape.loss_evaluators.image_loss_l1 import ImageLossL1
 from rebel_shape.loss_evaluators.image_loss_l2 import ImageLossL2
@@ -150,6 +151,11 @@ class ThermoSceneSplineOptimizationParameters(ReverseCli):
     Whether to use GPU for rendering or not. Note that the compute instance
     must have GPU support for this to work. For local testing, set to False.
     """
+    mask_pixels_during_optimization: bool = False
+    """
+    Whether to masks are applied during the optimization process. Note that during
+    the pose optimization the masks are not applied
+    """
 
     def __post_init__(self) -> None:
         if self.texture_resolution < 1:
@@ -268,10 +274,8 @@ def initialize_scene(
     initial_sphere_radius: float,
 ) -> tuple[
     "mi.Scene",
-    list["mi.Sensor"],
-    list["mi.TensorXf"],
-    list["mi.Sensor"],
-    list["mi.TensorXf"],
+    list["MaskedPoseImage"],
+    list["MaskedPoseImage"],
     TessellatedSplineSurface,
 ]:
     """
@@ -296,9 +300,7 @@ def initialize_scene(
 
         - `scene_source`: The Mitsuba scene with the tessellated B-spline surface
             patches and the environment map.
-        - `train_sensors`: List of loaded Mitsuba sensors used for training.
         - `reference_images`: List of reference images for training.
-        - `evaluation_sensors`: List of loaded Mitsuba sensors used for evaluation.
         - `evaluation_images`: List of reference images for evaluation.
         - `tessellated_spline_surface`: The tessellated spline surface used for
             optimization. Initial mesh is a cubed sphere.
@@ -321,13 +323,13 @@ def initialize_scene(
 
     sampler = Sampler(type=Sampler.Type.ORTHOGONAL, sample_count=continuous_samples)
 
-    sensors, ref_images = preprocess_rgb_images(
+    ref_images = preprocess_rgb_images(
         scene_path=thermoscenes_scene_path,
         environment_map_path=envmap_path,
         spp=4,
         sampler=sampler,
     )
-    eval_sensors, eval_images = preprocess_rgb_images(
+    eval_images = preprocess_rgb_images(
         scene_path=thermoscenes_scene_path,
         environment_map_path=envmap_path,
         spp=4,
@@ -368,7 +370,7 @@ def initialize_scene(
 
         scene_source: "mi.Scene" = mi.load_dict(scene_dict)
 
-    return scene_source, sensors, ref_images, eval_sensors, eval_images, cubedsphere
+    return scene_source, ref_images, eval_images, cubedsphere
 
 
 def optimize_thermoscenes_scene(
@@ -400,6 +402,9 @@ def optimize_thermoscenes_scene(
     Optimization can either be executed on a GPU or CPU, depending on the
     `params.use_gpu` parameter.
 
+    Optimization can be done with masked pixels or with original pixels depending
+    on the `params.mask_pixels_during_optimization` parameter.
+
     :raises ValueError: If `params.thermoscenes_scene_path` is not a valid path, or
         it is not a directory.
     """
@@ -416,19 +421,27 @@ def optimize_thermoscenes_scene(
         logger.info("Using the CPU for rendering")
 
     # Initialize the scene, reference images and cameras
-    (scene, sensors, ref_images, eval_sensors, eval_images, tessellated_spline) = (
-        initialize_scene(
-            continuous_samples=params.continuous_samples,
-            visibility_samples=params.visibility_samples,
-            thermoscenes_scene_path=params.thermoscenes_scene_path,
-            envmap_path=params.environment_map_path,
-            texture_resolution=params.texture_resolution,
-            spline_degree=params.spline_degree,
-            spline_subdivisions=params.spline_subdivisions,
-            mesh_subdivisions=params.mesh_subdivisions,
-            initial_sphere_radius=params.initial_sphere_radius,
-        )
+    (scene, ref_images, eval_images, tessellated_spline) = initialize_scene(
+        continuous_samples=params.continuous_samples,
+        visibility_samples=params.visibility_samples,
+        thermoscenes_scene_path=params.thermoscenes_scene_path,
+        envmap_path=params.environment_map_path,
+        texture_resolution=params.texture_resolution,
+        spline_degree=params.spline_degree,
+        spline_subdivisions=params.spline_subdivisions,
+        mesh_subdivisions=params.mesh_subdivisions,
+        initial_sphere_radius=params.initial_sphere_radius,
     )
+
+    ref_images_no_mask = [
+        MaskedPoseImage(image=image.original_image, camera=image.camera, mask=None)
+        for image in ref_images
+    ]
+    eval_images_no_mask = [
+        MaskedPoseImage(image=image.original_image, camera=image.camera, mask=None)
+        for image in eval_images
+    ]
+
     scene_params = mi.traverse(scene)
 
     shape_key = tessellated_spline.mesh_name
@@ -454,13 +467,14 @@ def optimize_thermoscenes_scene(
         )
 
         pose_optimizer.optimize(
-            sensors=sensors,
-            ref_images=ref_images,
+            ref_images=ref_images_no_mask,
             scene_optimizer=SceneAdamSequential(
                 batch_size=params.pose_batch_size, uniform=False
             ),
             num_iters=params.pose_optimization_iterations,
-            views_to_render=eval_sensors[: params.num_of_images_to_save],
+            views_to_render=[
+                image.sensor for image in eval_images[: params.num_of_images_to_save]
+            ],
             save_directory_path=params.output_folder,
         )
 
@@ -527,7 +541,6 @@ def optimize_thermoscenes_scene(
     )
     optimizer.show_comparison_with_reference(
         ref_images=eval_images,
-        sensors=eval_sensors,
         samples_per_pixel=params.continuous_samples * 4,
         save_path=save_path,
     )
@@ -557,19 +570,23 @@ def optimize_thermoscenes_scene(
         )
         logger.info(f"Scheduling refinement by factor 2 for iteration {iteration}")
 
+    if not params.mask_pixels_during_optimization:
+        ref_images = ref_images_no_mask
+        eval_images = eval_images_no_mask
+
     optimizer.optimize(
-        sensors=sensors,
-        ref_images=ref_images,
+        ref_images,
         scene_optimizer=composite_scene_optimizer,
         num_iters=params.optimization_iterations,
-        views_to_render=eval_sensors[: params.num_of_images_to_save],
+        views_to_render=[
+            image.sensor for image in eval_images[: params.num_of_images_to_save]
+        ],
         save_directory_path=params.output_folder,
     )
     logger.info("Finished optimization, rendering final images")
 
     optimizer.show_comparison_with_reference(
         ref_images=ref_images,
-        sensors=sensors,
         samples_per_pixel=params.continuous_samples * 4,
         save_path=params.output_folder / "Final_comparison.png",
     )

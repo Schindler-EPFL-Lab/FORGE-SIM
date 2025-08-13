@@ -2,6 +2,7 @@ import drjit as dr
 import mitsuba as mi
 import numpy as np
 
+from rebel_shape.data_processing.masked_pose_image import MaskedPoseImage
 from rebel_shape.scene_optimizers.scene_adam import SceneAdam
 from rebel_shape.scene_optimizers.scene_optimizer import SceneOptimizer
 
@@ -58,15 +59,14 @@ class SceneAdamSimultaneous(SceneAdam):
         scene: "mi.Scene",
         scene_params: "mi.SceneParams",
         param_optimization_configs: list[SceneOptimizer.ParamOptimizationConfig],
-        sensors: list["mi.Sensor"],
-        ref_images: list["mi.TensorXf"],
+        ref_images: list[MaskedPoseImage],
         seed: int,
     ) -> tuple["mi.TensorXf", "mi.TensorXf"]:
         """
         Execute a single optimization step.
 
         Images are rendered based on `scene` and `scene_params`.
-        All views specified by `sensors` are considered and `image_loss`
+        All views specified by sensors of `ref_images` are considered and `image_loss`
         is computed for the rendered images and `ref_images`.. The regularization
         loss is computed after each update (at the end of the batch) and added to the
         total loss.
@@ -82,7 +82,7 @@ class SceneAdamSimultaneous(SceneAdam):
         :returns: A tuple of tensors of shape (1,) that contain the total loss and the
             regularization loss of the optimization step.
         """
-        sensor_count = len(sensors)
+        sensor_count = len(ref_images)
 
         total_loss = mi.TensorXf(0.0)
         total_reg_loss = mi.TensorXf(0.0)
@@ -103,7 +103,6 @@ class SceneAdamSimultaneous(SceneAdam):
                 image_loss, reg_loss = self._objective_function(
                     scene=scene,
                     scene_params=scene_params,
-                    sensors=[sensors[i] for i in batch_indices],
                     ref_images=[ref_images[i] for i in batch_indices],
                     param_config=param_config,
                     parameters=self.parameters[param_config.parameter_key],

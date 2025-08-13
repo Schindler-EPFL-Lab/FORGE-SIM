@@ -4,7 +4,6 @@ from typing import Any
 
 import drjit as dr
 import mitsuba as mi
-import mlflow
 import numpy as np
 
 from rebel_shape.loss_evaluators.image_loss import ImageLoss
@@ -182,7 +181,6 @@ class BitmapTextureOptimizer(PropertyOptimizer):
         overall memory footprint of the optimization process.
 
         If `output_directory` is None, the method returns without saving.
-        The texture is also logged by mlflolw in directory `logged_textures`.
         """
         if (iteration + 1) % self._texture_save_interval != 0:
             return
@@ -203,10 +201,6 @@ class BitmapTextureOptimizer(PropertyOptimizer):
 
             output_name_path_str = str(output_directory / output_name)
             texture.write(output_name_path_str)
-
-            mlflow.log_artifact(
-                local_path=output_name_path_str, artifact_path="logged_textures"
-            )
 
     @staticmethod
     def generate_empty_texture(

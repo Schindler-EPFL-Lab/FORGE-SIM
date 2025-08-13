@@ -1,5 +1,6 @@
 import mitsuba as mi
 
+from rebel_shape.data_processing.masked_pose_image import MaskedPoseImage
 from rebel_shape.scene_optimizers.scene_optimizer import (
     MitsubaOptimizationType,
     SceneOptimizer,
@@ -151,17 +152,16 @@ class CompositeSceneOptimizer(SceneOptimizer):
         scene: "mi.Scene",
         scene_params: "mi.SceneParams",
         param_optimization_configs: list[SceneOptimizer.ParamOptimizationConfig],
-        sensors: list["mi.Sensor"],
-        ref_images: list["mi.TensorXf"],
+        ref_images: list[MaskedPoseImage],
         seed: int = 0,
     ) -> tuple["mi.TensorXf", "mi.TensorXf"]:
         """
         Execute a single optimization step for all optimizers.
 
         Images are rendered based on `scene` and `scene_params`.
-        All views specified by `sensors` are considered and `image_loss`
-        is computed for the rendered images and `ref_images` for every internal
-        parameter of the scene. The regularization loss is computed after each
+        All views specified by sensors of `ref_images` are considered and `image_loss`
+        is computed between the rendered images and `ref_images` for every
+        internal parameter of the scene. The regularization loss is computed after each
         update (at the end of the batch) and added to the total loss.
 
         How the scene parameters should be updated is specified and which loss is
@@ -204,7 +204,6 @@ class CompositeSceneOptimizer(SceneOptimizer):
                 scene=scene,
                 scene_params=scene_params,
                 param_optimization_configs=param_configs,
-                sensors=sensors,
                 ref_images=ref_images,
                 seed=seed,
             )

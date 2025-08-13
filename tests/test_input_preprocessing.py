@@ -15,11 +15,10 @@ class TestInputPreprocessing(unittest.TestCase):
         dataset_path = local_dir / "data/thermoscenes_example/buildingA_winter"
         envmap_path = local_dir / "data/textures/overcast_soil_1k.exr"
 
-        sensors, ref_images = preprocess_rgb_images(
+        images = preprocess_rgb_images(
             scene_path=dataset_path,
             environment_map_path=envmap_path,
             spp=1,
         )
 
-        self.assertEqual(len(sensors), 2)
-        self.assertEqual(len(ref_images), 2)
+        self.assertEqual(len(images), 2)

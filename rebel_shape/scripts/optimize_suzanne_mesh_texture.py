@@ -22,6 +22,7 @@ sys.path.append("./")
 from dataclasses_reverse_cli.reverse_cli import ReverseCli
 
 from rebel_shape import logger
+from rebel_shape.data_processing.masked_pose_image import MaskedPoseImage
 from rebel_shape.loss_evaluators.composite_loss import CompositeImageLoss
 from rebel_shape.loss_evaluators.image_loss_l1 import ImageLossL1
 from rebel_shape.loss_evaluators.image_loss_msssim import ImageLossMSSSIM
@@ -39,7 +40,7 @@ from rebel_shape.scene_optimizers.optimization_events import OptimizationEvents
 from rebel_shape.scene_optimizers.scene_adam_sequential import SceneAdamSequential
 from rebel_shape.schedulers.exponential_scheduler import ExponentialScheduler
 from rebel_shape.utils.image_utils import show_rendered_views
-from rebel_shape.utils.sensor_utils import create_sensors_fibonacci
+from rebel_shape.utils.sensor_utils import create_cameras_fibonacci
 
 
 @dataclass
@@ -97,7 +98,7 @@ def initialize_scene(
     reference_samples: int,
     image_resolution: int,
     texture_resolution: int,
-) -> tuple["mi.Scene", list["mi.Sensor"], list["mi.TensorXf"]]:
+) -> tuple["mi.Scene", list[MaskedPoseImage]]:
     """
     Sets up the scene, sensors, and reference images for shape optimization.
 
@@ -119,10 +120,9 @@ def initialize_scene(
 
         - `scene_source`: The Mitsuba scene to be optimized, which contains the
             initial shape and texture.
-        - `sensors`: A list of Mitsuba camera sensors created in a Fibonacci pattern
-            around the origin, each with a resolution of `image_resolution`.
-        - `ref_images`: A list of reference images rendered from the target scene
-            with `reference_samples` samples per pixel.
+        - `ref_images`: a list of reference images rendered from a camera sensors
+            created in a Fibonacci pattern around the origin, each with a resolution of
+            `image_resolution` with `reference_samples` samples per pixel.
     """
     integrator = PRBIntegrator(
         max_bounces=4,
@@ -160,7 +160,7 @@ def initialize_scene(
 
     # Target images are obtained through rendering
     scene_target: "mi.Scene" = mi.load_dict(scene_dict)
-    sensors = create_sensors_fibonacci(
+    cameras = create_cameras_fibonacci(
         sensor_count=sensor_count,
         target_coords=(0.0, 0.0, 0.0),
         sensor_resolution=(image_resolution, image_resolution),
@@ -169,8 +169,16 @@ def initialize_scene(
 
     start_time = time.time()
     ref_images = [
-        mi.render(scene_target, sensor=sensors[i], spp=reference_samples)
+        mi.render(scene_target, sensor=cameras[i].mitsuba_sensor, spp=reference_samples)
         for i in range(sensor_count)
+    ]
+    ref_images = [
+        MaskedPoseImage(
+            image=ref_image,
+            camera=camera,
+            mask=None,
+        )
+        for ref_image, camera in zip(ref_images, cameras)
     ]
     show_rendered_views(
         views=[mi.util.convert_to_bitmap(image) for image in ref_images]
@@ -199,7 +207,7 @@ def initialize_scene(
 
         scene_source: "mi.Scene" = mi.load_dict(scene_dict)
 
-    return scene_source, sensors, ref_images
+    return scene_source, ref_images
 
 
 def optimize_suzanne(params: SuzanneMeshTextureParameters) -> None:
@@ -225,7 +233,7 @@ def optimize_suzanne(params: SuzanneMeshTextureParameters) -> None:
         mi.set_variant("llvm_ad_rgb")
         logger.info("Using the CPU for rendering.")
 
-    scene_source, sensors, ref_images = initialize_scene(
+    scene_source, ref_images = initialize_scene(
         sensor_count=params.sensor_count,
         base_samples=params.base_samples,
         reference_samples=params.reference_samples,
@@ -278,18 +286,18 @@ def optimize_suzanne(params: SuzanneMeshTextureParameters) -> None:
     )
 
     optimizer.optimize(
-        sensors=sensors,
         ref_images=ref_images,
         scene_optimizer=composite_scene_optimizer,
         num_iters=params.optimization_iterations,
-        views_to_render=[sensors[i] for i in range(0, params.sensor_count, 2)],
+        views_to_render=[
+            ref_images[i].sensor for i in range(0, params.sensor_count, 2)
+        ],
         save_directory_path=params.output_folder,
     )
     logger.info("Finished optimization, rendering final images.")
 
     optimizer.show_comparison_with_reference(
         ref_images=ref_images,
-        sensors=sensors,
         samples_per_pixel=params.reference_samples,
         save_path=params.output_folder / "Final_comparison.png",
     )

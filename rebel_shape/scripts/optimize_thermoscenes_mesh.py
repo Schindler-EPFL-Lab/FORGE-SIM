@@ -12,6 +12,8 @@ import mitsuba as mi
 import mlflow
 import tyro
 
+from rebel_shape.data_processing.masked_pose_image import MaskedPoseImage
+
 # This is a hack so that the script work with azure sdkv2.
 # The root folder is _not_ added to the python path as it was in sdkv1
 # and thus, local imports of rebel_nerf are not found.
@@ -127,6 +129,11 @@ class ThermoSceneOptimizationParameters(ReverseCli):
     Whether to use GPU for rendering or not. Note that the compute instance
     must have GPU support for this to work. For local testing, set to False.
     """
+    mask_pixels_during_optimization: bool = False
+    """
+    Whether the masks are applied during the optimization process to ignore non-building
+    pixels. Note that during the pose optimization the masks are not applied
+    """
 
     def __post_init__(self) -> None:
         if self.texture_resolution < 1:
@@ -216,10 +223,8 @@ def initialize_scene(
     texture_resolution: int,
 ) -> tuple[
     "mi.Scene",
-    list["mi.Sensor"],
-    list["mi.TensorXf"],
-    list["mi.Sensor"],
-    list["mi.TensorXf"],
+    list[MaskedPoseImage],
+    list[MaskedPoseImage],
 ]:
     """
     Creates and loads Mitsuba dictionary that represents the scene, as well as
@@ -238,9 +243,7 @@ def initialize_scene(
 
         - `scene_source`: A Mitsuba scene object with the initial guess mesh and
             the environment map loaded.
-        - `train_sensors`: List of loaded Mitsuba sensors used for training.
         - `reference_images`: List of reference images for training.
-        - `evaluation_sensors`: List of loaded Mitsuba sensors used for evaluation.
         - `evaluation_images`: List of reference images for evaluation.
 
     :raises ValueError: If `thermoscenes_scene_path` is not a valid path, if the
@@ -262,13 +265,13 @@ def initialize_scene(
 
     sampler = Sampler(type=Sampler.Type.MULTIJITTER, sample_count=continuous_samples)
 
-    sensors, ref_images = preprocess_rgb_images(
+    ref_images = preprocess_rgb_images(
         scene_path=thermoscenes_scene_path,
         environment_map_path=envmap_path,
         spp=4,
         sampler=sampler,
     )
-    eval_sensors, eval_images = preprocess_rgb_images(
+    eval_images = preprocess_rgb_images(
         scene_path=thermoscenes_scene_path,
         environment_map_path=envmap_path,
         spp=4,
@@ -303,7 +306,7 @@ def initialize_scene(
         }
         scene_source: "mi.Scene" = mi.load_dict(scene_dict)
 
-    return scene_source, sensors, ref_images, eval_sensors, eval_images
+    return scene_source, ref_images, eval_images
 
 
 def optimize_thermoscenes_scene(params: ThermoSceneOptimizationParameters) -> None:
@@ -348,7 +351,7 @@ def optimize_thermoscenes_scene(params: ThermoSceneOptimizationParameters) -> No
         logger.info("Using the CPU for rendering.")
 
     # Initialize the scene, reference images and cameras
-    scene_source, sensors, ref_images, eval_sensors, eval_images = initialize_scene(
+    scene_source, ref_images, eval_images = initialize_scene(
         continuous_samples=params.continuous_samples,
         visibility_samples=params.visibility_samples,
         thermoscenes_scene_path=params.thermoscenes_scene_path,
@@ -362,6 +365,15 @@ def optimize_thermoscenes_scene(params: ThermoSceneOptimizationParameters) -> No
             f"Expected at least {params.num_of_images_to_save}, "
             f"but got {len(eval_images)}."
         )
+
+    ref_images_no_mask = [
+        MaskedPoseImage(image=image.original_image, camera=image.camera, mask=None)
+        for image in ref_images
+    ]
+    eval_images_no_mask = [
+        MaskedPoseImage(image=image.original_image, camera=image.camera, mask=None)
+        for image in eval_images
+    ]
 
     shape_key = "shape"
     texture_key = "shape.bsdf.reflectance.data"
@@ -386,13 +398,14 @@ def optimize_thermoscenes_scene(params: ThermoSceneOptimizationParameters) -> No
         )
 
         pose_optimizer.optimize(
-            sensors=sensors,
-            ref_images=ref_images,
+            ref_images=ref_images_no_mask,
             scene_optimizer=SceneAdamSequential(
                 batch_size=params.pose_batch_size, uniform=False
             ),
             num_iters=params.pose_optimization_iterations,
-            views_to_render=eval_sensors[: params.num_of_images_to_save],
+            views_to_render=[
+                image.sensor for image in eval_images[: params.num_of_images_to_save]
+            ],
             save_directory_path=params.output_folder,
         )
 
@@ -449,9 +462,9 @@ def optimize_thermoscenes_scene(params: ThermoSceneOptimizationParameters) -> No
         if params.output_folder is not None
         else None
     )
+
     optimizer.show_comparison_with_reference(
         ref_images=eval_images,
-        sensors=eval_sensors,
         samples_per_pixel=params.continuous_samples * 4,
         save_path=save_path,
     )
@@ -472,19 +485,23 @@ def optimize_thermoscenes_scene(params: ThermoSceneOptimizationParameters) -> No
         ],
     )
 
+    if not params.mask_pixels_during_optimization:
+        ref_images = ref_images_no_mask
+        eval_images = eval_images_no_mask
+
     optimizer.optimize(
-        sensors=sensors,
         ref_images=ref_images,
         scene_optimizer=composite_scene_optimizer,
         num_iters=params.optimization_iterations,
-        views_to_render=eval_sensors[: params.num_of_images_to_save],
+        views_to_render=[
+            image.sensor for image in eval_images[: params.num_of_images_to_save]
+        ],
         save_directory_path=params.output_folder,
     )
     logger.info("Finished optimization, rendering final state.")
 
     optimizer.show_comparison_with_reference(
         ref_images=ref_images,
-        sensors=sensors,
         samples_per_pixel=params.continuous_samples * 4,
         save_path=params.output_folder / "Final_comparison.png",
     )

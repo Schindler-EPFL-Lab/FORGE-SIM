@@ -4,7 +4,6 @@ from typing import Any
 
 import drjit as dr
 import mitsuba as mi
-import mlflow
 
 from rebel_shape.loss_evaluators.image_loss import ImageLoss
 from rebel_shape.loss_evaluators.image_loss_l2 import ImageLossL2
@@ -200,7 +199,7 @@ class MeshOptimizer(PropertyOptimizer):
         `iteration` number.
 
         If `output_directory` is None, the mesh is not saved and the method returns
-        immediately. The mesh is also logged by mlflow in directory `logged_meshes`.
+        immediately.
 
         :raises ValueError: If the mesh with the specified `shape_key` is not found
             in the scene.
@@ -220,7 +219,3 @@ class MeshOptimizer(PropertyOptimizer):
 
         mesh_output_path_str = str(output_directory / mesh_name)
         mesh.write_ply(mesh_output_path_str)
-
-        mlflow.log_artifact(
-            local_path=mesh_output_path_str, artifact_path="logged_meshes"
-        )
