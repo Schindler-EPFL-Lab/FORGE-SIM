@@ -30,12 +30,14 @@ azure = [
     "debugpy>=1.8.12",
 ]
 azure-local = ["azure-cli>=2.70.0", "azure-ml-utils>=0.0.1"]
+depth-estimation = ["moge"]
 
 
 [tool.uv.sources]
 azure-ml-utils = { path = "../azure-ml-utils", editable = true }
 groundingdino = { git = "https://github.com/IDEA-Research/GroundingDINO", rev = "5a890bd867ab0eacb851046c7f5a55cab0e77925" }
 segment-anything = { git = "https://github.com/facebookresearch/segment-anything", rev = "dca509fe793f601edb92606367a655c15ac00fdf" }
+moge = { git = "https://github.com/microsoft/MoGe", rev = "0286b495230a074aadf1c76cc5c679e943e5d1c6" }
 
 [[tool.uv.dependency-metadata]]
 name = "groundingdino"

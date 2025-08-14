@@ -57,7 +57,7 @@ COPY README.md README.md
 RUN ls
 
 # Install dependencies
-RUN uv sync --frozen --extra azure
+RUN uv sync --frozen --extra azure --extra depth-estimation
 
 RUN uv pip freeze
 # Put the python binary at the front of the path to use directly in future commands.
