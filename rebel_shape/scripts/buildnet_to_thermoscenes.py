@@ -11,6 +11,7 @@ import json
 from dataclasses import dataclass
 from pathlib import Path
 
+import numpy as np
 import tyro
 from dataclasses_reverse_cli.reverse_cli import ReverseCli
 from PIL import Image
@@ -32,6 +33,11 @@ class BuildNetConversionParams(ReverseCli):
     """
     Path where the ThermoScenes-formatted dataset will be written.
     Creates images/ and thermal/ subdirectories with transforms.json
+    """
+    num_images: int | None = None
+    """
+    Number of images to keep from the original dataset (out of a total of 200 images).
+    The default is keeping the entire dataset.
     """
     train_fraction: float = 0.9
     """
@@ -58,7 +64,8 @@ class BuildNetConversionParams(ReverseCli):
 
 def convert_buildnet3d_to_thermoscenes(params: BuildNetConversionParams) -> None:
     """
-    Convert a BuildNet3D scene folder into ThermoScenes format with train/eval split.
+    Convert a BuildNet3D scene folder into ThermoScenes format with train/eval split
+    and a given number of images to keep out of the original 200 images.
 
     This function processes BuildNet3D scenes by:
     1. Loading camera intrinsics and frame metadata from meta_data.json
@@ -122,6 +129,14 @@ def convert_buildnet3d_to_thermoscenes(params: BuildNetConversionParams) -> None
         raise ValueError("No frames found in meta_data.json")
 
     logger.info(f"Found {len(frames)} frames with resolution {width}x{height}")
+
+    # Fix the seed so that the same images are chosen every time
+    np.random.seed(42)
+    num_images = params.num_images if params.num_images is not None else len(frames)
+    indices_to_keep = np.random.choice(len(frames), size=num_images, replace=False)
+    frames = [frames[i] for i in indices_to_keep]
+
+    logger.info(f"Keeping {len(frames)} frames with indices: \n {indices_to_keep}")
 
     # --- 3) Extract and verify camera intrinsics ---
     reference_intrinsics = frames[0].get("intrinsics")

@@ -5,7 +5,7 @@ reconstructed mesh vertices using the thermal images from the ThermoScenes scene
 """
 
 import sys
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 import mitsuba as mi
@@ -23,7 +23,6 @@ from dataclasses_reverse_cli.reverse_cli import ReverseCli
 from rebel_shape import logger
 from rebel_shape.data_processing.masked_pose_image import MaskedPoseImage
 from rebel_shape.data_processing.thermoscenes_loader import ThermoScenesLoader
-from rebel_shape.loss_evaluators.image_loss_l1 import ImageLossL1
 from rebel_shape.plugin_wrappers.diffuse_bsdf import DiffuseBSDF
 from rebel_shape.plugin_wrappers.prb_integrator import GuidingOptions, PRBIntegrator
 from rebel_shape.plugin_wrappers.sampler import Sampler
@@ -31,11 +30,12 @@ from rebel_shape.property_optimizers.attribute_texture_optimizer import (
     AttributeTextureOptimizer,
 )
 from rebel_shape.scene_optimizers.optimization_events import OptimizationEvents
-from rebel_shape.scene_optimizers.scene_adam_sequential import SceneAdamSequential
-from rebel_shape.schedulers.constant_scheduler import ConstantScheduler
+from rebel_shape.scripts.configs.texture_optimization_config import (
+    TextureOptimizationConfig,
+)
 
 
-@dataclass
+@dataclass(kw_only=True)
 class ThermalInpaintingParameters(ReverseCli):
     """
     Parameters used for inpainting thermal information onto mesh vertices.
@@ -52,20 +52,29 @@ class ThermalInpaintingParameters(ReverseCli):
     mesh_path: Path
     """Path to the reconstructed mesh that will receive the thermal vertex data."""
 
-    texture_projection_steepness: float = 1.0
-    """Steepness of the sigmoid projection for texture optimization"""
     continuous_samples: int = 16
     """Number of samples per pixel used for continuous derivatives"""
     optimization_iterations: int = 20
     """How many times all images in the dataset are used for optimization"""
-    texture_learning_rate: float = 0.01
-    """Adam learning rate for texture"""
-    texture_batch_size: int = 1
-    """Number of images used for texture gradient computation"""
+
+    texture_params: TextureOptimizationConfig = field(
+        default_factory=lambda: TextureOptimizationConfig(
+            texture_resolution=1,  # Not used for vertex attributes
+            learning_rate_start=0.01,
+            learning_rate_end=0.01,
+            learning_rate_steepness=4.0,
+            use_lbfgs=False,
+            uniform_adam=False,
+            batch_size=6,
+            use_msssim_loss=False,
+            l1_loss_weight=1.0,
+        )
+    )
+    """Parameters for mesh inpainting optimization"""
 
     output_folder: Path = Path("./outputs/")
     """Where to save the model and outputs (created if it does not exist)"""
-    num_of_images_to_save: int = 6
+    num_of_images_to_save: int = 3
     """
     Number of images to save after each optimization step. The images are taken from 
     the evaluation set.
@@ -78,23 +87,10 @@ class ThermalInpaintingParameters(ReverseCli):
     """
 
     def __post_init__(self) -> None:
-        if self.texture_projection_steepness <= 0.0:
-            raise ValueError(
-                "`texture_projection_steepness` must be a positive real number."
-            )
-
-        if self.texture_projection_steepness <= 0.0:
-            raise ValueError(
-                "`texture_projection_steepness` must be a positive real number."
-            )
         if self.continuous_samples < 1:
             raise ValueError("`continuous_samples` must be a positive integer.")
         if self.optimization_iterations < 1:
             raise ValueError("`first_pass_iterations` must be a positive integer.")
-        if self.texture_learning_rate < 0.0:
-            raise ValueError("`texture_learning_rate` must be non-negative.")
-        if self.texture_batch_size < 1:
-            raise ValueError("`batch_size` must be a positive integer")
         if self.num_of_images_to_save < 1:
             raise ValueError("`num_of_images_to_save` must be a positive integer.")
 
@@ -103,11 +99,7 @@ def initialize_scene(
     continuous_samples: int,
     thermoscenes_scene_path: Path,
     mesh_path: Path,
-) -> tuple[
-    "mi.Scene",
-    list[MaskedPoseImage],
-    list[MaskedPoseImage],
-]:
+) -> tuple["mi.Scene", list[MaskedPoseImage], list[MaskedPoseImage]]:
     """
     Creates and loads Mitsuba dictionary that represents the scene, as well as
     providing the reference images and sensor views.
@@ -130,7 +122,6 @@ def initialize_scene(
         - `evaluation_images`: A list of evaluation images loaded from ThermoScenes.
 
     """
-
     integrator = PRBIntegrator(
         max_bounces=2,
         bounces_without_russian_roulette=2,
@@ -174,11 +165,20 @@ def initialize_scene(
     scene_dict = {"type": "scene", "integrator": integrator.mitsuba_dict, "shape": mesh}
     scene_source: "mi.Scene" = mi.load_dict(scene_dict)
 
-    return (
-        scene_source,
-        loader.train_images_thermal,
-        loader.eval_images_thermal,
-    )
+    train_images_thermal = [
+        MaskedPoseImage(image=image, camera=camera, mask=None)
+        for image, camera in zip(
+            loader.train_images_thermal, loader.train_cameras_thermal
+        )
+    ]
+    eval_images_thermal = [
+        MaskedPoseImage(image=image, camera=camera, mask=None)
+        for image, camera in zip(
+            loader.eval_images_thermal, loader.eval_cameras_thermal
+        )
+    ]
+
+    return scene_source, train_images_thermal, eval_images_thermal
 
 
 def inpaint_thermal_information(params: ThermalInpaintingParameters) -> None:
@@ -224,18 +224,16 @@ def inpaint_thermal_information(params: ThermalInpaintingParameters) -> None:
         mesh_path=params.mesh_path,
     )
 
-    temperature_scheduler = ConstantScheduler(
-        learning_rate=params.texture_learning_rate
-    )
-
     optimizer = AttributeTextureOptimizer(
         scene=scene_source,
         scene_params=mi.traverse(scene_source),
         optimization_events=OptimizationEvents(),
         shape_key="shape",
         attribute_key="vertex_temperature",
-        texture_scheduler=temperature_scheduler,
-        texture_loss=ImageLossL1(),
+        texture_scheduler=params.texture_params.scheduler(
+            end_iteration=params.optimization_iterations,
+        ),
+        texture_loss=params.texture_params.image_loss,
     )
 
     save_path = (
@@ -252,9 +250,7 @@ def inpaint_thermal_information(params: ThermalInpaintingParameters) -> None:
 
     optimizer.optimize(
         ref_images=ref_images,
-        scene_optimizer=SceneAdamSequential(
-            batch_size=params.texture_batch_size, uniform=False
-        ),
+        scene_optimizer=params.texture_params.scene_optimizer,
         num_iters=params.optimization_iterations,
         views_to_render=[
             image.sensor for image in eval_images[: params.num_of_images_to_save]
@@ -277,6 +273,6 @@ def inpaint_thermal_information(params: ThermalInpaintingParameters) -> None:
 
 if __name__ == "__main__":
     parameters = tyro.cli(ThermalInpaintingParameters)
-    mlflow.log_params(parameters.loggable_dict)
+    mlflow.log_params(parameters.to_loggable_dict())
 
     inpaint_thermal_information(params=parameters)

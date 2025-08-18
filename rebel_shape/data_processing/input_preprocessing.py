@@ -9,7 +9,7 @@ from rebel_shape.plugin_wrappers.sampler import Sampler
 
 def preprocess_rgb_images(
     scene_path: Path,
-    environment_map_path: Path,
+    environment_map_path: Path | None = None,
     output_dir: Path | None = None,
     spp: int = 16,
     train: bool = True,
@@ -25,7 +25,8 @@ def preprocess_rgb_images(
 
     Then, the background from `environment_map_path` is rendered for appropriate camera
     poses. `spp` samples per pixel are used in this step. Choosing a higher value
-    than the default (`16`) has limited benefit.
+    than the default (`16`) has limited benefit. If the path is not provided, a solid
+    white background is used.
 
     The `sampler` determines the sampling strategy used for rendering and is passed
     to all cameras loaded from the ThermoScenes scene.
@@ -42,7 +43,7 @@ def preprocess_rgb_images(
     :raises RuntimeError: If the images in scene_path are not RGBA.
     """
 
-    if not environment_map_path.exists():
+    if environment_map_path is not None and not environment_map_path.exists():
         raise FileNotFoundError(f"Environment map not found at {environment_map_path}")
 
     loader = ThermoScenesLoader(scene_path=scene_path, sensor_sampler=sampler)
@@ -50,11 +51,23 @@ def preprocess_rgb_images(
     cameras = loader.train_cameras if train else loader.eval_cameras
     rgb_images = loader.train_images_rgb if train else loader.eval_images_rgb
 
+    environment_map = (
+        {"type": "envmap", "filename": str(environment_map_path)}
+        if environment_map_path is not None
+        else {
+            "type": "constant",
+            "radiance": {
+                "type": "rgb",
+                "value": 1.0,
+            },
+        }
+    )
+
     # Create a simple scene with just the environment map
     scene_dict = {
         "type": "scene",
         "integrator": {"type": "path"},
-        "environment": {"type": "envmap", "filename": str(environment_map_path)},
+        "environment": environment_map,
     }
     scene = mi.load_dict(scene_dict)
 

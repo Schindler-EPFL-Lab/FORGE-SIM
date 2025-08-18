@@ -423,6 +423,6 @@ def simulate_heat_cn(params: HeatSimulationParameters) -> None:
 
 if __name__ == "__main__":
     parameters = tyro.cli(HeatSimulationParameters)
-    mlflow.log_params(parameters.loggable_dict)
+    mlflow.log_params(parameters.to_loggable_dict())
 
     simulate_heat_cn(params=parameters)

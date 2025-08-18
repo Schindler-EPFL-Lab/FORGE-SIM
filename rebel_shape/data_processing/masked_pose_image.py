@@ -12,7 +12,7 @@ class MaskedPoseImage:
 
     def __init__(
         self,
-        image: ["mi.TensorXf"],
+        image: "mi.TensorXf",
         camera: PerspectiveCamera,
         mask: "mi.TensorXf | None" = None,
     ) -> None:

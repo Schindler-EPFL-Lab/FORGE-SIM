@@ -5,7 +5,7 @@ Performs pose, shape, and texture optimization.
 
 import sys
 import tempfile
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 import mitsuba as mi
@@ -23,10 +23,6 @@ from dataclasses_reverse_cli.reverse_cli import ReverseCli
 from rebel_shape import logger
 from rebel_shape.data_processing.input_preprocessing import preprocess_rgb_images
 from rebel_shape.data_processing.masked_pose_image import MaskedPoseImage
-from rebel_shape.loss_evaluators.composite_loss import CompositeImageLoss
-from rebel_shape.loss_evaluators.image_loss_l1 import ImageLossL1
-from rebel_shape.loss_evaluators.image_loss_l2 import ImageLossL2
-from rebel_shape.loss_evaluators.image_loss_msssim import ImageLossMSSSIM
 from rebel_shape.meshing.tessellated_spline_surface import TessellatedSplineSurface
 from rebel_shape.plugin_wrappers.diffuse_bsdf import DiffuseBSDF
 from rebel_shape.plugin_wrappers.prb_integrator import GuidingOptions, PRBIntegrator
@@ -46,13 +42,13 @@ from rebel_shape.scene_optimizers.composite_scene_optimizer import (
     CompositeSceneOptimizer,
 )
 from rebel_shape.scene_optimizers.optimization_events import OptimizationEvents
-from rebel_shape.scene_optimizers.scene_adam_sequential import SceneAdamSequential
-from rebel_shape.schedulers.exponential_scheduler import ExponentialScheduler
-from rebel_shape.scripts.configs.pose_optimization import PoseOptimization
-from rebel_shape.scripts.configs.spline_shape_optimization import (
-    SplineShapeOptimization,
+from rebel_shape.scripts.configs.pose_optimization_config import PoseOptimizationConfig
+from rebel_shape.scripts.configs.spline_shape_optimization_config import (
+    SplineShapeOptimizationConfig,
 )
-from rebel_shape.scripts.configs.texture_optimization import TextureOptimization
+from rebel_shape.scripts.configs.texture_optimization_config import (
+    TextureOptimizationConfig,
+)
 from rebel_shape.splines.cube_initialization import cubed_sphere
 
 
@@ -61,34 +57,71 @@ class ThermoSceneSplineOptimizationParameters(ReverseCli):
     thermoscenes_scene_path: Path
     """
     Path to the ThermoScenes scene that is optimized. Assumes the foreground
-    has been extracted
+    has been extracted.
     """
-    environment_map_path: Path
-    """Path to the envionment map that is used as background in optimization."""
+    environment_map_path: Path | None = None
+    """
+    Path to the envionment map that is used as background in optimization. If not 
+    provided, a solid white background is used instead.
+    """
+    optimize_initial_pose: bool = True
+    """Whether to execute pose optimization before shape and texture optimization"""
 
-    use_msssim_loss: bool = True
-    """
-    If `True`, the MS-SSIM loss is used for shape and texture optimization. 
-    If `False`, the L2 loss is used instead.
-    """
-
-    continuous_samples: int = 49
+    continuous_samples: int = 25
     """number of samples per pixel used for continuous derivatives"""
     visibility_samples: int = 9
     """number of samples per pixel used for direct and indirect visibility"""
-    optimization_iterations: int = 50
+    optimization_iterations: int = 150
     """Adam iterations executed on the initial mesh"""
 
-    pose_optimization: PoseOptimization = PoseOptimization()
+    pose_params: PoseOptimizationConfig = field(
+        default_factory=lambda: PoseOptimizationConfig(
+            initial_sphere_radius=3.0,
+            learning_rate_start=0.08,
+            learning_rate_end=0.04,
+            learning_rate_steepness=1.5,
+            use_lbfgs=False,
+            uniform_adam=False,
+            batch_size=12,
+            optimization_iterations=10,
+            use_msssim_loss=False,
+            l1_loss_weight=1.0,
+        )
+    )
     """Parameters of the pose optimization"""
-    texture_optimization: TextureOptimization = TextureOptimization()
-    """Parameters for texture optimization"""
-    shape_optimization: SplineShapeOptimization = SplineShapeOptimization()
+    shape_params: SplineShapeOptimizationConfig = field(
+        default_factory=lambda: SplineShapeOptimizationConfig(
+            smoothing_strength=0.0,
+            learning_rate_start=0.5,
+            learning_rate_end=1.0,
+            learning_rate_steepness=1.0,
+            use_lbfgs=True,
+            uniform_adam=True,
+            batch_size=None,
+            lbfgs_history_size=15,
+            h_refinement_iterations=[15, 30, 50, 75],
+            degree=3,
+            knot_spans=2,
+            tessellation_subdivisions=256,
+        )
+    )
     """Parameters for shape optimization"""
+    texture_params: TextureOptimizationConfig = field(
+        default_factory=lambda: TextureOptimizationConfig(
+            texture_resolution=512,
+            learning_rate_start=0.02,
+            learning_rate_end=0.04,
+            learning_rate_steepness=2.0,
+            use_lbfgs=False,
+            uniform_adam=False,
+            batch_size=6,
+        )
+    )
+    """Parameters for texture optimization"""
 
     output_folder: Path = Path("./outputs/")
     """Where to save the meshes and images (created if it does not exist)"""
-    num_of_images_to_save: int = 4
+    num_of_images_to_save: int = 3
     """
     Number of images to save after each optimization step. The images are taken from 
     the evaluation set.
@@ -119,7 +152,7 @@ def initialize_scene(
     continuous_samples: int,
     visibility_samples: int,
     thermoscenes_scene_path: Path,
-    envmap_path: Path,
+    envmap_path: Path | None,
     texture_resolution: int,
     spline_degree: int,
     spline_subdivisions: int,
@@ -127,8 +160,8 @@ def initialize_scene(
     initial_sphere_radius: float,
 ) -> tuple[
     "mi.Scene",
-    list["MaskedPoseImage"],
-    list["MaskedPoseImage"],
+    list[MaskedPoseImage],
+    list[MaskedPoseImage],
     TessellatedSplineSurface,
 ]:
     """
@@ -140,9 +173,9 @@ def initialize_scene(
     used for direct and indirect visibility changes.
 
     `thermoscenes_scene_path` is a `Path` to a scene that can be loaded
-    with `ThermoScenesLoader`. `initial_guess_mesh_path` specifies a path to the mesh
-    file that should be used as an initial guess for optimization. `envmap_path` is the
-    path to the 360 image that is used for the background during optimization.
+    with `ThermoScenesLoader`. `envmap_path` is the path to the 360 image that is
+    used for the background during optimization. If it is not provided a solid white
+    background is used instead.
 
     The initial mesh is a cubedsphere, which is created by tessellating a B-spline
     surface with `spline_degree` and `spline_subdivisions` knot spans. Each patch
@@ -179,13 +212,13 @@ def initialize_scene(
     ref_images = preprocess_rgb_images(
         scene_path=thermoscenes_scene_path,
         environment_map_path=envmap_path,
-        spp=4,
+        spp=continuous_samples,
         sampler=sampler,
     )
     eval_images = preprocess_rgb_images(
         scene_path=thermoscenes_scene_path,
         environment_map_path=envmap_path,
-        spp=4,
+        spp=continuous_samples,
         train=False,
         sampler=sampler,
     )
@@ -210,13 +243,22 @@ def initialize_scene(
             radius=initial_sphere_radius,
         )
 
+        environment = (
+            {"type": "envmap", "filename": str(envmap_path)}
+            if envmap_path is not None
+            else {
+                "type": "constant",
+                "radiance": {
+                    "type": "rgb",
+                    "value": 1.0,
+                },
+            }
+        )
+
         scene_dict = {
             "type": "scene",
             "integrator": integrator.mitsuba_dict,
-            "emitter": {
-                "type": "envmap",
-                "filename": str(envmap_path),
-            },
+            "emitter": environment,
         }
         for mesh in reversed(cubedsphere):
             scene_dict[mesh.name] = mesh.mitsuba_dict
@@ -274,16 +316,16 @@ def optimize_thermoscenes_scene(
         logger.info("Using the CPU for rendering")
 
     # Initialize the scene, reference images and cameras
-    (scene, ref_images, eval_images, tessellated_spline) = initialize_scene(
+    scene, ref_images, eval_images, tessellated_spline = initialize_scene(
         continuous_samples=params.continuous_samples,
         visibility_samples=params.visibility_samples,
         thermoscenes_scene_path=params.thermoscenes_scene_path,
         envmap_path=params.environment_map_path,
-        texture_resolution=params.texture_optimization.texture_resolution,
-        spline_degree=params.shape_optimization.spline_degree,
-        spline_subdivisions=params.shape_optimization.spline_subdivisions,
-        mesh_subdivisions=params.shape_optimization.mesh_subdivisions,
-        initial_sphere_radius=params.pose_optimization.initial_sphere_radius,
+        texture_resolution=params.texture_params.texture_resolution,
+        spline_degree=params.shape_params.degree,
+        spline_subdivisions=params.shape_params.knot_spans,
+        mesh_subdivisions=params.shape_params.tessellation_subdivisions,
+        initial_sphere_radius=params.pose_params.initial_sphere_radius,
     )
 
     ref_images_no_mask = [
@@ -301,30 +343,24 @@ def optimize_thermoscenes_scene(
     texture_key = tessellated_spline.mesh_name + "_texture"
 
     # Optimize the pose of the initial mesh
-    if params.pose_optimization.optimize_initial_pose:
+    if params.optimize_initial_pose:
         logger.info("Optimizing initial pose of the spline surface")
 
-        pose_scheduler = ExponentialScheduler(
-            start_learning_rate=params.pose_optimization.pose_learning_rate_start,
-            end_learning_rate=params.pose_optimization.pose_learning_rate_end,
-            steepness=params.pose_optimization.pose_learning_rate_steepness,
-            end_iteration=params.pose_optimization.pose_optimization_iterations,
-        )
         pose_optimizer = SplinePoseOptimizer(
             scene=scene,
             scene_params=scene_params,
             optimization_events=OptimizationEvents(),
             tessellated_spline=tessellated_spline,
-            scheduler=pose_scheduler,
-            image_loss=ImageLossL1(),
+            scheduler=params.pose_params.scheduler(
+                end_iteration=params.pose_params.optimization_iterations
+            ),
+            image_loss=params.pose_params.image_loss,
         )
 
         pose_optimizer.optimize(
             ref_images=ref_images_no_mask,
-            scene_optimizer=SceneAdamSequential(
-                batch_size=params.pose_optimization.pose_batch_size, uniform=False
-            ),
-            num_iters=params.pose_optimization.pose_optimization_iterations,
+            scene_optimizer=params.pose_params.scene_optimizer,
+            num_iters=params.pose_params.optimization_iterations,
             views_to_render=[
                 image.sensor for image in eval_images[: params.num_of_images_to_save]
             ],
@@ -332,36 +368,11 @@ def optimize_thermoscenes_scene(
         )
 
     # Set up the pipeline for shape + texture optimization
-    shape_scheduler = ExponentialScheduler(
-        start_learning_rate=params.shape_optimization.shape_learning_rate_start,
-        end_learning_rate=params.shape_optimization.shape_learning_rate_end,
-        end_iteration=params.optimization_iterations,
-        steepness=params.shape_optimization.shape_learning_rate_steepness,
+    shape_scheduler = params.shape_params.scheduler(
+        end_iteration=params.optimization_iterations
     )
-    texture_scheduler = ExponentialScheduler(
-        start_learning_rate=params.texture_optimization.texture_learning_rate_start,
-        end_learning_rate=params.texture_optimization.texture_learning_rate_end,
-        end_iteration=params.optimization_iterations,
-        steepness=params.texture_optimization.texture_learning_rate_steepness,
-    )
-
-    shape_loss = CompositeImageLoss(
-        losses_and_weights=[
-            (ImageLossL1(), params.shape_optimization.shape_l1_loss_weight),
-            (
-                ImageLossMSSSIM() if params.use_msssim_loss else ImageLossL2(),
-                1.0 - params.shape_optimization.shape_l1_loss_weight,
-            ),
-        ]
-    )
-    texture_loss = CompositeImageLoss(
-        losses_and_weights=[
-            (ImageLossL1(), params.texture_optimization.texture_l1_loss_weight),
-            (
-                ImageLossMSSSIM() if params.use_msssim_loss else ImageLossL2(),
-                1.0 - params.texture_optimization.texture_l1_loss_weight,
-            ),
-        ]
+    texture_scheduler = params.texture_params.scheduler(
+        end_iteration=params.optimization_iterations
     )
 
     shape_regularization = CompositeRegularization(
@@ -381,10 +392,10 @@ def optimize_thermoscenes_scene(
         tessellated_spline=tessellated_spline,
         shape_scheduler=shape_scheduler,
         texture_scheduler=texture_scheduler,
-        shape_loss=shape_loss,
-        texture_loss=texture_loss,
+        shape_loss=params.shape_params.image_loss,
+        texture_loss=params.texture_params.image_loss,
         shape_regularization=shape_regularization,
-        parametrization_smoothing=params.shape_optimization.shape_smoothing_strength,
+        parametrization_smoothing=params.shape_params.smoothing_strength,
     )
 
     save_path = (
@@ -401,23 +412,12 @@ def optimize_thermoscenes_scene(
 
     composite_scene_optimizer = CompositeSceneOptimizer(
         optimizer_config=[
-            (
-                SceneAdamSequential(
-                    batch_size=params.shape_optimization.shape_batch_size, uniform=True
-                ),
-                [shape_key],
-            ),
-            (
-                SceneAdamSequential(
-                    batch_size=params.texture_optimization.texture_batch_size,
-                    uniform=False,
-                ),
-                [texture_key],
-            ),
+            (params.shape_params.scene_optimizer, [shape_key]),
+            (params.texture_params.scene_optimizer, [texture_key]),
         ],
     )
 
-    for iteration in params.shape_optimization.h_refinement_iterations:
+    for iteration in params.shape_params.h_refinement_iterations:
         optimizer.optimization_events.add_event(
             iteration=iteration,
             callback=lambda: optimizer.h_refinement(
@@ -450,6 +450,6 @@ def optimize_thermoscenes_scene(
 
 if __name__ == "__main__":
     parameters = tyro.cli(ThermoSceneSplineOptimizationParameters)
-    mlflow.log_params(parameters.loggable_dict)
+    mlflow.log_params(parameters.to_loggable_dict())
 
     optimize_thermoscenes_scene(params=parameters)

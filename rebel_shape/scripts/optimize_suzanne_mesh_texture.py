@@ -6,7 +6,7 @@ Verifies the correctness of the `MeshTextureOptimizer` class.
 import sys
 import tempfile
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 import mitsuba as mi
@@ -23,9 +23,6 @@ from dataclasses_reverse_cli.reverse_cli import ReverseCli
 
 from rebel_shape import logger
 from rebel_shape.data_processing.masked_pose_image import MaskedPoseImage
-from rebel_shape.loss_evaluators.composite_loss import CompositeImageLoss
-from rebel_shape.loss_evaluators.image_loss_l1 import ImageLossL1
-from rebel_shape.loss_evaluators.image_loss_msssim import ImageLossMSSSIM
 from rebel_shape.plugin_wrappers.diffuse_bsdf import DiffuseBSDF
 from rebel_shape.plugin_wrappers.prb_integrator import GuidingOptions, PRBIntegrator
 from rebel_shape.plugin_wrappers.sampler import Sampler
@@ -38,34 +35,58 @@ from rebel_shape.scene_optimizers.composite_scene_optimizer import (
 )
 from rebel_shape.scene_optimizers.optimization_events import OptimizationEvents
 from rebel_shape.scene_optimizers.scene_adam_sequential import SceneAdamSequential
-from rebel_shape.schedulers.exponential_scheduler import ExponentialScheduler
+from rebel_shape.scripts.configs.shape_optimization_config import (
+    ShapeOptimizationConfig,
+)
+from rebel_shape.scripts.configs.texture_optimization_config import (
+    TextureOptimizationConfig,
+)
 from rebel_shape.utils.image_utils import show_rendered_views
 from rebel_shape.utils.sensor_utils import create_cameras_fibonacci
 
 
-@dataclass
+@dataclass(kw_only=True)
 class SuzanneMeshTextureParameters(ReverseCli):
     """Parameters used for simultaneous shape and texture optimization of Suzanne"""
 
     sensor_count: int = 12
     """Number of camera views used in optimization"""
-    reference_samples: int = 256
+    reference_samples: int = 1024
     """Number of samples per pixel used for the reference/target images"""
-    base_samples: int = 16
+    base_samples: int = 64
     """Number of samples per pixel used for continuous derivatives"""
-    image_resolution: int = 256
+    image_resolution: int = 480
     """Resolution of the rendered images along height and width"""
-    texture_resolution: int = 512
+    texture_resolution: int = 1024
     """Resolution of the texture along height and width"""
-    optimization_iterations: int = 60
+    optimization_iterations: int = 100
     """Number of optimization iterations with `SceneAdamBatch`"""
-    base_learning_rate: float = 0.2
-    """Adam learning rate in the first pass"""
-    l1_image_loss_weight: float = 0.8
-    """
-    The weight of L1 loss in composite loss. The other loss is MS-SSIM and it has a 
-    weight 1.0 - `l1_image_loss_weight`.
-    """
+
+    shape_params: ShapeOptimizationConfig = field(
+        default_factory=lambda: ShapeOptimizationConfig(
+            smoothing_strength=30.0,
+            learning_rate_start=0.24,
+            learning_rate_end=0.06,
+            learning_rate_steepness=1.5,
+            use_lbfgs=False,
+            uniform_adam=True,
+            batch_size=4,
+        )
+    )
+    """Parameters for shape optimization"""
+    texture_params: TextureOptimizationConfig = field(
+        default_factory=lambda: TextureOptimizationConfig(
+            texture_resolution=1024,
+            learning_rate_start=0.03,
+            learning_rate_end=0.12,
+            learning_rate_steepness=2.0,
+            use_lbfgs=False,
+            uniform_adam=False,
+            batch_size=2,
+        )
+    )
+    """Parameters for texture optimization"""
+
     output_folder: Path = Path("./outputs/")
     """Where to save the meshes and images (created if it does not exist)"""
 
@@ -88,8 +109,6 @@ class SuzanneMeshTextureParameters(ReverseCli):
             raise ValueError("`resolution` must be a positive integer")
         if self.optimization_iterations < 1:
             raise ValueError("`optimization_iterations` must be a positive integer.")
-        if self.base_learning_rate <= 0.0:
-            raise ValueError("`base_learning_rate` must be positive real number.")
 
 
 def initialize_scene(
@@ -169,19 +188,16 @@ def initialize_scene(
 
     start_time = time.time()
     ref_images = [
-        mi.render(scene_target, sensor=cameras[i].mitsuba_sensor, spp=reference_samples)
-        for i in range(sensor_count)
+        mi.render(scene_target, sensor=camera.mitsuba_sensor, spp=reference_samples)
+        for camera in cameras
     ]
     ref_images = [
-        MaskedPoseImage(
-            image=ref_image,
-            camera=camera,
-            mask=None,
-        )
+        MaskedPoseImage(image=ref_image, camera=camera, mask=None)
         for ref_image, camera in zip(ref_images, cameras)
     ]
+
     show_rendered_views(
-        views=[mi.util.convert_to_bitmap(image) for image in ref_images]
+        views=[mi.util.convert_to_bitmap(image.original_image) for image in ref_images]
     )
     logger.info(f"Rendered target images. Took {time.time() - start_time:.2f} seconds")
 
@@ -245,43 +261,27 @@ def optimize_suzanne(params: SuzanneMeshTextureParameters) -> None:
     shape_key = "shape"
     texture_key = "shape.bsdf.reflectance.data"
 
-    shape_scheduler = ExponentialScheduler(
-        start_learning_rate=params.base_learning_rate * 2.0,
-        end_learning_rate=params.base_learning_rate * 0.25,
-        end_iteration=params.optimization_iterations,
-    )
-    texture_scheduler = ExponentialScheduler(
-        start_learning_rate=params.base_learning_rate * 0.125,
-        end_learning_rate=params.base_learning_rate,
-        end_iteration=params.optimization_iterations,
-    )
-
-    composite_loss = CompositeImageLoss(
-        losses_and_weights=[
-            (ImageLossL1(), params.l1_image_loss_weight),
-            (ImageLossMSSSIM(), 1.0 - params.l1_image_loss_weight),
-        ]
-    )
-
     optimizer = MeshTextureOptimizer(
         scene=scene_source,
         scene_params=mi.traverse(scene_source),
         optimization_events=OptimizationEvents(),
         shape_key=shape_key,
         texture_key=texture_key,
-        shape_smoothing_strength=30.0,
-        shape_scheduler=shape_scheduler,
-        texture_scheduler=texture_scheduler,
-        shape_loss=composite_loss,
-        texture_loss=composite_loss,
+        shape_smoothing_strength=params.shape_params.smoothing_strength,
+        shape_scheduler=params.shape_params.scheduler(
+            end_iteration=params.optimization_iterations,
+        ),
+        texture_scheduler=params.texture_params.scheduler(
+            end_iteration=params.optimization_iterations,
+        ),
+        shape_loss=params.shape_params.image_loss,
+        texture_loss=params.texture_params.image_loss,
     )
-
-    mlflow.log_param("learning_rate", params.base_learning_rate)
 
     composite_scene_optimizer = CompositeSceneOptimizer(
         optimizer_config=[
             (SceneAdamSequential(batch_size=4, uniform=True), [shape_key]),
-            (SceneAdamSequential(batch_size=1, uniform=False), [texture_key]),
+            (SceneAdamSequential(batch_size=2, uniform=False), [texture_key]),
         ],
     )
 
@@ -290,7 +290,7 @@ def optimize_suzanne(params: SuzanneMeshTextureParameters) -> None:
         scene_optimizer=composite_scene_optimizer,
         num_iters=params.optimization_iterations,
         views_to_render=[
-            ref_images[i].sensor for i in range(0, params.sensor_count, 2)
+            ref_images[i].sensor for i in range(0, params.sensor_count, 4)
         ],
         save_directory_path=params.output_folder,
     )
@@ -314,6 +314,6 @@ def optimize_suzanne(params: SuzanneMeshTextureParameters) -> None:
 
 if __name__ == "__main__":
     parameters = tyro.cli(SuzanneMeshTextureParameters)
-    mlflow.log_params(parameters.loggable_dict)
+    mlflow.log_params(parameters.to_loggable_dict())
 
     optimize_suzanne(params=parameters)

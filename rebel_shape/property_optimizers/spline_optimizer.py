@@ -51,6 +51,7 @@ class SplineOptimizer(PropertyOptimizer):
         shape_loss: ImageLoss = ImageLossL2(),
         regularization: Regularization | None = None,
         smoothing_strength: float = 4.0,
+        mesh_save_interval: int | None = 10,
     ) -> None:
         """
         The `scene` is a loaded Mitsuba scene object, while `scene_params` are a
@@ -71,6 +72,11 @@ class SplineOptimizer(PropertyOptimizer):
         gradients at a particular vertex are diffused. Larger values have higher
         stability when optimizing while smaller ones are better to recover higher
         detail.
+
+        `mesh_save_interval` is an integer that specifies how often the meshes
+        representing the spline surface are saved during optimization. If it is set to
+        `None`, the meshes are not saved during optimization. If it is set to a positive
+        integer, the meshes are saved every `mesh_save_interval` iterations.
 
         :raises ValueError: If all meshes in `tessellated_spline` are not present
             in `scene_params` or if `smoothing_strength` is a negative number.
@@ -98,6 +104,10 @@ class SplineOptimizer(PropertyOptimizer):
         if smoothing_strength < 0.0:
             raise ValueError("`smoothing_strength` must be a positive real number.")
         self._smoothing = smoothing_strength
+
+        if mesh_save_interval is not None and mesh_save_interval < 1:
+            raise ValueError("`mesh_save_interval` must be a positive integer.")
+        self._mesh_save_interval = mesh_save_interval
 
         self._initialize_parametrization()
 
@@ -234,7 +244,11 @@ class SplineOptimizer(PropertyOptimizer):
         with open(output_directory / save_name, "w") as spline_file:
             spline_file.write(encoded_spline)
 
-        for mesh in self._tessellated_spline:
-            mesh_name = f"{mesh.name}_{timestamp}_iteration-{iteration:03}"
+        if self._mesh_save_interval is None:
+            return
 
-            mesh.save_to_ply(output_dir=output_directory, save_name=mesh_name)
+        if (iteration + 1) % self._mesh_save_interval == 0:
+            for mesh in self._tessellated_spline:
+                mesh_name = f"{mesh.name}_{timestamp}_iteration-{iteration:03}"
+
+                mesh.save_to_ply(output_dir=output_directory, save_name=mesh_name)

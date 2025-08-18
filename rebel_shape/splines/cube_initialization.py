@@ -308,7 +308,7 @@ def cubed_sphere(
             adam.step()
 
             if i % 10 == 0:
-                logger.debug(f"Iteration {i:3d}: G1 loss = {loss.numpy():.4g})")
+                logger.debug(f"Iteration {i:3d}: G1 loss = {loss.numpy():.4g}")
 
     # Scale the sphere to the desired radius
     cube.global_control_points = cube.global_control_points * radius

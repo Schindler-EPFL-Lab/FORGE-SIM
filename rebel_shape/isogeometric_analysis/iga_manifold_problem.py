@@ -330,9 +330,7 @@ class IGAManifoldProblem(IGAProblem):
         all_local_indices = dr.zeros(
             dtype=mi.TensorXu, shape=(offsets[-1], local_indices_list[0].shape[1])
         )
-        mappings = [
-            mapping for _, mapping in composite_iga_spline.patches_with_mapping
-        ]
+        mappings = [mapping for _, mapping in composite_iga_spline.patches_with_mapping]
 
         for i, (local_indices, local_matrices, mapping) in enumerate(
             zip(local_indices_list, local_matrices_list, mappings)
@@ -417,9 +415,7 @@ class IGAManifoldProblem(IGAProblem):
         all_local_indices = dr.zeros(
             dtype=mi.TensorXu, shape=(offsets[-1], local_indices_list[0].shape[1])
         )
-        mappings = [
-            mapping for _, mapping in composite_iga_spline.patches_with_mapping
-        ]
+        mappings = [mapping for _, mapping in composite_iga_spline.patches_with_mapping]
 
         for i, (local_indices, local_vectors, mapping) in enumerate(
             zip(local_indices_list, local_vectors_list, mappings)
@@ -511,13 +507,17 @@ class IGAManifoldProblem(IGAProblem):
         if offset < 0 or offset >= num_dofs:
             raise ValueError(f"offset must be in range [0, {num_dofs}), got {offset}.")
 
-        return mi.TensorXu(
-            np.repeat(
-                (np.arange(num_knot_spans) * num_dofs * num_dofs + offset * num_dofs),
-                num_dofs,
-            )
-            + np.tile(np.arange(num_dofs), num_knot_spans)
+        base_indices = (
+            num_dofs**2 * dr.arange(dtype=mi.UInt32, size=num_knot_spans)
+            + offset * num_dofs
         )
+
+        repeated_base = dr.repeat(value=base_indices, count=num_dofs)
+        tiled_offsets = dr.tile(
+            dr.arange(dtype=mi.UInt32, size=num_dofs), count=num_knot_spans
+        )
+
+        return mi.TensorXu(repeated_base + tiled_offsets)
 
     @staticmethod
     def _scatter_values_to_local_matrices(

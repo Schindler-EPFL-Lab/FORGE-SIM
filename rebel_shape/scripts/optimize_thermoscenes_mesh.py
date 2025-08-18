@@ -5,7 +5,7 @@ Performs pose, shape, and texture optimization.
 
 import sys
 import tempfile
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 import mitsuba as mi
@@ -23,10 +23,6 @@ from dataclasses_reverse_cli.reverse_cli import ReverseCli
 from rebel_shape import logger
 from rebel_shape.data_processing.input_preprocessing import preprocess_rgb_images
 from rebel_shape.data_processing.masked_pose_image import MaskedPoseImage
-from rebel_shape.loss_evaluators.composite_loss import CompositeImageLoss
-from rebel_shape.loss_evaluators.image_loss_l1 import ImageLossL1
-from rebel_shape.loss_evaluators.image_loss_l2 import ImageLossL2
-from rebel_shape.loss_evaluators.image_loss_msssim import ImageLossMSSSIM
 from rebel_shape.plugin_wrappers.diffuse_bsdf import DiffuseBSDF
 from rebel_shape.plugin_wrappers.prb_integrator import GuidingOptions, PRBIntegrator
 from rebel_shape.plugin_wrappers.sampler import Sampler
@@ -39,11 +35,13 @@ from rebel_shape.scene_optimizers.composite_scene_optimizer import (
     CompositeSceneOptimizer,
 )
 from rebel_shape.scene_optimizers.optimization_events import OptimizationEvents
-from rebel_shape.scene_optimizers.scene_adam_sequential import SceneAdamSequential
-from rebel_shape.schedulers.exponential_scheduler import ExponentialScheduler
-from rebel_shape.scripts.configs.pose_optimization import PoseOptimization
-from rebel_shape.scripts.configs.shape_optimization import ShapeOptimization
-from rebel_shape.scripts.configs.texture_optimization import TextureOptimization
+from rebel_shape.scripts.configs.pose_optimization_config import PoseOptimizationConfig
+from rebel_shape.scripts.configs.shape_optimization_config import (
+    ShapeOptimizationConfig,
+)
+from rebel_shape.scripts.configs.texture_optimization_config import (
+    TextureOptimizationConfig,
+)
 
 
 @dataclass(kw_only=True)
@@ -53,33 +51,63 @@ class ThermoSceneOptimizationParameters(ReverseCli):
     Path to the ThermoScenes scene that is optimized. Assumes the foreground
     has been extracted
     """
-    environment_map_path: Path
+    environment_map_path: Path | None = None
     """Path to the envionment map that is used as background in optimization."""
     initial_guess_mesh_path: Path
     """Path to the initial guess mesh."""
+    optimize_initial_pose: bool = True
+    """Whether to execute pose optimization before shape and texture optimization"""
 
-    use_msssim_loss: bool = True
-    """
-    If `True`, the SSIM loss is used for shape and texture optimization
-    """
-
-    continuous_samples: int = 16
+    continuous_samples: int = 25
     """number of samples per pixel used for continuous derivatives"""
-    visibility_samples: int = 4
+    visibility_samples: int = 9
     """number of samples per pixel used for direct and indirect visibility"""
-    optimization_iterations: int = 50
+    optimization_iterations: int = 100
     """Adam iterations executed on the initial mesh"""
 
-    pose_optimization: PoseOptimization = PoseOptimization()
+    pose_params: PoseOptimizationConfig = field(
+        default_factory=lambda: PoseOptimizationConfig(
+            initial_sphere_radius=3.0,
+            learning_rate_start=0.08,
+            learning_rate_end=0.04,
+            learning_rate_steepness=1.5,
+            use_lbfgs=False,
+            uniform_adam=False,
+            batch_size=12,
+            optimization_iterations=10,
+            use_msssim_loss=False,
+            l1_loss_weight=1.0,
+        )
+    )
     """Parameters of the pose optimization"""
-    texture_optimization: TextureOptimization = TextureOptimization()
-    """Parameters for texture optimization"""
-    shape_optimization: ShapeOptimization = ShapeOptimization()
+    shape_params: ShapeOptimizationConfig = field(
+        default_factory=lambda: ShapeOptimizationConfig(
+            smoothing_strength=100.0,
+            learning_rate_start=0.25,
+            learning_rate_end=0.1,
+            learning_rate_steepness=1.5,
+            use_lbfgs=False,
+            uniform_adam=True,
+            batch_size=9,
+        )
+    )
     """Parameters for shape optimization"""
+    texture_params: TextureOptimizationConfig = field(
+        default_factory=lambda: TextureOptimizationConfig(
+            texture_resolution=1024,
+            learning_rate_start=0.02,
+            learning_rate_end=0.04,
+            learning_rate_steepness=2.0,
+            use_lbfgs=False,
+            uniform_adam=False,
+            batch_size=6,
+        )
+    )
+    """Parameters for texture optimization"""
 
     output_folder: Path = Path("./outputs/")
     """Where to save the meshes and images (created if it does not exist)"""
-    num_of_images_to_save: int = 6
+    num_of_images_to_save: int = 3
     """
     Number of images to save after each optimization step. The images are taken from 
     the evaluation set.
@@ -112,7 +140,7 @@ def initialize_scene(
     visibility_samples: int,
     thermoscenes_scene_path: Path,
     initial_guess_mesh_path: Path,
-    envmap_path: Path,
+    envmap_path: Path | None,
     texture_resolution: int,
 ) -> tuple[
     "mi.Scene",
@@ -182,13 +210,22 @@ def initialize_scene(
             height=texture_resolution,
         )
 
+        environment = (
+            {"type": "envmap", "filename": str(envmap_path)}
+            if envmap_path is not None
+            else {
+                "type": "constant",
+                "radiance": {
+                    "type": "rgb",
+                    "value": 1.0,
+                },
+            }
+        )
+
         scene_dict = {
             "type": "scene",
             "integrator": integrator.mitsuba_dict,
-            "emitter": {
-                "type": "envmap",
-                "filename": str(envmap_path),
-            },
+            "emitter": environment,
             "shape": {
                 "type": "ply",
                 "filename": str(initial_guess_mesh_path),
@@ -250,7 +287,7 @@ def optimize_thermoscenes_scene(params: ThermoSceneOptimizationParameters) -> No
         thermoscenes_scene_path=params.thermoscenes_scene_path,
         initial_guess_mesh_path=params.initial_guess_mesh_path,
         envmap_path=params.environment_map_path,
-        texture_resolution=params.texture_optimization.texture_resolution,
+        texture_resolution=params.texture_params.texture_resolution,
     )
     if len(eval_images) < params.num_of_images_to_save:
         raise ValueError(
@@ -272,30 +309,24 @@ def optimize_thermoscenes_scene(params: ThermoSceneOptimizationParameters) -> No
     texture_key = "shape.bsdf.reflectance.data"
 
     # Optimize the pose of the initial mesh
-    if params.pose_optimization.optimize_initial_pose:
+    if params.optimize_initial_pose:
         logger.info("Optimizing initial mesh pose.")
 
-        pose_scheduler = ExponentialScheduler(
-            start_learning_rate=params.pose_optimization.pose_learning_rate_start,
-            end_learning_rate=params.pose_optimization.pose_learning_rate_end,
-            steepness=params.pose_optimization.pose_learning_rate_steepness,
-            end_iteration=params.pose_optimization.pose_optimization_iterations,
-        )
         pose_optimizer = MeshPoseOptimizer(
             scene=scene_source,
             scene_params=mi.traverse(scene_source),
             optimization_events=OptimizationEvents(),
             shape_key=shape_key,
-            scheduler=pose_scheduler,
-            image_loss=ImageLossL1(),
+            scheduler=params.pose_params.scheduler(
+                end_iteration=params.pose_params.optimization_iterations
+            ),
+            image_loss=params.pose_params.image_loss,
         )
 
         pose_optimizer.optimize(
             ref_images=ref_images_no_mask,
-            scene_optimizer=SceneAdamSequential(
-                batch_size=params.pose_optimization.pose_batch_size, uniform=False
-            ),
-            num_iters=params.pose_optimization.pose_optimization_iterations,
+            scene_optimizer=params.pose_params.scene_optimizer,
+            num_iters=params.pose_params.optimization_iterations,
             views_to_render=[
                 image.sensor for image in eval_images[: params.num_of_images_to_save]
             ],
@@ -303,36 +334,11 @@ def optimize_thermoscenes_scene(params: ThermoSceneOptimizationParameters) -> No
         )
 
     # Set up the pipeline for shape + texture optimization
-    shape_scheduler = ExponentialScheduler(
-        start_learning_rate=params.shape_optimization.shape_learning_rate_start,
-        end_learning_rate=params.shape_optimization.shape_learning_rate_end,
-        end_iteration=params.optimization_iterations,
-        steepness=params.shape_optimization.shape_learning_rate_steepness,
+    shape_scheduler = params.shape_params.scheduler(
+        end_iteration=params.optimization_iterations
     )
-    texture_scheduler = ExponentialScheduler(
-        start_learning_rate=params.texture_optimization.texture_learning_rate_start,
-        end_learning_rate=params.texture_optimization.texture_learning_rate_end,
-        end_iteration=params.optimization_iterations,
-        steepness=params.texture_optimization.texture_learning_rate_steepness,
-    )
-
-    shape_loss = CompositeImageLoss(
-        losses_and_weights=[
-            (ImageLossL1(), params.shape_optimization.shape_l1_loss_weight),
-            (
-                ImageLossMSSSIM() if params.use_msssim_loss else ImageLossL2(),
-                1.0 - params.shape_optimization.shape_l1_loss_weight,
-            ),
-        ]
-    )
-    texture_loss = CompositeImageLoss(
-        losses_and_weights=[
-            (ImageLossL1(), params.texture_optimization.texture_l1_loss_weight),
-            (
-                ImageLossMSSSIM() if params.use_msssim_loss else ImageLossL2(),
-                1.0 - params.texture_optimization.texture_l1_loss_weight,
-            ),
-        ]
+    texture_scheduler = params.texture_params.scheduler(
+        end_iteration=params.optimization_iterations
     )
 
     # Instantiate the optimizer with high projection smoothing for stability
@@ -342,12 +348,12 @@ def optimize_thermoscenes_scene(params: ThermoSceneOptimizationParameters) -> No
         optimization_events=OptimizationEvents(),
         shape_key=shape_key,
         texture_key=texture_key,
-        shape_smoothing_strength=params.shape_optimization.shape_smoothing_strength,
-        texture_projection_steepness=params.texture_optimization.texture_projection_steepness,
+        shape_smoothing_strength=params.shape_params.smoothing_strength,
+        texture_projection_steepness=params.texture_params.projection_steepness,
         shape_scheduler=shape_scheduler,
         texture_scheduler=texture_scheduler,
-        shape_loss=shape_loss,
-        texture_loss=texture_loss,
+        shape_loss=params.shape_params.image_loss,
+        texture_loss=params.texture_params.image_loss,
     )
 
     save_path = (
@@ -365,19 +371,8 @@ def optimize_thermoscenes_scene(params: ThermoSceneOptimizationParameters) -> No
 
     composite_scene_optimizer = CompositeSceneOptimizer(
         optimizer_config=[
-            (
-                SceneAdamSequential(
-                    batch_size=params.shape_optimization.shape_batch_size, uniform=True
-                ),
-                [shape_key],
-            ),
-            (
-                SceneAdamSequential(
-                    batch_size=params.texture_optimization.texture_batch_size,
-                    uniform=False,
-                ),
-                [texture_key],
-            ),
+            (params.shape_params.scene_optimizer, [shape_key]),
+            (params.shape_params.scene_optimizer, [texture_key]),
         ],
     )
 
@@ -414,6 +409,6 @@ def optimize_thermoscenes_scene(params: ThermoSceneOptimizationParameters) -> No
 
 if __name__ == "__main__":
     parameters = tyro.cli(ThermoSceneOptimizationParameters)
-    mlflow.log_params(parameters.loggable_dict)
+    mlflow.log_params(parameters.to_loggable_dict())
 
     optimize_thermoscenes_scene(params=parameters)

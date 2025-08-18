@@ -7,7 +7,7 @@ scene.
 
 import sys
 import tempfile
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 import drjit as dr
@@ -27,7 +27,6 @@ from dataclasses_reverse_cli.reverse_cli import ReverseCli
 from rebel_shape import logger
 from rebel_shape.data_processing.masked_pose_image import MaskedPoseImage
 from rebel_shape.data_processing.thermoscenes_loader import ThermoScenesLoader
-from rebel_shape.loss_evaluators.image_loss_l1 import ImageLossL1
 from rebel_shape.meshing.tessellated_iga_spline_surface import (
     TessellatedIGASplineSurface,
 )
@@ -39,11 +38,12 @@ from rebel_shape.property_optimizers.field_texture_optimizer import (
     FieldTextureOptimizer,
 )
 from rebel_shape.scene_optimizers.optimization_events import OptimizationEvents
-from rebel_shape.scene_optimizers.scene_adam_sequential import SceneAdamSequential
-from rebel_shape.schedulers.constant_scheduler import ConstantScheduler
+from rebel_shape.scripts.configs.texture_optimization_config import (
+    TextureOptimizationConfig,
+)
 
 
-@dataclass
+@dataclass(kw_only=True)
 class ThermalSplineInpaintingParameters(ReverseCli):
     """
     Parameters used for inpainting thermal information onto mesh vertices.
@@ -66,18 +66,25 @@ class ThermalSplineInpaintingParameters(ReverseCli):
     Since most splines have few control points, this is used to increase the
     resolution of the thermal information that can be stored in the control points.
     """
-    texture_projection_steepness: float = 4.0
-    """Steepness of the sigmoid projection for texture optimization"""
     continuous_samples: int = 16
     """Number of samples per pixel used for continuous derivatives"""
     optimization_iterations: int = 20
     """How many times all images in the dataset are used for optimization"""
-    texture_resolution: int = 512
-    """Resolution of the texture along height and width, per patch"""
-    texture_learning_rate: float = 0.01
-    """Adam learning rate for texture"""
-    texture_batch_size: int = 1
-    """Number of images used for texture gradient computation"""
+
+    texture_params: TextureOptimizationConfig = field(
+        default_factory=lambda: TextureOptimizationConfig(
+            texture_resolution=512,
+            learning_rate_start=0.01,
+            learning_rate_end=0.01,
+            learning_rate_steepness=4.0,
+            use_lbfgs=False,
+            uniform_adam=False,
+            batch_size=6,
+            use_msssim_loss=False,
+            l1_loss_weight=1.0,
+        )
+    )
+    """Parameters for spline inpainting optimization"""
 
     output_folder: Path = Path("./outputs/")
     """Where to save the model and outputs (created if it does not exist)"""
@@ -94,25 +101,10 @@ class ThermalSplineInpaintingParameters(ReverseCli):
     """
 
     def __post_init__(self) -> None:
-        if self.texture_projection_steepness <= 0.0:
-            raise ValueError(
-                "`texture_projection_steepness` must be a positive real number."
-            )
-
-        if self.texture_projection_steepness <= 0.0:
-            raise ValueError(
-                "`texture_projection_steepness` must be a positive real number."
-            )
         if self.continuous_samples < 1:
             raise ValueError("`continuous_samples` must be a positive integer.")
         if self.optimization_iterations < 1:
             raise ValueError("`first_pass_iterations` must be a positive integer.")
-        if self.texture_resolution < 1:
-            raise ValueError("`texture_resolution` must be a positive integer.")
-        if self.texture_learning_rate < 0.0:
-            raise ValueError("`texture_learning_rate` must be non-negative.")
-        if self.texture_batch_size < 1:
-            raise ValueError("`batch_size` must be a positive integer")
         if self.num_of_images_to_save < 1:
             raise ValueError("`num_of_images_to_save` must be a positive integer.")
 
@@ -122,7 +114,7 @@ def initialize_scene(
     spline_path: Path,
     h_refinement_factor: int,
     continuous_samples: int,
-    texture_resolution: int = 512,
+    texture_resolution: int,
 ) -> tuple[
     "mi.Scene",
     list[MaskedPoseImage],
@@ -150,7 +142,6 @@ def initialize_scene(
         - `tessellated_iga_spline_surface`: A `TessellatedIGASplineSurface` object
             that represents the tessellated IGA spline surface with thermal data.
     """
-
     integrator = PRBIntegrator(
         max_bounces=2,
         bounces_without_russian_roulette=2,
@@ -222,10 +213,23 @@ def initialize_scene(
 
         scene_source: "mi.Scene" = mi.load_dict(scene_dict)
 
+    train_images_thermal = [
+        MaskedPoseImage(image=image, camera=camera, mask=None)
+        for image, camera in zip(
+            loader.train_images_thermal, loader.train_cameras_thermal
+        )
+    ]
+    eval_images_thermal = [
+        MaskedPoseImage(image=image, camera=camera, mask=None)
+        for image, camera in zip(
+            loader.eval_images_thermal, loader.eval_cameras_thermal
+        )
+    ]
+
     return (
         scene_source,
-        loader.train_images_thermal,
-        loader.eval_images_thermal,
+        train_images_thermal,
+        eval_images_thermal,
         tessellated_iga_spline_surface,
     )
 
@@ -271,10 +275,8 @@ def inpaint_thermal_information(params: ThermalSplineInpaintingParameters) -> No
         continuous_samples=params.continuous_samples,
         thermoscenes_scene_path=params.thermoscenes_scene_path,
         spline_path=params.spline_path,
-    )
-
-    temperature_scheduler = ConstantScheduler(
-        learning_rate=params.texture_learning_rate
+        h_refinement_factor=params.h_refinement_factor,
+        texture_resolution=params.texture_params.texture_resolution,
     )
 
     optimizer = FieldTextureOptimizer(
@@ -283,8 +285,10 @@ def inpaint_thermal_information(params: ThermalSplineInpaintingParameters) -> No
         optimization_events=OptimizationEvents(),
         property_key="emitter.radiance.data",
         tessellated_iga_spline=spline,
-        texture_scheduler=temperature_scheduler,
-        texture_loss=ImageLossL1(),
+        texture_scheduler=params.texture_params.scheduler(
+            end_iteration=params.optimization_iterations,
+        ),
+        texture_loss=params.texture_params.image_loss,
     )
 
     save_path = (
@@ -301,9 +305,7 @@ def inpaint_thermal_information(params: ThermalSplineInpaintingParameters) -> No
 
     optimizer.optimize(
         ref_images=ref_images,
-        scene_optimizer=SceneAdamSequential(
-            batch_size=params.texture_batch_size, uniform=False
-        ),
+        scene_optimizer=params.texture_params.scene_optimizer,
         num_iters=params.optimization_iterations,
         views_to_render=[
             image.sensor for image in eval_images[: params.num_of_images_to_save]
@@ -317,14 +319,14 @@ def inpaint_thermal_information(params: ThermalSplineInpaintingParameters) -> No
         samples_per_pixel=params.continuous_samples * 4,
         save_path=params.output_folder / "Final_comparison.png",
     )
-    # Save the final state of the scene
-    optimizer.scene.shapes()[0].write_ply(
-        str(params.output_folder / "thermal_mesh.ply")
-    )
+
+    encoded_spline = jsonpickle.encode(spline)
+    with open(params.output_folder / "thermal_data.json", "w") as spline_file:
+        spline_file.write(encoded_spline)
 
 
 if __name__ == "__main__":
     parameters = tyro.cli(ThermalSplineInpaintingParameters)
-    mlflow.log_params(parameters.loggable_dict)
+    mlflow.log_params(parameters.to_loggable_dict())
 
     inpaint_thermal_information(params=parameters)

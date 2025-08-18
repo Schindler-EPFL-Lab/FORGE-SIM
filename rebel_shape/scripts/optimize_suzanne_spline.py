@@ -5,7 +5,7 @@ Verifies the implementation of the `SplineOptimizer` class.
 
 import sys
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 import mitsuba as mi
@@ -22,9 +22,6 @@ from dataclasses_reverse_cli.reverse_cli import ReverseCli
 
 from rebel_shape import logger
 from rebel_shape.data_processing.masked_pose_image import MaskedPoseImage
-from rebel_shape.loss_evaluators.composite_loss import CompositeImageLoss
-from rebel_shape.loss_evaluators.image_loss_l1 import ImageLossL1
-from rebel_shape.loss_evaluators.image_loss_msssim import ImageLossMSSSIM
 from rebel_shape.meshing.tessellated_spline_surface import TessellatedSplineSurface
 from rebel_shape.plugin_wrappers.diffuse_bsdf import DiffuseBSDF
 from rebel_shape.plugin_wrappers.prb_integrator import GuidingOptions, PRBIntegrator
@@ -35,15 +32,15 @@ from rebel_shape.regularization.spline_g1_loss import SplineG1Loss
 from rebel_shape.regularization.spline_normal_loss import SplineNormalLoss
 from rebel_shape.regularization.spline_position_loss import SplinePositionLoss
 from rebel_shape.scene_optimizers.optimization_events import OptimizationEvents
-from rebel_shape.scene_optimizers.scene_adam_sequential import SceneAdamSequential
-from rebel_shape.scene_optimizers.scene_lbfgs import SceneLBFGS
-from rebel_shape.schedulers.exponential_scheduler import ExponentialScheduler
+from rebel_shape.scripts.configs.spline_shape_optimization_config import (
+    SplineShapeOptimizationConfig,
+)
 from rebel_shape.splines.cube_initialization import cubed_sphere
 from rebel_shape.utils.image_utils import show_rendered_views
 from rebel_shape.utils.sensor_utils import create_cameras_fibonacci
 
 
-@dataclass
+@dataclass(kw_only=True)
 class SuzanneSplineParameters(ReverseCli):
     """Parameters used for spline optimization of Suzanne"""
 
@@ -59,38 +56,24 @@ class SuzanneSplineParameters(ReverseCli):
     """Number of pixels along width and height of the images"""
     optimization_iterations: int = 150
     """Number of optimization iterations with `SceneAdamBatch`"""
-    start_learning_rate: float = 0.15
-    """Learning rate at the beginning of the optimization"""
-    end_learning_rate: float = 0.03
-    """Learning rate at the end of the optimization"""
-    l1_image_loss_weight: float = 0.85
-    """
-    The weight of L1 loss in composite loss. The other loss is MS-SSIM and it has a 
-    weight 1.0 - `l1_image_loss_weight`.
-    """
-    use_lbfgs: bool = False
-    """
-    Whether to use LBFGS optimizer instead of Adam. If set to True, the
-    `SceneLBFGS` optimizer is used instead of `SceneAdam`. L-BFGS typically requires
-    larger learning rates to be effective (close to 1.0), while these are generally
-    too large for Adam.
-    """
 
-    spline_degree: int = 3
-    """Degree of the B-spline surface patches."""
-    spline_knot_spans: int = 2
-    """How many knot spans per patch in the B-spline surface."""
-    tessellation_subdivisions: int = 256
-    """How many triangles per patch in the tessellated mesh."""
-    parametrization_smoothing: float = 0.0
-    """The strength of gradient smoothing applied to the spline parametrization."""
-    h_refinement_iterations: list[int] | None = None
-    """
-    List of iterations at which the h-refinement is applied, increasing the number
-    of knot spans and thus the number of control points in the spline. The default 
-    values are applied if `None` is provided: [5, 10, 15, 25].
-    The values must be strictly increasing positive integers.
-    """
+    shape_params: SplineShapeOptimizationConfig = field(
+        default_factory=lambda: SplineShapeOptimizationConfig(
+            smoothing_strength=0.0,
+            learning_rate_start=0.5,
+            learning_rate_end=1.0,
+            learning_rate_steepness=1.0,
+            use_lbfgs=True,
+            uniform_adam=True,
+            batch_size=None,
+            lbfgs_history_size=15,
+            h_refinement_iterations=[15, 30, 50, 75],
+            degree=3,
+            knot_spans=2,
+            tessellation_subdivisions=256,
+        )
+    )
+    """Parameters for shape optimization"""
 
     output_folder: Path = Path("./outputs/")
     """Where to save the meshes and images (created if it does not exist)"""
@@ -115,45 +98,6 @@ class SuzanneSplineParameters(ReverseCli):
         if self.optimization_iterations < 1:
             raise ValueError("`optimization_iterations` must be a positive integer.")
 
-        if self.start_learning_rate <= 0.0:
-            raise ValueError("`start_learning_rate` must be positive real number.")
-        if self.end_learning_rate < 0.0:
-            raise ValueError("`end_learning_rate` must be non-negative real number.")
-        if self.end_learning_rate >= self.start_learning_rate:
-            raise ValueError(
-                "`end_learning_rate` must be smaller than `start_learning_rate`."
-            )
-        if self.l1_image_loss_weight < 0.0 or self.l1_image_loss_weight > 1.0:
-            raise ValueError("`l1_image_loss_weight` must be in the range [0.0, 1.0].")
-
-        if self.spline_degree < 1:
-            raise ValueError("`spline_degree` must be a positive integer.")
-        if self.spline_knot_spans < 1:
-            raise ValueError("`spline_knot_spans` must be a positive integer.")
-        if self.tessellation_subdivisions < 1:
-            raise ValueError("`tessellation_subdivisions` must be a positive integer.")
-        if self.parametrization_smoothing < 0.0:
-            raise ValueError(
-                "`parametrization_smoothing` must be a non-negative real number."
-            )
-
-        if self.h_refinement_iterations is None:
-            self.h_refinement_iterations = [15, 30, 50, 75]
-        # Check that `h_refinement_iterations` is a list of strictly increasing
-        # positive integers
-        prev_iteration = 0
-        for iteration in self.h_refinement_iterations:
-            if iteration < 1:
-                raise ValueError(
-                    "`h_refinement_iterations` must be a list of positive integers."
-                )
-            if iteration <= prev_iteration:
-                raise ValueError(
-                    "`h_refinement_iterations` must be a list of strictly increasing "
-                    "positive integers."
-                )
-            prev_iteration = iteration
-
 
 def initialize_scene(
     sensor_count: int,
@@ -162,8 +106,8 @@ def initialize_scene(
     reference_samples: int,
     resolution: int,
     spline_degree: int,
-    spline_subdivisions: int,
-    mesh_subdivisions: int,
+    knot_spans: int,
+    tessellation_subdivisions: int,
 ) -> tuple["mi.Scene", list[MaskedPoseImage], TessellatedSplineSurface]:
     """
     Sets up the scene, sensors, reference images, and tessellated composite B-Spline
@@ -232,8 +176,8 @@ def initialize_scene(
 
     start_time = time.time()
     ref_images = [
-        mi.render(scene_target, sensor=cameras[i].mitsuba_sensor, spp=reference_samples)
-        for i in range(sensor_count)
+        mi.render(scene_target, sensor=camera.mitsuba_sensor, spp=reference_samples)
+        for camera in cameras
     ]
     show_rendered_views(
         views=[mi.util.convert_to_bitmap(image) for image in ref_images]
@@ -252,8 +196,8 @@ def initialize_scene(
     cubedsphere = cubed_sphere(
         name="suzanne",
         degree=spline_degree,
-        spline_subdivisions=spline_subdivisions,
-        tessellation_subdivisions=mesh_subdivisions,
+        spline_subdivisions=knot_spans,
+        tessellation_subdivisions=tessellation_subdivisions,
     )
 
     scene_dict = {
@@ -306,22 +250,9 @@ def optimize_suzanne(params: SuzanneSplineParameters) -> None:
         visibility_samples=params.visibility_samples,
         reference_samples=params.reference_samples,
         resolution=params.resolution,
-        spline_degree=params.spline_degree,
-        spline_subdivisions=params.spline_knot_spans,
-        mesh_subdivisions=params.tessellation_subdivisions,
-    )
-
-    scheduler = ExponentialScheduler(
-        start_learning_rate=params.start_learning_rate,
-        end_learning_rate=params.end_learning_rate,
-        end_iteration=params.optimization_iterations,
-    )
-
-    loss = CompositeImageLoss(
-        losses_and_weights=[
-            (ImageLossL1(), params.l1_image_loss_weight),
-            (ImageLossMSSSIM(), 1.0 - params.l1_image_loss_weight),
-        ]
+        spline_degree=params.shape_params.degree,
+        knot_spans=params.shape_params.knot_spans,
+        tessellation_subdivisions=params.shape_params.tessellation_subdivisions,
     )
 
     regularization = CompositeRegularization(
@@ -338,17 +269,17 @@ def optimize_suzanne(params: SuzanneSplineParameters) -> None:
         scene_params=mi.traverse(scene_source),
         optimization_events=OptimizationEvents(),
         tessellated_spline=tessellated_spline,
-        shape_scheduler=scheduler,
-        shape_loss=loss,
+        shape_scheduler=params.shape_params.scheduler(
+            end_iteration=params.optimization_iterations,
+        ),
+        shape_loss=params.shape_params.image_loss,
         regularization=regularization,
-        smoothing_strength=params.parametrization_smoothing,
+        smoothing_strength=params.shape_params.smoothing_strength,
     )
 
-    scene_optimizer = (
-        SceneLBFGS() if params.use_lbfgs else SceneAdamSequential(batch_size=4)
-    )
+    scene_optimizer = params.shape_params.scene_optimizer
 
-    for iteration in params.h_refinement_iterations:
+    for iteration in params.shape_params.h_refinement_iterations:
         optimizer.optimization_events.add_event(
             iteration=iteration,
             callback=lambda: optimizer.h_refinement(
@@ -377,6 +308,6 @@ def optimize_suzanne(params: SuzanneSplineParameters) -> None:
 
 if __name__ == "__main__":
     parameters = tyro.cli(SuzanneSplineParameters)
-    mlflow.log_params(parameters.loggable_dict)
+    mlflow.log_params(parameters.to_loggable_dict())
 
     optimize_suzanne(params=parameters)

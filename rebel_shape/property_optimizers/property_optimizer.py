@@ -45,15 +45,24 @@ class PropertyOptimizer(abc.ABC):
         scene: "mi.Scene",
         scene_params: "mi.SceneParams",
         optimization_events: OptimizationEvents,
+        display_state_interval: int = 2
     ) -> None:
         """
         The `scene` is a loaded Mitsuba scene object, while `scene_params` are a
         dictionary of parameters that are to be optimized. `optimization_events` store
         all actions that happen at a specific iteration throughout the optimization.
+
+        `display_state_interval` is the number of iterations after which the
+        optimization state is displayed. When a small number of images is used for
+        optimization rendering, the current state of the scene at each iteration
+        can be very expensive so it is recommended to set this value to a larger
+        number (5 - 10). Setting it to 1 is useful for debugging and visualization
+        purposes.
         """
         self._scene = scene
         self._scene_params = scene_params
         self._optimization_events = optimization_events
+        self._display_state_interval = display_state_interval
 
     def optimize(
         self,
@@ -81,15 +90,16 @@ class PropertyOptimizer(abc.ABC):
         scene_optimizer.set_parameters(self.optimization_parameters)
 
         for i in range(num_iters):
-            # Show the current optimization state at each iteration
-            self.optimization_events.add_event(
-                iteration=i,
-                callback=lambda it=i: self.show_optimization_state(
-                    iteration=it,
-                    views_to_render=views_to_render,
-                    save_directory_path=save_directory_path,
-                ),
-            )
+            # Show current state every `display_state_interval` iterations
+            if (i + 1) % self._display_state_interval == 0:
+                self.optimization_events.add_event(
+                    iteration=i,
+                    callback=lambda it=i: self.show_optimization_state(
+                        iteration=it,
+                        views_to_render=views_to_render,
+                        save_directory_path=save_directory_path,
+                    ),
+                )
             # Save progress
             self.optimization_events.add_event(
                 iteration=i,
@@ -274,30 +284,32 @@ class PropertyOptimizer(abc.ABC):
                 "random choice of optimization views is desired"
             )
 
+        if views_to_render is None:
+            return
+
         images: list["mi.TensorXf"] = []
 
-        if views_to_render is not None:
-            for sensor in views_to_render:
-                images.append(
-                    mi.render(
-                        scene=self.scene,
-                        params=self.scene_params,
-                        sensor=sensor,
-                        seed=iteration,
-                    )
-                )
-
-            timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
-            save_path = (
-                None
-                if save_directory_path is None
-                else save_directory_path.joinpath(
-                    f"views_{timestamp}_iteration-{iteration:03}.png"
+        for sensor in views_to_render:
+            images.append(
+                mi.render(
+                    scene=self.scene,
+                    params=self.scene_params,
+                    sensor=sensor,
+                    seed=iteration,
                 )
             )
 
-            show_rendered_views(
-                views=[mi.util.convert_to_bitmap(image) for image in images],
-                save_path=save_path,
-                titles=[f"View {i + 1}" for i in range(len(images))],
+        timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+        save_path = (
+            None
+            if save_directory_path is None
+            else save_directory_path.joinpath(
+                f"views_{timestamp}_iteration-{iteration:03}.png"
             )
+        )
+
+        show_rendered_views(
+            views=[mi.util.convert_to_bitmap(image) for image in images],
+            save_path=save_path,
+            titles=[f"View {i + 1}" for i in range(len(images))],
+        )

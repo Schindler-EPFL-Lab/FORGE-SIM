@@ -6,7 +6,7 @@ Verifies the implementation of the `BitmapTextureOptimizer` class.
 import sys
 import tempfile
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 import mitsuba as mi
@@ -23,9 +23,6 @@ from dataclasses_reverse_cli.reverse_cli import ReverseCli
 
 from rebel_shape import logger
 from rebel_shape.data_processing.masked_pose_image import MaskedPoseImage
-from rebel_shape.loss_evaluators.composite_loss import CompositeImageLoss
-from rebel_shape.loss_evaluators.image_loss_l1 import ImageLossL1
-from rebel_shape.loss_evaluators.image_loss_msssim import ImageLossMSSSIM
 from rebel_shape.plugin_wrappers.diffuse_bsdf import DiffuseBSDF
 from rebel_shape.plugin_wrappers.prb_integrator import GuidingOptions, PRBIntegrator
 from rebel_shape.plugin_wrappers.sampler import Sampler
@@ -33,38 +30,46 @@ from rebel_shape.property_optimizers.bitmap_texture_optimizer import (
     BitmapTextureOptimizer,
 )
 from rebel_shape.scene_optimizers.optimization_events import OptimizationEvents
-from rebel_shape.scene_optimizers.scene_adam_sequential import SceneAdamSequential
-from rebel_shape.schedulers.constant_scheduler import ConstantScheduler
+from rebel_shape.scripts.configs.texture_optimization_config import (
+    TextureOptimizationConfig,
+)
 from rebel_shape.utils.image_utils import show_rendered_views
 from rebel_shape.utils.sensor_utils import create_cameras_fibonacci
 
 
-@dataclass
+@dataclass(kw_only=True)
 class SuzanneTextureParameters(ReverseCli):
     """Checks whether the inputted parameters are valid"""
 
-    sensor_count: int = 8
+    sensor_count: int = 12
     """Number of camera views used in optimization"""
-    reference_samples: int = 256
+    reference_samples: int = 1024
     """number of samples per pixel used for the reference/target images"""
-    base_samples: int = 16
+    base_samples: int = 64
     """number of samples per pixel used for continuous derivatives"""
-    image_resolution: int = 320
+    image_resolution: int = 480
     """Resolution of the rendered images along height and width"""
-    texture_resolution: int = 512
+    texture_resolution: int = 1024
     """Resolution of the texture along height and width"""
     optimization_iterations: int = 20
     """Adam iterations executed on the initial mesh"""
-    learning_rate: float = 0.5
-    """Adam learning rate during optimization"""
-    l1_image_loss_weight: float = 0.8
-    """
-    The weight of L1 loss in composite loss. The other loss is MS-SSIM and it has a 
-    weight 1.0 - `l1_image_loss_weight`.
-    """
+
+    texture_params: TextureOptimizationConfig = field(
+        default_factory=lambda: TextureOptimizationConfig(
+            texture_resolution=1024,
+            learning_rate_start=0.5,
+            learning_rate_end=0.5,
+            learning_rate_steepness=1.0,
+            use_lbfgs=False,
+            uniform_adam=False,
+            batch_size=3,
+            l1_loss_weight=0.8,
+        )
+    )
+    """Parameters for texture optimization"""
+
     output_folder: Path = Path("./outputs/")
     """Where to save the meshes and images (created if it does not exist)"""
-
     use_gpu: bool = True
     """
     Whether to use GPU for rendering or not. Note that the compute instance
@@ -84,8 +89,6 @@ class SuzanneTextureParameters(ReverseCli):
             raise ValueError("`resolution` must be a positive integer")
         if self.optimization_iterations < 1:
             raise ValueError("`optimization_iterations` must be a positive integer.")
-        if self.learning_rate <= 0.0:
-            raise ValueError("`learning_rate` must be positive real number.")
 
 
 def initialize_scene(
@@ -156,21 +159,14 @@ def initialize_scene(
     )
     start_time = time.time()
     ref_images = [
-        mi.render(
-            scene_target,
-            sensor=cameras[i].mitsuba_sensor,
-            spp=reference_samples,
-        )
-        for i in range(sensor_count)
+        mi.render(scene_target, sensor=camera.mitsuba_sensor, spp=reference_samples)
+        for camera in cameras
     ]
     ref_images = [
-        MaskedPoseImage(
-            image=ref_image,
-            camera=camera,
-            mask=None,
-        )
+        MaskedPoseImage(image=ref_image, camera=camera, mask=None)
         for ref_image, camera in zip(ref_images, cameras)
     ]
+
     show_rendered_views(
         views=[mi.util.convert_to_bitmap(image.image) for image in ref_images]
     )
@@ -229,13 +225,6 @@ def optimize_suzanne_texture(params: SuzanneTextureParameters) -> None:
         texture_resolution=params.texture_resolution,
     )
 
-    image_loss = CompositeImageLoss(
-        losses_and_weights=[
-            (ImageLossL1(), params.l1_image_loss_weight),
-            (ImageLossMSSSIM(), 1.0 - params.l1_image_loss_weight),
-        ]
-    )
-
     # Optimization procedure
     optimizer = BitmapTextureOptimizer(
         scene=scene_source,
@@ -243,16 +232,18 @@ def optimize_suzanne_texture(params: SuzanneTextureParameters) -> None:
         optimization_events=OptimizationEvents(),
         optimization_key="shape_texture",
         texture_keys=["shape.bsdf.reflectance.data"],
-        texture_scheduler=ConstantScheduler(learning_rate=params.learning_rate),
-        texture_loss=image_loss,
+        texture_scheduler=params.texture_params.scheduler(
+            end_iteration=params.optimization_iterations,
+        ),
+        texture_loss=params.texture_params.image_loss,
     )
 
     optimizer.optimize(
         ref_images=ref_images,
-        scene_optimizer=SceneAdamSequential(uniform=False, batch_size=1),
+        scene_optimizer=params.texture_params.scene_optimizer,
         num_iters=params.optimization_iterations,
         views_to_render=[
-            ref_images[i].sensor for i in range(0, params.sensor_count, 2)
+            ref_images[i].sensor for i in range(0, params.sensor_count, 4)
         ],
         save_directory_path=params.output_folder,
     )
@@ -271,6 +262,6 @@ def optimize_suzanne_texture(params: SuzanneTextureParameters) -> None:
 
 if __name__ == "__main__":
     parameters = tyro.cli(SuzanneTextureParameters)
-    mlflow.log_params(parameters.loggable_dict)
+    mlflow.log_params(parameters.to_loggable_dict())
 
     optimize_suzanne_texture(params=parameters)
