@@ -3,6 +3,7 @@ import unittest
 import drjit as dr
 import mitsuba as mi
 import numpy as np
+import numpy.typing as npt
 from scipy.sparse import linalg
 
 from rebel_shape.isogeometric_analysis.manifold_poisson_problem import (
@@ -222,9 +223,10 @@ class TestManifoldPoissonProblem(unittest.TestCase):
 
         # The forcing term is an eigenfunction of the Laplacian, so the exact solution
         # has the same form scaled by 1 / (2 * pi^2).
-        sol = poisson._spline.interpolating_spline.project_function(
-            func=lambda coords: forcing_term_flat(coords) / (2.0 * dr.pi**2)
-        )
+        def func(coords: "mi.TensorXf") -> "mi.TensorXf":
+            return forcing_term_flat(coords) / (2.0 * dr.pi**2)
+
+        sol = poisson._spline.interpolating_spline.project_function(func)
 
         np.testing.assert_allclose(np.max(full_solution), np.max(sol), rtol=1e-5)
 
@@ -293,13 +295,13 @@ class TestManifoldPoissonProblem(unittest.TestCase):
         full_solution[active_dofs] = solution[0]
         poisson.spline.field_values = mi.TensorXf(full_solution.reshape(-1, 1))
 
-        # Validate solution against expected analytical solution
-        expected_sol = poisson.spline.interpolating_spline.project_function(
-            func=lambda parametric_coords: (
-                dr.sin(dr.pi * parametric_coords[:, 0])
-                * dr.sin(dr.pi * parametric_coords[:, 1])
+        def func(parametric_coords: "mi.TensorXf") -> "mi.TensorXf":
+            return dr.sin(dr.pi * parametric_coords[:, 0]) * dr.sin(
+                dr.pi * parametric_coords[:, 1]
             )
-        )
+
+        # Validate solution against expected analytical solution
+        expected_sol = poisson.spline.interpolating_spline.project_function(func=func)
         np.testing.assert_allclose(
             np.max(full_solution), np.max(expected_sol), rtol=1e-3
         )
@@ -307,7 +309,7 @@ class TestManifoldPoissonProblem(unittest.TestCase):
     @staticmethod
     def _poisson_fd_sor_red_black(
         n: int = 65, max_iter: int = 500, tol: float = 1e-5
-    ) -> np.ndarray:
+    ) -> npt.NDArray[np.float64]:
         """
         Finite difference solution of the Poisson equation on a flat surface
         [0, 1] x [0, 1] with a forcing term f = 1 using the successive
@@ -340,7 +342,7 @@ class TestManifoldPoissonProblem(unittest.TestCase):
         omega = 2.0 / (1.0 + np.sin(np.pi / (n + 1)))
         h2 = 1.0 / (n - 1) ** 2
 
-        for it in range(max_iter):
+        for _ in range(max_iter):
             u_old = u.copy()
             # Update red points
             u[1:-1:2, 1:-1:2] = (1 - omega) * u[1:-1:2, 1:-1:2] + omega * 0.25 * (

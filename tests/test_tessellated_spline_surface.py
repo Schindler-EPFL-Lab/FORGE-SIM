@@ -1,11 +1,11 @@
-import unittest
 import tempfile
+import unittest
 from json import JSONDecodeError
 from pathlib import Path
 
+import jsonpickle
 import mitsuba as mi
 import numpy as np
-import jsonpickle
 from PIL import Image
 
 from rebel_shape.meshing.composite_spline_surface_factory import (
@@ -233,7 +233,7 @@ class TestTessellatedSplineSurface(unittest.TestCase):
             # Save tessellated surface
             surface_file = temp_path / "test_surface.json"
             with open(surface_file, "w") as f:
-                f.write(jsonpickle.encode(self.tessellated_surface))
+                _ = f.write(jsonpickle.encode(self.tessellated_surface))
 
             # Create texture files matching patch names
             texture1 = temp_path / "diffuse_patch1_texture.png"
@@ -242,10 +242,12 @@ class TestTessellatedSplineSurface(unittest.TestCase):
 
             # Create dummy texture files
             for texture_path in (texture1, texture2, texture3):
-                img = Image.fromarray(np.array([
-                    [[255, 0, 0], [0, 255, 0]],
-                    [[0, 0, 255], [255, 255, 0]]
-                ], dtype=np.uint8))
+                img = Image.fromarray(
+                    np.array(
+                        [[[255, 0, 0], [0, 255, 0]], [[0, 0, 255], [255, 255, 0]]],
+                        dtype=np.uint8,
+                    )
+                )
                 img.save(texture_path)
 
             texture_paths = (texture3, texture1, texture2)
@@ -299,5 +301,5 @@ class TestTessellatedSplineSurface(unittest.TestCase):
             with self.assertRaises(JSONDecodeError):
                 TessellatedSplineSurface.from_file_with_textures(
                     composite_spline_surface_path=invalid_file,
-                    texture_paths=[texture_file, texture_file, texture_file]
+                    texture_paths=[texture_file, texture_file, texture_file],
                 )

@@ -10,7 +10,7 @@ from rebel_shape.plugin_wrappers.diffuse_bsdf import DiffuseBSDF
 from rebel_shape.splines.coordinate_spline import CoordinateSpline
 
 
-class SplinePatch(CoordinateSpline, Patch):
+class SplinePatch(CoordinateSpline, Patch, abc.ABC):
     """
     Abstract base class for spline patches in 3D space.
 
@@ -35,7 +35,7 @@ class SplinePatch(CoordinateSpline, Patch):
         """
         raise NotImplementedError(
             "Classes inheriting from `SplinePatch` need to implement the "
-            "`control_points_grid` property."
+            + "`control_points_grid` property."
         )
 
     @abc.abstractmethod
@@ -52,7 +52,7 @@ class SplinePatch(CoordinateSpline, Patch):
         """
         raise NotImplementedError(
             "Classes inheriting from `SplinePatch` need to implement the "
-            "`evaluate_normals` method."
+            + "`evaluate_normals` method."
         )
 
     @abc.abstractmethod
@@ -69,7 +69,7 @@ class SplinePatch(CoordinateSpline, Patch):
         """
         raise NotImplementedError(
             "Classes inheriting from `SplinePatch` need to implement the "
-            "`evaluate_jacobian` method."
+            + "`evaluate_jacobian` method."
         )
 
     @staticmethod
@@ -165,7 +165,7 @@ class SplinePatch(CoordinateSpline, Patch):
         """
         raise NotImplementedError(
             "Classes inheriting from `Spline` need to implement the "
-            "`parametric_domain_size` property."
+            + "`parametric_domain_size` property."
         )
 
     @abc.abstractmethod
@@ -182,7 +182,7 @@ class SplinePatch(CoordinateSpline, Patch):
         """
         raise NotImplementedError(
             "Classes inheriting from `SplinePatch` need to implement the "
-            "`__getstate__` method."
+            + "`__getstate__` method."
         )
 
     @abc.abstractmethod
@@ -198,7 +198,7 @@ class SplinePatch(CoordinateSpline, Patch):
         """
         raise NotImplementedError(
             "Classes inheriting from `SplinePatch` need to implement the "
-            "`__setstate__` method."
+            + "`__setstate__` method."
         )
 
     @abc.abstractmethod
@@ -216,7 +216,7 @@ class SplinePatch(CoordinateSpline, Patch):
         """
         raise NotImplementedError(
             "Classes inheriting from `SplinePatch` need to implement the "
-            "`h_refinement` method."
+            + "`h_refinement` method."
         )
 
     @property
@@ -234,7 +234,7 @@ class SplinePatch(CoordinateSpline, Patch):
         """
         raise NotImplementedError(
             "Classes inheriting from `SplinePatch` need to implement the "
-            "`quads` property."
+            + "`quads` property."
         )
 
     def texcoords_to_parametric_coords(self, texcoords: "mi.TensorXf") -> "mi.TensorXf":

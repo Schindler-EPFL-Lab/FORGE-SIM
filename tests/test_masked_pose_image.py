@@ -267,6 +267,7 @@ class TestMaskedPoseImage(unittest.TestCase):
                     )
                 )
                 returned_mask = image_mask.mask
+                assert returned_mask is not None
                 if returned_mask.ndim == 2 and mask.ndim == 3:
                     returned_mask = returned_mask[..., None]
                 if returned_mask.ndim == 3 and mask.ndim == 2:
@@ -303,6 +304,7 @@ class TestMaskedPoseImage(unittest.TestCase):
                     )
                 )
                 returned_mask = image_mask.mask
+                assert returned_mask is not None
                 if returned_mask.ndim == 2 and mask.ndim == 3:
                     returned_mask = returned_mask[..., None]
                 if returned_mask.ndim == 3 and mask.ndim == 2:

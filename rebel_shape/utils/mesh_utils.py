@@ -3,6 +3,7 @@ from pathlib import Path
 import drjit as dr
 import mitsuba as mi
 import numpy as np
+import numpy.typing as npt
 
 from rebel_shape.plugin_wrappers.diffuse_bsdf import DiffuseBSDF
 
@@ -49,9 +50,9 @@ def create_cubedsphere(radius: float = 1.0, subdivisions: int = 0) -> "mi.Mesh":
 
 def create_mitsuba_mesh(
     mesh_name: str,
-    faces: np.ndarray,
-    vertices: np.ndarray,
-    texture_coordinates: np.ndarray | None = None,
+    faces: npt.NDArray[np.float64],
+    vertices: npt.NDArray[np.float64],
+    texture_coordinates: npt.NDArray[np.float64] | None = None,
 ) -> "mi.Mesh":
     """
     Create a Mitsuba mesh named 'mesh_name`  from `vertices` and `faces`.
@@ -102,7 +103,9 @@ def create_mitsuba_mesh(
     return mesh
 
 
-def _create_cube(radius: float = 1.0) -> tuple[np.ndarray, np.ndarray]:
+def _create_cube(
+    radius: float = 1.0,
+) -> tuple[npt.NDArray[np.float64], npt.NDArray[np.float64]]:
     """
     Generate vertices and faces for a cube projected onto a sphere of `radius`.
 
@@ -147,11 +150,13 @@ def _create_cube(radius: float = 1.0) -> tuple[np.ndarray, np.ndarray]:
 
 
 def subdivide_mesh(
-    vertices: np.ndarray,
-    faces: np.ndarray,
-    texture_coordinates: np.ndarray | None = None,
+    vertices: npt.NDArray[np.float64],
+    faces: npt.NDArray[np.float64],
+    texture_coordinates: npt.NDArray[np.float64] | None = None,
     radius: float | None = None,
-) -> tuple[np.ndarray, np.ndarray, np.ndarray | None]:
+) -> tuple[
+    npt.NDArray[np.float64], npt.NDArray[np.int32], npt.NDArray[np.float64] | None
+]:
     """
     Subdivide each face of the mesh into 4 smaller triangles.
 
@@ -221,6 +226,7 @@ def subdivide_mesh(
             midpoints.append(mid_idx)
 
             if texture_coordinates is not None:
+                assert new_texcoords is not None
                 mid_texcoord = 0.5 * (new_texcoords[p1] + new_texcoords[p2])
                 new_texcoords = np.vstack((new_texcoords, mid_texcoord))
 
@@ -267,7 +273,9 @@ def visualize_mesh_parametrization(mesh_path: Path) -> "mi.Mesh":
     return mesh
 
 
-def _cube_map_parametrization(vertices: np.ndarray) -> np.ndarray:
+def _cube_map_parametrization(
+    vertices: npt.NDArray[np.float64],
+) -> npt.NDArray[np.float64]:
     """
     Computes a cube map parametrization for vertices of a sphere.
 
@@ -350,6 +358,7 @@ def _cube_map_parametrization(vertices: np.ndarray) -> np.ndarray:
         t = 0.25 * 0.5 * (t + 1.0)
 
         # Map to appropriate region in the texture space
+        u, v = None, None
         if face == "Bo":
             u = s + 0.25
             v = t
@@ -369,6 +378,8 @@ def _cube_map_parametrization(vertices: np.ndarray) -> np.ndarray:
             u = s + 0.25
             v = t + 0.5
 
+        assert u is not None
+        assert v is not None
         uv[i] = [u, v]
 
     return uv

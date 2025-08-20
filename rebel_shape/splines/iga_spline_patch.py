@@ -32,7 +32,7 @@ class IGASplinePatch(SplinePatch):
     with a specified resolution and returns the evaluated field values as a texture.
     """
 
-    def __init__(self, spline_patch: SplinePatch, field_values: "mi.TensorXf") -> None:
+    def __init__(self, spline_patch: SplinePatch, field_values: "mi.TensorXf") -> None:  # pyright: ignore[reportMissingSuperCall]
         """
         Initializes the IGA spline patch with a `SplinePatch` and `field_values`.
 
@@ -60,12 +60,12 @@ class IGASplinePatch(SplinePatch):
         if len(field_values.shape) != 2:
             raise ValueError(
                 "The control points of the B-spline patch must be a 2D tensor of shape "
-                "(n_cp, dofs_per_cp)."
+                + "(n_cp, dofs_per_cp)."
             )
         if field_values.shape[0] != spline_patch.control_points.shape[0]:
             raise ValueError(
                 "The number of rows in `field_values` must match the number of control "
-                "points."
+                + "points."
             )
         self._field_values = field_values
 
@@ -90,7 +90,7 @@ class IGASplinePatch(SplinePatch):
         """
         return self._spline_patch.evaluate_coordinates(parametric_coords)
 
-    def evaluate_normals(self, parametric_coords) -> "mi.TensorXf":
+    def evaluate_normals(self, parametric_coords: "mi.TensorXf") -> "mi.TensorXf":
         """
         Compute the surface normals at the given `parametric_coords`.
 
@@ -504,8 +504,10 @@ class IGASplinePatch(SplinePatch):
 
         # Add colorbar for single-channel field
         if visualize_field and facecolors is not None and cmap is not None:
+            assert clim is not None
             sm = plt.cm.ScalarMappable(
-                cmap=cmap, norm=plt.Normalize(vmin=clim[0], vmax=clim[1])
+                cmap=cmap,
+                norm=plt.Normalize(vmin=clim[0], vmax=clim[1]),
             )
             sm.set_array([])
             fig.colorbar(sm, ax=ax, shrink=0.5, aspect=5)
