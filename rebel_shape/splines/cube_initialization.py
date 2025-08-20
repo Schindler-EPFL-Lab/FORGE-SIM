@@ -299,7 +299,7 @@ def cubed_sphere(
         adam = mi.ad.Adam(lr=1.5e-2 / spline_subdivisions**2, uniform=True)
         adam["cps"] = cube.global_control_points
 
-        for i in range(121):
+        for i in range(151):
             # Update the control points
             cube.global_control_points = adam["cps"]
 
@@ -308,7 +308,7 @@ def cubed_sphere(
             adam.step()
 
             if i % 10 == 0:
-                logger.info(f"Iteration {i}: G1 loss = {loss.numpy():.4g})")
+                logger.debug(f"Iteration {i:3d}: G1 loss = {loss.numpy():.4g})")
 
     # Scale the sphere to the desired radius
     cube.global_control_points = cube.global_control_points * radius

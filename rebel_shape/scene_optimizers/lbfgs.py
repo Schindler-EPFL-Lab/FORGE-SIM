@@ -21,6 +21,7 @@ class LBFGS(mi.ad.Optimizer):
     including history buffers for state differences, gradient differences, and
     their dot products. When the history exceeds the specified size, older entries
     are automatically discarded to maintain memory efficiency.
+    Negative curvature updates are skipped.
 
     Line search is performed using backtracking with configurable iteration limits.
     The algorithm can use either the Armijo condition alone or both Armijo and Wolfe
@@ -42,6 +43,8 @@ class LBFGS(mi.ad.Optimizer):
     and is written by the same team that developed Dr.Jit and Mitsuba 3.
     """
 
+    CURVATURE_EPSILON: float = 1e-8
+
     def __init__(
         self,
         learning_rate: float = 1.0,
@@ -49,7 +52,7 @@ class LBFGS(mi.ad.Optimizer):
         params: dict[str, MitsubaOptimizationType] | None = None,
         use_wolfe_curvature: bool = False,
         line_search_iterations: int = 20,
-    ):
+    ) -> None:
         """
         Initialize the L-BFGS optimizer with the specified parameters.
 
@@ -89,12 +92,12 @@ class LBFGS(mi.ad.Optimizer):
         if history_size < 5:
             logger.warning(
                 "`history_size` is set to a very low value, which may lead to "
-                "poor convergence behavior. Consider increasing it."
+                + "poor convergence behavior. Consider increasing it."
             )
         if history_size > 100:
             logger.warning(
                 "`history_size` is set to a very high value, which may lead to "
-                "increased memory usage and slower optimization. Consider reducing it."
+                + "higher memory usage and slower optimization. Consider reducing it."
             )
 
         if line_search_iterations < 1:
@@ -102,12 +105,12 @@ class LBFGS(mi.ad.Optimizer):
         if line_search_iterations < 5:
             logger.warning(
                 "`line_search_iterations` is set to a low value, which may lead to "
-                "poor convergence behavior. Consider increasing it."
+                + "poor convergence behavior. Consider increasing it."
             )
         if line_search_iterations > 30:
             logger.warning(
                 "`line_search_iterations` is set to a very high value, which may lead "
-                "to increased computation time. Consider reducing it."
+                + "to increased computation time. Consider reducing it."
             )
 
         super().__init__(lr=learning_rate, params=params)
@@ -170,6 +173,8 @@ class LBFGS(mi.ad.Optimizer):
         Computes differences between current and previous states/gradients and
         stores them in the history buffers for a variable with key `variable_key`.
 
+        If the computed curvature is negative, it skips the update.
+
         Automatically manages history size by removing the oldest entries when the
         buffer exceeds the specified limit. It also schedules DrJit operations for
         the computed differences and updates the iteration counter for the variable.
@@ -177,39 +182,95 @@ class LBFGS(mi.ad.Optimizer):
         This method is called automatically during the optimization step and typically
         should not be called manually.
         """
-        # Discard entries that are too old
-        if self._iterations[variable_key] > self._history_size:
-            self._state_difference[variable_key].pop(0)
-            self._gradient_differences[variable_key].pop(0)
-            self._gradient_diff_dot_state_diff[variable_key].pop(0)
-
         params = dr.ravel(dr.detach(self.variables[variable_key]))
         params_gradient = dr.ravel(self.variables[variable_key].grad)
         dr.schedule(params, params_gradient)
 
-        # Update history
+        # Update history if not the first iteration
         if self._iterations[variable_key] > 0:
-            self._state_difference[variable_key].append(
-                params - self._previous_params[variable_key]
-            )
-            self._gradient_differences[variable_key].append(
-                params_gradient - self._previous_gradient[variable_key]
-            )
-            dr.schedule(
-                self._state_difference[variable_key][-1],
-                self._gradient_differences[variable_key][-1],
-            )
-            self._gradient_diff_dot_state_diff[variable_key].append(
-                dr.dot(
-                    self._gradient_differences[variable_key][-1],
-                    self._state_difference[variable_key][-1],
+            s = params - self._previous_params[variable_key]
+            y = params_gradient - self._previous_gradient[variable_key]
+            dr.schedule(s, y)
+
+            ys = dr.dot(y, s)
+
+            # Only apply updates if the curvature is positive
+            if ys > self.CURVATURE_EPSILON:
+                # Discard entries that are too old
+                if self._iterations[variable_key] > self._history_size:
+                    self._state_difference[variable_key].pop(0)
+                    self._gradient_differences[variable_key].pop(0)
+                    self._gradient_diff_dot_state_diff[variable_key].pop(0)
+
+                self._state_difference[variable_key].append(s)
+                self._gradient_differences[variable_key].append(y)
+                self._gradient_diff_dot_state_diff[variable_key].append(ys)
+
+                self._iterations[variable_key] += 1
+            else:
+                logger.debug(
+                    f"Rejected update for {variable_key} due to negative "
+                    + f"curvature {ys} <= {self.CURVATURE_EPSILON}. "
                 )
-            )
+        else:
+            # First iteration, initialize history
+            self._iterations[variable_key] = 1
 
         # Update previous state and gradient
         self._previous_params[variable_key] = params
         self._previous_gradient[variable_key] = params_gradient
-        self._iterations[variable_key] += 1
+
+    def _apply_inverse_hessian(
+        self, variable_key: str, q: MitsubaOptimizationType
+    ) -> MitsubaOptimizationType:
+        """
+        Computes the inverse Hessian approximation H_k product with vector `q`
+        for variable with key `variable_key` using the L-BFGS two-loop recursion.
+
+        This method is used for finding the search direction in the L-BFGS
+        optimization step. It applies the two-loop recursion algorithm to compute
+        the product of the inverse Hessian approximation with the vector `q`,
+        representing the current gradient.
+
+        The Notation in the implementation follows the standard L-BFGS notation
+        (e.g. Wikipedia: https://en.wikipedia.org/wiki/Limited-memory_BFGS
+        or Nocedal and Wright's book on numerical optimization):
+
+        - `s[i]` is the difference between the current and previous parameter
+          state at iteration `i`
+        - `y[i]` is the difference between the current and previous gradient
+            at iteration `i`
+        - `ys[i]` is the dot product of `y[i]` and `s[i]`
+        - `q` is the current gradient
+        - `r` is the produjct of `q` with the inverse Hessian approximation
+
+        :returns: The result of the inverse Hessian approximation applied to `q`.
+            Taking the negative of the result gives the search direction
+            for the L-BFGS optimization step.
+        """
+        s_hist = self._state_difference[variable_key]
+        y_hist = self._gradient_differences[variable_key]
+        ys_hist = self._gradient_diff_dot_state_diff[variable_key]
+
+        alphas: list[float] = []
+
+        for s, y, ys in zip(reversed(s_hist), reversed(y_hist), reversed(ys_hist)):
+            alpha = dr.rcp(ys) * dr.dot(s, q)
+            q = q - alpha * y
+            alphas.insert(0, alpha)
+
+        gamma = (
+            1.0
+            if self._iterations[variable_key] == 1
+            else ys_hist[-1] * dr.rcp(dr.dot(y_hist[-1], y_hist[-1]))
+        )
+        r = gamma * q
+
+        for s, y, ys, alpha in zip(s_hist, y_hist, ys_hist, alphas):
+            b = dr.rcp(ys) * dr.dot(y, r)
+            r = r + (alpha - b) * s
+
+        return r
 
     @staticmethod
     def _fill_new_values(
@@ -388,7 +449,7 @@ class LBFGS(mi.ad.Optimizer):
 
             # Accept step size if the condition is satisfied
             if dr.all(condition_satisfied):
-                logger.info(
+                logger.debug(
                     f"Line search iteration {it + 1} (Wolfe = {use_wolfe_curvature}) - "
                     f"f_new = {new_objective}, f_old = {objective}."
                 )
@@ -413,18 +474,6 @@ class LBFGS(mi.ad.Optimizer):
         2. Computes search directions using L-BFGS two-loop recursion
         3. Performs backtracking line search with Armijo (and Wolfe) conditions
         4. Updates all variables with the computed step
-
-        The Notation in the implementation follows the standard L-BFGS notation
-        (e.g. WikiPedia: https://en.wikipedia.org/wiki/Limited-memory_BFGS
-        or Nocedal and Wright's book on numerical optimization):
-
-        - `s[i]` is the difference between the current and previous parameter
-          state at iteration `i`
-        - `y[i]` is the difference between the current and previous gradient
-            at iteration `i`
-        - `ys[i]` is the dot product of `y[i]` and `s[i]`
-        - `q` is the current gradient
-        - `z` is the search direction computed by the L-BFGS algorithm
 
         Using Wolfe curvature condition requires the gradients to be computed
         for the new parameters after each line search iteration, which can be
@@ -452,36 +501,9 @@ class LBFGS(mi.ad.Optimizer):
             # Update history
             self._update_history(variable_key)
 
-            # Find search direction
-            q = dr.ravel(params.grad)
-
-            hist_size = len(self._state_difference[variable_key])
-            dr.make_opaque(hist_size)
-
-            s = self._state_difference[variable_key]
-            y = self._gradient_differences[variable_key]
-            ys = self._gradient_diff_dot_state_diff[variable_key]
-            alphas: list[float] = []
-
-            for i in range(hist_size - 1, -1, -1):
-                rho = dr.rcp(ys[i])
-                a = rho * dr.dot(s[i], q)
-                q = q - a * y[i]
-                alphas.insert(0, a)
-
-            gamma = (
-                1.0
-                if self._iterations[variable_key] == 1
-                else ys[-1] / dr.dot(y[-1], y[-1])
+            search_directions[variable_key] = -1.0 * self._apply_inverse_hessian(
+                variable_key=variable_key, q=dr.ravel(params.grad)
             )
-
-            z = gamma * q
-            for i in range(hist_size):
-                rho = dr.rcp(ys[i])
-                b = rho * dr.dot(y[i], z)
-                z = z + (alphas[i] - b) * s[i]
-
-            search_directions[variable_key] = -z
 
         if self._line_search_fn is None:
             raise RuntimeError(

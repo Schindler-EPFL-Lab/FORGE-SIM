@@ -23,7 +23,7 @@ class SceneLBFGS(SceneOptimizer):
 
     The `history_size` is an adjustable parameter, and it should be chosen large
     enough to stabilize the optimization, but not so large that it stalls it with
-    outdated curvature data
+    outdated curvature data.
 
     Additionally, unlike stochastic optimization methods that typically take a fixed
     size step, regardless of whether this step reduces the objective function value,
@@ -235,7 +235,7 @@ class SceneLBFGS(SceneOptimizer):
                     f"Learning rate for '{key}' must be a positive real number."
                 )
 
-            if learning_rate < 0.2:
+            if learning_rate < 0.1:
                 logger.warning(
                     f"Learning rate for '{key}' is set to {learning_rate}, "
                     "which is below the typical lower bound of 0.2. "
