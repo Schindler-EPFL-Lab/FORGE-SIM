@@ -49,6 +49,10 @@ from rebel_shape.scene_optimizers.optimization_events import OptimizationEvents
 from rebel_shape.scene_optimizers.scene_adam_sequential import SceneAdamSequential
 from rebel_shape.schedulers.exponential_scheduler import ExponentialScheduler
 from rebel_shape.scripts.configs.pose_optimization import PoseOptimization
+from rebel_shape.scripts.configs.spline_shape_optimization import (
+    SplineShapeOptimization,
+)
+from rebel_shape.scripts.configs.texture_optimization import TextureOptimization
 from rebel_shape.splines.cube_initialization import cubed_sphere
 
 
@@ -62,24 +66,6 @@ class ThermoSceneSplineOptimizationParameters(ReverseCli):
     environment_map_path: Path
     """Path to the envionment map that is used as background in optimization."""
 
-    shape_smoothing_strength: float = 0.0
-    """Laplacian smoothing parameter for shape optimization"""
-    shape_l1_loss_weight: float = 0.85
-    """
-    Weight of the L1 image loss for shape in composite loss. The other loss is either
-    SSIM or L2, depending on `use_ssim_loss`, and is weighted by 
-    1.0 - `shape_l1_loss_weight`
-    """
-    texture_resolution: int = 1024
-    """Resolution of the texture used for optimization"""
-    texture_projection_steepness: float = 1.0
-    """Steepness of the sigmoid projection for texture optimization"""
-    texture_l1_loss_weight: float = 0.85
-    """
-    Weight of the L1 image loss for texture in composite loss. The other loss is either
-    SSIM or L2, depending on `use_ssim_loss`, and is weighted by 
-    1.0 - `texture_l1_loss_weight`
-    """
     use_msssim_loss: bool = True
     """
     If `True`, the MS-SSIM loss is used for shape and texture optimization. 
@@ -93,42 +79,12 @@ class ThermoSceneSplineOptimizationParameters(ReverseCli):
     optimization_iterations: int = 50
     """Adam iterations executed on the initial mesh"""
 
-    spline_degree: int = 3
-    """Degree of the spline used for shape optimization"""
-    spline_subdivisions: int = 2
-    """Number of knot spans in each patch of the spline"""
-    mesh_subdivisions: int = 256
-    """Number of tessellation subdivisions used for each patch of the spline"""
-
-    pose_optimization: PoseOptimization
-    """
-    Parameters of the pose optimization
-    """
-
-    shape_learning_rate_start: float = 0.15
-    """Adam learning rate at the start of shape optimization"""
-    shape_learning_rate_end: float = 0.002
-    """Adam learning rate at the end of shape optimization"""
-    shape_learning_rate_steepness: float = 1.5
-    """How quickly the shape learning rate converges to the end value"""
-    shape_batch_size: int = 9
-    """Number of images used for shape gradient computation"""
-    h_refinement_iterations: list[int] | None = None
-    """
-    List of iterations at which the h-refinement is applied, increasing the number
-    of knot spans and thus the number of control points in the spline. The default 
-    values are applied if `None` is provided: [5, 10, 15, 25].
-    The values must be strictly increasing positive integers.
-    """
-
-    texture_learning_rate_start: float = 0.0025
-    """Adam learning rate at the start of shape optimization"""
-    texture_learning_rate_end: float = 0.025
-    """Adam learning rate at the end of shape optimization"""
-    texture_learning_rate_steepness: float = 2.5
-    """How late in the optimization procedure the larger steps kick in"""
-    texture_batch_size: int = 1
-    """Number of images used for texture gradient computation"""
+    pose_optimization: PoseOptimization = PoseOptimization()
+    """Parameters of the pose optimization"""
+    texture_optimization: TextureOptimization = TextureOptimization()
+    """Parameters for texture optimization"""
+    shape_optimization: SplineShapeOptimization = SplineShapeOptimization()
+    """Parameters for shape optimization"""
 
     output_folder: Path = Path("./outputs/")
     """Where to save the meshes and images (created if it does not exist)"""
@@ -149,88 +105,12 @@ class ThermoSceneSplineOptimizationParameters(ReverseCli):
     """
 
     def __post_init__(self) -> None:
-        if self.texture_resolution < 1:
-            raise ValueError("`texture_resolution` must be a positive integer.")
-        if self.shape_smoothing_strength < 0.0:
-            raise ValueError(
-                "`shape_projection_smoothing` must be a positive real number."
-            )
-        if self.texture_projection_steepness <= 0.0:
-            raise ValueError(
-                "`texture_projection_steepness` must be a positive real number."
-            )
-        if self.shape_l1_loss_weight < 0.0 or self.shape_l1_loss_weight > 1.0:
-            raise ValueError(
-                "`shape_l1_loss_weight` must be a real number in [0.0, 1.0]."
-            )
-        if self.texture_l1_loss_weight < 0.0 or self.texture_l1_loss_weight > 1.0:
-            raise ValueError(
-                "`texture_l1_loss_weight` must be a real number in [0.0, 1.0]."
-            )
-
         if self.continuous_samples < 1:
             raise ValueError("`continuous_samples` must be a positive integer.")
         if self.visibility_samples < 1:
             raise ValueError("`visibility_samples` must be a positive integer.")
         if self.optimization_iterations < 1:
             raise ValueError("`first_pass_iterations` must be a positive integer.")
-
-        if self.spline_degree < 1:
-            raise ValueError("`spline_degree` must be a positive integer.")
-        if self.spline_subdivisions < 1:
-            raise ValueError("`spline_subdivisions` must be a positive integer.")
-        if self.mesh_subdivisions < 1:
-            raise ValueError("`mesh_subdivisions` must be a positive integer.")
-
-        if self.shape_learning_rate_start < 0.0:
-            raise ValueError("`shape_learning_rate_start` must be non-negative.")
-        if self.shape_learning_rate_end < 0.0:
-            raise ValueError("`shape_learning_rate_end` must be non-negative.")
-        if self.shape_learning_rate_end > self.shape_learning_rate_start:
-            raise ValueError(
-                "`shape_learning_rate_end` must be smaller than "
-                "`shape_learning_rate_start`."
-            )
-        if self.shape_learning_rate_steepness <= 0.0:
-            raise ValueError(
-                "`shape_learning_rate_steepness` must be a positive real number."
-            )
-        if self.shape_batch_size < 1:
-            raise ValueError("`batch_size` must be a positive integer")
-
-        if self.h_refinement_iterations is None:
-            self.h_refinement_iterations = [5, 10, 15, 25]
-        # Check that `h_refinement_iterations` is a list of strictly increasing
-        # positive integers
-        prev_iteration = 0
-        for iteration in self.h_refinement_iterations:
-            if iteration < 1:
-                raise ValueError(
-                    "`h_refinement_iterations` must be a list of positive integers."
-                )
-            if iteration <= prev_iteration:
-                raise ValueError(
-                    "`h_refinement_iterations` must be a list of strictly increasing "
-                    "positive integers."
-                )
-            prev_iteration = iteration
-
-        if self.texture_learning_rate_start < 0.0:
-            raise ValueError("`texture_learning_rate_start` must be non-negative.")
-        if self.texture_learning_rate_end < 0.0:
-            raise ValueError("`texture_learning_rate_end` must be non-negative.")
-        if self.texture_learning_rate_end < self.texture_learning_rate_start:
-            raise ValueError(
-                "`texture_learning_rate_start` must be smaller than "
-                "`texture_learning_rate_end`."
-            )
-        if self.texture_learning_rate_steepness <= 0.0:
-            raise ValueError(
-                "`texture_learning_rate_steepness` must be a positive real number."
-            )
-        if self.texture_batch_size < 1:
-            raise ValueError("`batch_size` must be a positive integer")
-
         if self.num_of_images_to_save < 1:
             raise ValueError("`num_of_images_to_save` must be a positive integer.")
 
@@ -399,10 +279,10 @@ def optimize_thermoscenes_scene(
         visibility_samples=params.visibility_samples,
         thermoscenes_scene_path=params.thermoscenes_scene_path,
         envmap_path=params.environment_map_path,
-        texture_resolution=params.texture_resolution,
-        spline_degree=params.spline_degree,
-        spline_subdivisions=params.spline_subdivisions,
-        mesh_subdivisions=params.mesh_subdivisions,
+        texture_resolution=params.texture_optimization.texture_resolution,
+        spline_degree=params.shape_optimization.spline_degree,
+        spline_subdivisions=params.shape_optimization.spline_subdivisions,
+        mesh_subdivisions=params.shape_optimization.mesh_subdivisions,
         initial_sphere_radius=params.pose_optimization.initial_sphere_radius,
     )
 
@@ -453,33 +333,33 @@ def optimize_thermoscenes_scene(
 
     # Set up the pipeline for shape + texture optimization
     shape_scheduler = ExponentialScheduler(
-        start_learning_rate=params.shape_learning_rate_start,
-        end_learning_rate=params.shape_learning_rate_end,
+        start_learning_rate=params.shape_optimization.shape_learning_rate_start,
+        end_learning_rate=params.shape_optimization.shape_learning_rate_end,
         end_iteration=params.optimization_iterations,
-        steepness=params.shape_learning_rate_steepness,
+        steepness=params.shape_optimization.shape_learning_rate_steepness,
     )
     texture_scheduler = ExponentialScheduler(
-        start_learning_rate=params.texture_learning_rate_start,
-        end_learning_rate=params.texture_learning_rate_end,
+        start_learning_rate=params.texture_optimization.texture_learning_rate_start,
+        end_learning_rate=params.texture_optimization.texture_learning_rate_end,
         end_iteration=params.optimization_iterations,
-        steepness=params.texture_learning_rate_steepness,
+        steepness=params.texture_optimization.texture_learning_rate_steepness,
     )
 
     shape_loss = CompositeImageLoss(
         losses_and_weights=[
-            (ImageLossL1(), params.shape_l1_loss_weight),
+            (ImageLossL1(), params.shape_optimization.shape_l1_loss_weight),
             (
                 ImageLossMSSSIM() if params.use_msssim_loss else ImageLossL2(),
-                1.0 - params.shape_l1_loss_weight,
+                1.0 - params.shape_optimization.shape_l1_loss_weight,
             ),
         ]
     )
     texture_loss = CompositeImageLoss(
         losses_and_weights=[
-            (ImageLossL1(), params.texture_l1_loss_weight),
+            (ImageLossL1(), params.texture_optimization.texture_l1_loss_weight),
             (
                 ImageLossMSSSIM() if params.use_msssim_loss else ImageLossL2(),
-                1.0 - params.texture_l1_loss_weight,
+                1.0 - params.texture_optimization.texture_l1_loss_weight,
             ),
         ]
     )
@@ -504,7 +384,7 @@ def optimize_thermoscenes_scene(
         shape_loss=shape_loss,
         texture_loss=texture_loss,
         shape_regularization=shape_regularization,
-        parametrization_smoothing=params.shape_smoothing_strength,
+        parametrization_smoothing=params.shape_optimization.shape_smoothing_strength,
     )
 
     save_path = (
@@ -522,19 +402,22 @@ def optimize_thermoscenes_scene(
     composite_scene_optimizer = CompositeSceneOptimizer(
         optimizer_config=[
             (
-                SceneAdamSequential(batch_size=params.shape_batch_size, uniform=True),
+                SceneAdamSequential(
+                    batch_size=params.shape_optimization.shape_batch_size, uniform=True
+                ),
                 [shape_key],
             ),
             (
                 SceneAdamSequential(
-                    batch_size=params.texture_batch_size, uniform=False
+                    batch_size=params.texture_optimization.texture_batch_size,
+                    uniform=False,
                 ),
                 [texture_key],
             ),
         ],
     )
 
-    for iteration in params.h_refinement_iterations:
+    for iteration in params.shape_optimization.h_refinement_iterations:
         optimizer.optimization_events.add_event(
             iteration=iteration,
             callback=lambda: optimizer.h_refinement(
