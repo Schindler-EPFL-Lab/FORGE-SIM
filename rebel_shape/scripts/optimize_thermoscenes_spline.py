@@ -48,10 +48,11 @@ from rebel_shape.scene_optimizers.composite_scene_optimizer import (
 from rebel_shape.scene_optimizers.optimization_events import OptimizationEvents
 from rebel_shape.scene_optimizers.scene_adam_sequential import SceneAdamSequential
 from rebel_shape.schedulers.exponential_scheduler import ExponentialScheduler
+from rebel_shape.scripts.configs.pose_optimization import PoseOptimization
 from rebel_shape.splines.cube_initialization import cubed_sphere
 
 
-@dataclass
+@dataclass(kw_only=True)
 class ThermoSceneSplineOptimizationParameters(ReverseCli):
     thermoscenes_scene_path: Path
     """
@@ -99,20 +100,10 @@ class ThermoSceneSplineOptimizationParameters(ReverseCli):
     mesh_subdivisions: int = 256
     """Number of tessellation subdivisions used for each patch of the spline"""
 
-    initial_sphere_radius: float = 2.0
-    """Radius of the initial sphere used for optimization"""
-    optimize_initial_pose: bool = True
-    """Whether to execute pose optimization before shape and texture optimization"""
-    pose_optimization_iterations: int = 10
-    """How many times the """
-    pose_learning_rate_start: float = 0.1
-    """Adam learning rate at the start of initial pose optimization"""
-    pose_learning_rate_end: float = 0.02
-    """Adam learning rate at the end of initial pose optimization"""
-    pose_learning_rate_steepness: float = 2.0
-    """How quickly the pose learning rate converges to the end value"""
-    pose_batch_size: int = 12
-    """Number of images used for pose gradient computation"""
+    pose_optimization: PoseOptimization
+    """
+    Parameters of the pose optimization
+    """
 
     shape_learning_rate_start: float = 0.15
     """Adam learning rate at the start of shape optimization"""
@@ -190,24 +181,6 @@ class ThermoSceneSplineOptimizationParameters(ReverseCli):
             raise ValueError("`spline_subdivisions` must be a positive integer.")
         if self.mesh_subdivisions < 1:
             raise ValueError("`mesh_subdivisions` must be a positive integer.")
-        if self.initial_sphere_radius <= 0.0:
-            raise ValueError("`initial_sphere_radius` must be a positive real number.")
-
-        if self.pose_learning_rate_start < 0.0:
-            raise ValueError("`pose_learning_rate_start` must be non-negative.")
-        if self.pose_learning_rate_end < 0.0:
-            raise ValueError("`pose_learning_rate_end` must be non-negative.")
-        if self.pose_learning_rate_end > self.pose_learning_rate_start:
-            raise ValueError(
-                "`pose_learning_rate_end` must be smaller than "
-                "`pose_learning_rate_start`."
-            )
-        if self.pose_learning_rate_steepness <= 0.0:
-            raise ValueError(
-                "`pose_learning_rate_steepness` must be a positive real number."
-            )
-        if self.pose_batch_size < 1:
-            raise ValueError("`batch_size` must be a positive integer")
 
         if self.shape_learning_rate_start < 0.0:
             raise ValueError("`shape_learning_rate_start` must be non-negative.")
@@ -430,7 +403,7 @@ def optimize_thermoscenes_scene(
         spline_degree=params.spline_degree,
         spline_subdivisions=params.spline_subdivisions,
         mesh_subdivisions=params.mesh_subdivisions,
-        initial_sphere_radius=params.initial_sphere_radius,
+        initial_sphere_radius=params.pose_optimization.initial_sphere_radius,
     )
 
     ref_images_no_mask = [
@@ -448,14 +421,14 @@ def optimize_thermoscenes_scene(
     texture_key = tessellated_spline.mesh_name + "_texture"
 
     # Optimize the pose of the initial mesh
-    if params.optimize_initial_pose:
+    if params.pose_optimization.optimize_initial_pose:
         logger.info("Optimizing initial pose of the spline surface")
 
         pose_scheduler = ExponentialScheduler(
-            start_learning_rate=params.pose_learning_rate_start,
-            end_learning_rate=params.pose_learning_rate_end,
-            steepness=params.pose_learning_rate_steepness,
-            end_iteration=params.pose_optimization_iterations,
+            start_learning_rate=params.pose_optimization.pose_learning_rate_start,
+            end_learning_rate=params.pose_optimization.pose_learning_rate_end,
+            steepness=params.pose_optimization.pose_learning_rate_steepness,
+            end_iteration=params.pose_optimization.pose_optimization_iterations,
         )
         pose_optimizer = SplinePoseOptimizer(
             scene=scene,
@@ -469,9 +442,9 @@ def optimize_thermoscenes_scene(
         pose_optimizer.optimize(
             ref_images=ref_images_no_mask,
             scene_optimizer=SceneAdamSequential(
-                batch_size=params.pose_batch_size, uniform=False
+                batch_size=params.pose_optimization.pose_batch_size, uniform=False
             ),
-            num_iters=params.pose_optimization_iterations,
+            num_iters=params.pose_optimization.pose_optimization_iterations,
             views_to_render=[
                 image.sensor for image in eval_images[: params.num_of_images_to_save]
             ],

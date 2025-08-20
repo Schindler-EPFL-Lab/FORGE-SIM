@@ -12,8 +12,6 @@ import mitsuba as mi
 import mlflow
 import tyro
 
-from rebel_shape.data_processing.masked_pose_image import MaskedPoseImage
-
 # This is a hack so that the script work with azure sdkv2.
 # The root folder is _not_ added to the python path as it was in sdkv1
 # and thus, local imports of rebel_nerf are not found.
@@ -24,6 +22,7 @@ from dataclasses_reverse_cli.reverse_cli import ReverseCli
 
 from rebel_shape import logger
 from rebel_shape.data_processing.input_preprocessing import preprocess_rgb_images
+from rebel_shape.data_processing.masked_pose_image import MaskedPoseImage
 from rebel_shape.loss_evaluators.composite_loss import CompositeImageLoss
 from rebel_shape.loss_evaluators.image_loss_l1 import ImageLossL1
 from rebel_shape.loss_evaluators.image_loss_l2 import ImageLossL2
@@ -42,9 +41,10 @@ from rebel_shape.scene_optimizers.composite_scene_optimizer import (
 from rebel_shape.scene_optimizers.optimization_events import OptimizationEvents
 from rebel_shape.scene_optimizers.scene_adam_sequential import SceneAdamSequential
 from rebel_shape.schedulers.exponential_scheduler import ExponentialScheduler
+from rebel_shape.scripts.configs.pose_optimization import PoseOptimization
 
 
-@dataclass
+@dataclass(kw_only=True)
 class ThermoSceneOptimizationParameters(ReverseCli):
     thermoscenes_scene_path: Path
     """
@@ -85,20 +85,10 @@ class ThermoSceneOptimizationParameters(ReverseCli):
     """number of samples per pixel used for direct and indirect visibility"""
     optimization_iterations: int = 50
     """Adam iterations executed on the initial mesh"""
-
-    optimize_initial_pose: bool = True
-    """Whether to execute pose optimization before shape and texture optimization"""
-    pose_optimization_iterations: int = 10
-    """How many times the """
-    pose_learning_rate_start: float = 0.1
-    """Adam learning rate at the start of initial pose optimization"""
-    pose_learning_rate_end: float = 0.01
-    """Adam learning rate at the end of initial pose optimization"""
-    pose_learning_rate_steepness: float = 2.0
-    """How quickly the pose learning rate converges to the end value"""
-    pose_batch_size: int = 12
-    """Number of images used for pose gradient computation"""
-
+    pose_optimization: PoseOptimization = PoseOptimization()
+    """
+    Parameters of the pose optimization
+    """
     shape_learning_rate_start: float = 0.6
     """Adam learning rate at the start of shape optimization"""
     shape_learning_rate_end: float = 0.15
@@ -161,22 +151,6 @@ class ThermoSceneOptimizationParameters(ReverseCli):
             raise ValueError("`visibility_samples` must be a positive integer.")
         if self.optimization_iterations < 1:
             raise ValueError("`first_pass_iterations` must be a positive integer.")
-
-        if self.pose_learning_rate_start < 0.0:
-            raise ValueError("`pose_learning_rate_start` must be non-negative.")
-        if self.pose_learning_rate_end < 0.0:
-            raise ValueError("`pose_learning_rate_end` must be non-negative.")
-        if self.pose_learning_rate_end > self.pose_learning_rate_start:
-            raise ValueError(
-                "`pose_learning_rate_end` must be smaller than "
-                "`pose_learning_rate_start`."
-            )
-        if self.pose_learning_rate_steepness <= 0.0:
-            raise ValueError(
-                "`pose_learning_rate_steepness` must be a positive real number."
-            )
-        if self.pose_batch_size < 1:
-            raise ValueError("`batch_size` must be a positive integer")
 
         if self.shape_learning_rate_start < 0.0:
             raise ValueError("`shape_learning_rate_start` must be non-negative.")
@@ -379,14 +353,14 @@ def optimize_thermoscenes_scene(params: ThermoSceneOptimizationParameters) -> No
     texture_key = "shape.bsdf.reflectance.data"
 
     # Optimize the pose of the initial mesh
-    if params.optimize_initial_pose:
+    if params.pose_optimization.optimize_initial_pose:
         logger.info("Optimizing initial mesh pose.")
 
         pose_scheduler = ExponentialScheduler(
-            start_learning_rate=params.pose_learning_rate_start,
-            end_learning_rate=params.pose_learning_rate_end,
-            steepness=params.pose_learning_rate_steepness,
-            end_iteration=params.pose_optimization_iterations,
+            start_learning_rate=params.pose_optimization.pose_learning_rate_start,
+            end_learning_rate=params.pose_optimization.pose_learning_rate_end,
+            steepness=params.pose_optimization.pose_learning_rate_steepness,
+            end_iteration=params.pose_optimization.pose_optimization_iterations,
         )
         pose_optimizer = MeshPoseOptimizer(
             scene=scene_source,
@@ -400,9 +374,9 @@ def optimize_thermoscenes_scene(params: ThermoSceneOptimizationParameters) -> No
         pose_optimizer.optimize(
             ref_images=ref_images_no_mask,
             scene_optimizer=SceneAdamSequential(
-                batch_size=params.pose_batch_size, uniform=False
+                batch_size=params.pose_optimization.pose_batch_size, uniform=False
             ),
-            num_iters=params.pose_optimization_iterations,
+            num_iters=params.pose_optimization.pose_optimization_iterations,
             views_to_render=[
                 image.sensor for image in eval_images[: params.num_of_images_to_save]
             ],
