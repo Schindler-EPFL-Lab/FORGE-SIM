@@ -43,7 +43,10 @@ class LBFGS(mi.ad.Optimizer):
     and is written by the same team that developed Dr.Jit and Mitsuba 3.
     """
 
-    CURVATURE_EPSILON: float = 1e-8
+    CURVATURE_EPSILON_REL: float = 1e-12
+    """Minimum relative curvature threshold for accepting updates """
+    CURVATURE_EPSILON_ABS: float = 1e-18
+    """Minimum absolute curvature threshold for accepting updates """
 
     def __init__(
         self,
@@ -193,9 +196,14 @@ class LBFGS(mi.ad.Optimizer):
             dr.schedule(s, y)
 
             ys = dr.dot(y, s)
+            ss = dr.dot(s, s)
+
+            curvature_threshold = dr.maximum(
+                self.CURVATURE_EPSILON_REL * ss, self.CURVATURE_EPSILON_ABS
+            )
 
             # Only apply updates if the curvature is positive
-            if ys > self.CURVATURE_EPSILON:
+            if ys > curvature_threshold:
                 # Discard entries that are too old
                 if self._iterations[variable_key] > self._history_size:
                     self._state_difference[variable_key].pop(0)
@@ -210,7 +218,7 @@ class LBFGS(mi.ad.Optimizer):
             else:
                 logger.debug(
                     f"Rejected update for {variable_key} due to negative "
-                    + f"curvature {ys} <= {self.CURVATURE_EPSILON}. "
+                    + f"curvature {ys} <= {curvature_threshold}. "
                 )
         else:
             # First iteration, initialize history
@@ -490,6 +498,8 @@ class LBFGS(mi.ad.Optimizer):
             if variable_key not in self._state_difference:
                 self.reset(variable_key)
 
+            params = dr.ravel(params)
+
             # Reset history if the shape of the parameter has changed
             if (
                 self._iterations[variable_key] > 0
@@ -502,7 +512,7 @@ class LBFGS(mi.ad.Optimizer):
             self._update_history(variable_key)
 
             search_directions[variable_key] = -1.0 * self._apply_inverse_hessian(
-                variable_key=variable_key, q=dr.ravel(params.grad)
+                variable_key=variable_key, q=params.grad
             )
 
         if self._line_search_fn is None:

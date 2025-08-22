@@ -42,6 +42,33 @@ class SceneLBFGS(SceneOptimizer):
     provided. This ensures that the objective for a particular batch does not increase,
     even though the overall objective might. Combining it with a larger history seems
     to produce qualitatively similar results as the full gradient.
+
+    L-BFGS usage for shape optimization:
+
+    By default, it expects to use full gradients, i.e. all images are considered when
+    computing the gradient leading to a single update at each iteration (epoch).
+    This is memory intensive: in practical experiments about 50 images can be optimized
+    while fitting into a 16 GB memory buffer (GPU memory of an NVIDIA T4 Azure
+    instance).
+
+    Furthermore, if there are many input images it is likely that they will overlap
+    significantly, meaning that most images do not contribute significantly to the
+    gradient. Thus, it is recommended to use multiple large batches with randomization.
+    Larger batches (>30 images) that are randomly selected ensure diverse views, while
+    the randomization removes the risk of correlating with the past gradients.
+    The batches should be as similar in size as possible.
+
+    If 200 images are split into 5 batches of 40 without randomization, then every 5
+    iterations the same images would be considered for gradient computation and the
+    past gradients with the same set of images would be strongly correlated, biasing
+    the curvature estimate and resulting in overly large steps.
+
+    Batching also allows for faster convergence without sacrificing stability, as line
+    search is conducted for each batch and each batch approximates the full gradient
+    sufficiently well to avoid issues in all but the most pathological cases.
+    It is encouraged to keep a larger history in batched mode to have a better estimate
+    of curvature; each batch still lacks some information. 5 to 10 past epochs should be
+    kept; that is 20 to 40 past states if there are 4 batches per epoch.
     """
 
     def __init__(
@@ -51,6 +78,7 @@ class SceneLBFGS(SceneOptimizer):
         use_wolfe_conditions: bool = False,
         line_search_iterations: int = 15,
         batch_size: int | None = None,
+        randomize_image_order: bool = True,
     ) -> None:
         """
         Initialize the L-BFGS optimizer with the specified parameters.
@@ -82,6 +110,10 @@ class SceneLBFGS(SceneOptimizer):
         reduce AD graph memory usage and speed up the optimization process,
         especially for scenes with many sensors.
 
+        `randomize_image_order` controls whether the order of images is randomized
+        during the optimization step. This can make the optimization process more robust
+        by preventing the optimizer from getting stuck in local minima.
+
         :raises ValueError: If `learning_rate` is not positive or if `batch_size` is
             specified and is less than 1.
         """
@@ -97,6 +129,7 @@ class SceneLBFGS(SceneOptimizer):
             )
 
         self._batch_size = batch_size
+        self._randomize_image_order = randomize_image_order
 
         self._lbfgs = LBFGS(
             learning_rate=learning_rate,
@@ -149,10 +182,16 @@ class SceneLBFGS(SceneOptimizer):
 
         batch_size = self._batch_size if self._batch_size else sensor_count
 
+        ordered_indices = (
+            np.arange(sensor_count)
+            if not self._randomize_image_order
+            else np.random.permutation(sensor_count)
+        )
+
         for param_config in param_optimization_configs:
             for start_idx in range(0, sensor_count, batch_size):
                 end_idx = min(start_idx + batch_size, sensor_count)
-                batch_indices = np.arange(start_idx, end_idx).tolist()
+                batch_indices = ordered_indices[start_idx:end_idx]
 
                 batch_image_loss, batch_reg_loss = self._objective_function(
                     scene=scene,
