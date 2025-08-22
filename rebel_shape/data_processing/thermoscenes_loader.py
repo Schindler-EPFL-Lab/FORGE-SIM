@@ -64,6 +64,7 @@ class ThermoScenesLoader:
         self._eval_cameras: list[PerspectiveCamera] = []
 
         self._sensor_sampler = sensor_sampler
+        self._tf_cameras = mi.ScalarTransform4f()
         self._load_data()
 
         if align_cameras_xz:
@@ -189,11 +190,16 @@ class ThermoScenesLoader:
 
             # Going from Nerfstudio to Mitsuba requires flipping the sign of x and z
             pose_matrix = mi.ScalarTransform4f(pose_matrix)
+            # scale(-1, 1, -1) should not be taken into account when calculating
+            # _extra_transforms because the scaling changes only the camera local
+            # coordinates but not the camera poses
             pose_matrix = pose_matrix.scale(mi.ScalarPoint3f(-1.0, 1.0, -1.0))
 
             # Transform into the reference frame
             if inv_reference_pose_matrix is None:
                 inv_reference_pose_matrix = pose_matrix.inverse()
+
+                self._tf_cameras = inv_reference_pose_matrix @ self._tf_cameras
 
             pose_matrix = inv_reference_pose_matrix @ pose_matrix
 
@@ -273,9 +279,17 @@ class ThermoScenesLoader:
             angle=rotation_angle * 180.0 / np.pi,  # Convert to degrees for Mitsuba
         )
 
+        # update self transforms global since the camera poses have been changed
+        self._tf_cameras = tf_alignment_matrix @ self._tf_cameras
+
         # Apply the transformation to all cameras
         for camera in self._train_cameras + self._eval_cameras:
             camera.tf_pose_matrix = tf_alignment_matrix @ camera.tf_pose_matrix
+
+    @property
+    def tf_cameras(self) -> "mi.ScalarTransform4f":
+        """Return the transformation which were applied to camera poses"""
+        return self._tf_cameras
 
     @property
     def train_images_rgb(self) -> list["mi.TensorXf"]:

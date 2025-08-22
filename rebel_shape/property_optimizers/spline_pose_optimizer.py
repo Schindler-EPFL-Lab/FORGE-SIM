@@ -61,10 +61,7 @@ class SplinePoseOptimizer(PoseOptimizer):
                     f"Mesh {mesh.name} is not present in the scene parameters."
                 )
 
-        self._initial_control_points = dr.unravel(
-            dtype=mi.Point3f,
-            array=tessellated_spline.global_control_points.array,
-        )
+        self._initial_control_points = dr.copy(tessellated_spline.global_control_points)
 
     def _update_positions(self, tf_new_pose: "mi.Transform4f") -> None:
         """
@@ -75,16 +72,9 @@ class SplinePoseOptimizer(PoseOptimizer):
         meshes in the tessellated spline surface to reflect the impact of the new
         control points.
         """
-        new_control_points = tf_new_pose @ self._initial_control_points
 
-        new_control_points = dr.ravel(new_control_points)
-        new_control_points = dr.reshape(
-            dtype=mi.TensorXf,
-            value=new_control_points,
-            shape=self._tessellated_spline.global_control_points.shape,
-        )
-
-        self._tessellated_spline.global_control_points = new_control_points
+        self._tessellated_spline.global_control_points = self._initial_control_points
+        self._tessellated_spline.transform_global_control_points(tf_new_pose)
 
         for mesh in self._tessellated_spline:
             self._scene_params[mesh.name + ".vertex_positions"] = dr.ravel(

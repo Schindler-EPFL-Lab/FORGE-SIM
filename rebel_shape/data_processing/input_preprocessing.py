@@ -14,7 +14,7 @@ def preprocess_rgb_images(
     spp: int = 16,
     train: bool = True,
     sampler: Sampler = Sampler(),
-) -> list[MaskedPoseImage]:
+) -> tuple[list[MaskedPoseImage], "mi.ScalarTransform4f"]:
     """
     Blends the environment map used in optimization with foreground object that is
     reconstructed from RGBA images.
@@ -35,8 +35,8 @@ def preprocess_rgb_images(
     by the rendered background. Optionally, the generated images are saved to the
     `output_dir`.
 
-    :returns: Two equal length lists that contain instantiated Mitsuba
-        sensors and composited images in the same order.
+    :returns: A tuple containing a list of masked pose images train/eval images and
+    dataloder transform which was applied to camera poses.
 
     :raises FileNotFoundError: If the environment map file cannot be found
 
@@ -102,4 +102,4 @@ def preprocess_rgb_images(
 
         composited_images.append(composited_image_masked_pose)
 
-    return composited_images
+    return composited_images, loader.tf_cameras

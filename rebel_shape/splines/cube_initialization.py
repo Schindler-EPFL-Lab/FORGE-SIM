@@ -228,8 +228,37 @@ def unit_cube(
     return TessellatedSplineSurface(
         composite_spline_surface=composite_mesh,
         tessellation_subdivisions_per_patch=tessellation_subdivisions,
-        per_patch_bsdf=[bsdf] * len(composite_mesh)
+        per_patch_bsdf=[bsdf] * len(composite_mesh),
     )
+
+
+def _get_normalizing_tf_matrix(points: "mi.TensorXf") -> "mi.Transform4f":
+    """
+    Computes the translation and scale factors required to transform the input `points`
+    so that their bounding box is exactly [-1, 1]^3.
+
+    returns:
+        tuple[list[float], list[float]]: A tuple containing the scale and translation
+        vectors to apply to the points for normalization.
+    """
+
+    if points.ndim != 2:
+        raise RuntimeError(f"points ndim = {points.ndim} but it must be 2")
+
+    if points.shape[1] != 3:
+        raise RuntimeError(f"points shape[1] = {points.shape[1]} but it must be 3")
+
+    # Find the bounding box of the object
+    bbox_min = dr.min(points, axis=0)
+    bbox_max = dr.max(points, axis=0)
+
+    # Scale the object such that the bounding box is [-radius, radius]^3
+    translation = -(bbox_max + bbox_min) / 2
+    translation = list(translation.array)
+    scale = 2 / (bbox_max - bbox_min)  # go to [-1, -1]
+    scale = list(scale.array)
+
+    return mi.Transform4f().scale(mi.Point3f(scale)).translate(mi.Point3f(translation))
 
 
 def cubed_sphere(
@@ -309,6 +338,11 @@ def cubed_sphere(
 
             if i % 10 == 0:
                 logger.debug(f"Iteration {i:3d}: G1 loss = {loss.numpy():.4g}")
+
+    transform_to_normalized_bbox = _get_normalizing_tf_matrix(
+        cube._tessellated_mesh._global_mesh.vertices
+    )
+    cube.transform_global_control_points(transform_to_normalized_bbox)
 
     # Scale the sphere to the desired radius
     cube.global_control_points = cube.global_control_points * radius

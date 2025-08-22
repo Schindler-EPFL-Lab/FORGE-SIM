@@ -186,13 +186,13 @@ def initialize_scene(
 
     sampler = Sampler(type=Sampler.Type.MULTIJITTER, sample_count=continuous_samples)
 
-    ref_images = preprocess_rgb_images(
+    ref_images, _ = preprocess_rgb_images(
         scene_path=thermoscenes_scene_path,
         environment_map_path=envmap_path,
         spp=4,
         sampler=sampler,
     )
-    eval_images = preprocess_rgb_images(
+    eval_images, _ = preprocess_rgb_images(
         scene_path=thermoscenes_scene_path,
         environment_map_path=envmap_path,
         spp=4,

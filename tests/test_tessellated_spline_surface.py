@@ -3,6 +3,7 @@ import unittest
 from json import JSONDecodeError
 from pathlib import Path
 
+import drjit as dr
 import jsonpickle
 import mitsuba as mi
 import numpy as np
@@ -303,3 +304,74 @@ class TestTessellatedSplineSurface(unittest.TestCase):
                     composite_spline_surface_path=invalid_file,
                     texture_paths=[texture_file, texture_file, texture_file],
                 )
+
+    @staticmethod
+    def _create_simple_tessellated_spline_surface() -> TessellatedSplineSurface:
+        """Created a simple tessellated spline surface for testing."""
+
+        # Use BSplinePatch for testing, not mocks, too complex to mock properly
+        # Unit square with 1 knot span in each direction = Bezier patch
+        patch = BSplinePatch.unit_square(
+            patch_name="patch1", degree=2, u_subdivisions=1, v_subdivisions=1
+        )
+
+        composite_factory = CompositeSplineSurfaceFactory("test_composite")
+        composite_factory.add_patch(patch)
+
+        spline_surface = composite_factory.build()
+
+        return TessellatedSplineSurface(
+            composite_spline_surface=spline_surface,
+            tessellation_subdivisions_per_patch=2,
+        )
+
+    def test_transform_control_points_id(self):
+        """
+        Test that applying the identity transformation on the tessellated spline control
+        points does not change their values
+        """
+
+        tessellated_surface = self._create_simple_tessellated_spline_surface()
+        transform = mi.Transform4f()
+        control_points_expected = dr.copy(tessellated_surface.global_control_points)
+        tessellated_surface.transform_global_control_points(transform)
+        control_points_transformed = tessellated_surface.global_control_points
+
+        self.assertTrue(
+            dr.allclose(control_points_expected, control_points_transformed)
+        )
+
+    def test_transform_control_points(self):
+        """
+        Test that applying a compose transform on the tessellated spline control
+        points produces the expected values
+        """
+
+        tessellated_surface = self._create_simple_tessellated_spline_surface()
+        transform = (
+            mi.Transform4f()
+            .rotate([1.0, 2.0, 3.0], 45.0)
+            .translate([1.0, 2.0, 3.0])
+            .scale([1.0, 2.0, 3.0])
+        )
+
+        control_points_expected = mi.TensorXf(
+            [
+                [5.8431462, 6.38299096, 12.22613665],
+                [6.3431462, 7.73654449, 11.95836967],
+                [6.8431462, 9.09009802, 11.69060269],
+                [4.30761218, 8.26167071, 14.69060275],
+                [4.80761218, 9.61522424, 14.42283577],
+                [5.30761218, 10.96877778, 14.15506878],
+                [2.77207816, 10.14035046, 17.15506884],
+                [3.27207816, 11.49390399, 16.88730186],
+                [3.77207816, 12.84745753, 16.61953488],
+            ]
+        )
+
+        tessellated_surface.transform_global_control_points(transform)
+        control_points_transformed = tessellated_surface.global_control_points
+
+        self.assertTrue(
+            dr.allclose(control_points_expected, control_points_transformed)
+        )

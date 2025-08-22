@@ -2,6 +2,7 @@ from collections.abc import Iterator, Sequence
 from pathlib import Path
 from typing import Any
 
+import drjit as dr
 import jsonpickle
 import mitsuba as mi
 
@@ -250,6 +251,27 @@ class TessellatedSplineSurface:
             tesselation.vertex_normals = vertex_normals
 
         self._tessellated_mesh.update_global_representation()
+
+    def transform_global_control_points(self, transform: "mi.Transform4f") -> None:
+        """
+        Applies a 4x4 transformation matrix `transform` to all global control points
+        of the spline surface
+        """
+
+        original_control_points = dr.unravel(
+            dtype=mi.Point3f,
+            array=self.global_control_points.array,
+        )
+
+        new_control_points = transform @ original_control_points
+        new_control_points = dr.ravel(new_control_points)
+        new_control_points = dr.reshape(
+            dtype=mi.TensorXf,
+            value=new_control_points,
+            shape=self.global_control_points.shape,
+        )
+
+        self.global_control_points = new_control_points
 
     @property
     def global_quads(self) -> "mi.TensorXu":
