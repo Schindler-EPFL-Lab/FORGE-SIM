@@ -53,7 +53,7 @@ class BSpline(InterpolatingSpline):
     """Determines when two knots are considered equal (absolute tolerance float64)."""
     ZERO_TOL = 1.0e-6
     """
-    Determines when a denominator is considered zero in the Cox-de Boor algorithm. 
+    Determines when a denominator is considered zero in the Cox-de Boor algorithm.
     The lower accuracy reflects the use of float32 numbers in the algorithm.
     """
     PROJECTION_TOL = 1.192092896e-07 * 2
@@ -262,12 +262,10 @@ class BSpline(InterpolatingSpline):
             max=n_knots - self._knot_multiplicities[0] - 1,
         )
 
-        expected_control_points = len(self._knots) - self._knot_multiplicities[0]
-
         return ParametricSpanData(
             parametric_coords=dr.ravel(parametric_coords),
             knot_spans=dr.ravel(knot_spans),
-            num_basis_functions=int(expected_control_points),
+            num_basis_functions=self.num_basis_functions,
             spline_degree=self._degree,
         )
 
@@ -492,7 +490,7 @@ class BSpline(InterpolatingSpline):
 
         `parametric_coords` is a 2D tensor of shape (n_points, 1) where n_points
         is the number of points to evaluate, and the second dimension is 1 because
-        a curve has a single parametric direction (u).
+        there is a single parametric direction (u).
 
         This method internally computes the knot spans for the given `parametric_coords`
         and proceeds to call `evaluate_basis_function_derivatives` with
@@ -511,7 +509,37 @@ class BSpline(InterpolatingSpline):
         return self.evaluate_basis_function_derivatives(
             parametric_span_data=span_data,
             derivative_order=1,
-        )[:, 1, :]
+        )[:, 1, :][:, :, None]
+
+    def evaluate_basis_functions_second_derivative(
+        self, parametric_coords: "mi.TensorXf"
+    ) -> "mi.TensorXf":
+        """
+        Evaluate the second derivative of the B-spline basis functions at the given
+        `parametric_coords`.
+
+        `parametric_coords` is a 2D tensor of shape (n_points, 1) where n_points
+        is the number of points to evaluate, and the second dimension is 1 because
+        there is a single parametric direction (u).
+
+        This method internally computes the knot spans for the given `parametric_coords`
+        and proceeds to call `evaluate_basis_function_derivatives` with
+        `derivative_order=2`, keeping just the second derivatives of the basis
+        functions.
+
+        :returns: A tensor of shape (n_points, degree + 1, 1, 1) representing the second
+                  derivatives of the basis functions at the given `parametric_coords`.
+
+        :raises ValueError: If `parametric_coords` is not a 2D tensor (n_points, 1), or
+            if the values in `parametric_coords` are outside the knot vector range.
+        """
+        self.validate_parametric_coords(parametric_coords)
+        span_data = self.compute_span_data(parametric_coords[:, 0])
+
+        return self.evaluate_basis_function_derivatives(
+            parametric_span_data=span_data,
+            derivative_order=2,
+        )[:, 2, :][:, :, None, None]
 
     def validate_parametric_coords(self, parametric_coords: "mi.TensorXf") -> None:
         """
@@ -542,7 +570,7 @@ class BSpline(InterpolatingSpline):
     def interpolate(
         self, values: "mi.TensorXf", parametric_coords: "mi.TensorXf"
     ) -> "mi.TensorXf":
-        """
+        r"""
         Compute the B-spline interpolation of `values` at the specified
         `parametric_coords`.
 
@@ -552,11 +580,13 @@ class BSpline(InterpolatingSpline):
 
         The interpolated value is computed using the B-spline basis functions
         weighted by the provided
-            I_{d}(u) = sum(i = 0 to n_basis) N_{i}(u) * V_{i, d}
+        ```math
+            I_{d}(u) = \sum_{i = 0}^{\text{n_basis}} N_{i}(u) V_{i, d}
+        ```
         where:
-            - V{i, d} is the value at the i-th basis function and d-th dimension
-            - N_{i}(u) is the i-th B-spline basis function evaluated at u
-            - I_d(u) is the d-th component of the interpolated values at coordinate u
+            - $V{i, d}$ is the value at the i-th basis function and d-th dimension
+            - $N_{i}(u)$ is the i-th B-spline basis function evaluated at u
+            - $I_d(u)$ is the d-th component of the interpolated values at coordinate u
 
         Most B-Spline basis functions N_{i,p} are zero for a given parametric
         coordinate; only `degree + 1` from an appropriate knot span are non-zero.
@@ -585,9 +615,8 @@ class BSpline(InterpolatingSpline):
             dtype=mi.TensorXf, shape=(parametric_coords.shape[0], values.shape[1])
         )
 
-        for j in range(self.basis_functions_per_span):
-            basis_func_index = span_data.global_basis_function_index(local_index=j)
-            result += basis_funcs[:, j][:, None] * values[dr.ravel(basis_func_index)]
+        for i, basis_func_index in enumerate(span_data.basis_function_indices):
+            result += basis_funcs[:, i][:, None] * values[basis_func_index]
 
         return result
 
@@ -620,13 +649,13 @@ class BSpline(InterpolatingSpline):
 
         span_data = self.compute_span_data(parametric_coords=parametric_coords[:, 0])
 
-        result = dr.zeros(
-            dtype=mi.TensorXu, shape=(parametric_coords.shape[0], self._degree + 1)
+        result = dr.empty(
+            dtype=mi.TensorXu,
+            shape=(parametric_coords.shape[0], self.basis_functions_per_span),
         )
 
-        for j in range(self.basis_functions_per_span):
-            basis_func_index = span_data.global_basis_function_index(local_index=j)
-            result[:, j] = dr.ravel(basis_func_index)
+        for i, basis_func_index in enumerate(span_data.basis_function_indices):
+            result[:, i] = dr.ravel(basis_func_index)
 
         return result
 

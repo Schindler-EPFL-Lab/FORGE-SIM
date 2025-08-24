@@ -1,5 +1,6 @@
 import unittest
 
+import drjit as dr
 import mitsuba as mi
 import numpy as np
 
@@ -42,6 +43,84 @@ class TestBSplineCurve(unittest.TestCase):
         cls.curve_bezier = BSplineCurve(
             spline=cls.spline_bezier, control_points=cls.control_points_bezier
         )
+
+        cls.samples = 99
+        """
+        Number of samples along the curve when evaluating it.
+        Should be kept small to avoid long test times, but large enough
+        to ensure that the curve is sampled sufficiently.
+        """
+
+        cls.autodiff_test_cases = [
+            {
+                "knots": [0.0, 0.0, 0.21, 0.49, 0.76, 1.0, 1.0],
+                "degree": 1,
+                "control_points": np.array(
+                    [
+                        [0.0, 0.0, 0.0],
+                        [1.0, 0.0, 0.0],
+                        [1.0, 1.0, 0.0],
+                        [1.0, 1.0, 1.0],
+                        [0.5, 0.5, 1.0],
+                    ]
+                ),
+            },
+            {
+                "knots": [0.0, 0.0, 0.0, 1.0, 2.0, 3.0, 4.0, 4.0, 5.0, 5.0, 5.0],
+                "degree": 2,
+                "control_points": np.array(
+                    [
+                        [0.0, 0.0, 0.0],
+                        [1.0, 0.0, 0.0],
+                        [1.0, 1.0, 0.0],
+                        [1.0, 1.0, 1.0],
+                        [0.5, 0.5, 1.0],
+                        [0.0, 0.0, 0.5],
+                        [-0.5, 0.0, 0.5],
+                        [-0.5, 0.0, 0.0],
+                    ]
+                ),
+            },
+            {
+                "knots": [0.0, 0.0, 0.0, 0.21, 0.49, 0.76, 1.0, 1.0, 1.0],
+                "degree": 3,
+                "control_points": np.array(
+                    [
+                        [0.0, 0.0, 0.0],
+                        [1.0, 0.0, 0.0],
+                        [1.0, 1.0, 0.0],
+                        [1.0, 1.0, 1.0],
+                        [0.5, 0.5, 1.0],
+                        [0.0, 0.0, 0.5],
+                    ]
+                ),
+            },
+            {
+                "knots": [0.0, 0.0, 0.21, 0.49, 0.76, 1.0, 1.0],
+                "degree": 2,
+                "control_points": np.array(
+                    [
+                        [0.0, 0.0, 0.0],
+                        [1.0, 0.0, 0.0],
+                        [1.0, 1.0, 0.0],
+                        [1.0, 1.0, 1.0],
+                        [0.5, 0.5, 1.0],
+                    ]
+                ),
+            },
+            {
+                "knots": [0.0, 0.21, 0.49, 0.76, 1.0],
+                "degree": 2,
+                "control_points": np.array(
+                    [
+                        [0.0, 0.0, 0.0],
+                        [1.0, 0.0, 0.0],
+                        [1.0, 1.0, 0.0],
+                        [1.0, 1.0, 1.0],
+                    ]
+                ),
+            },
+        ]
 
     def test_invalid_control_points_shape(self):
         """
@@ -219,106 +298,50 @@ class TestBSplineCurve(unittest.TestCase):
         self.assertEqual(first_derivative.shape, (3, 3))
         np.testing.assert_array_almost_equal(first_derivative.numpy(), expected)
 
-    def test_first_derivative_finite_difference(self):
-        test_cases = [
-            {
-                "knots": [0.0, 0.0, 0.21, 0.49, 0.76, 1.0, 1.0],
-                "degree": 1,
-                "control_points": np.array(
-                    [
-                        [0.0, 0.0, 0.0],
-                        [1.0, 0.0, 0.0],
-                        [1.0, 1.0, 0.0],
-                        [1.0, 1.0, 1.0],
-                        [0.5, 0.5, 1.0],
-                    ]
-                ),
-            },
-            {
-                "knots": [0.0, 0.0, 0.0, 1.0, 2.0, 3.0, 4.0, 4.0, 5.0, 5.0, 5.0],
-                "degree": 2,
-                "control_points": np.array(
-                    [
-                        [0.0, 0.0, 0.0],
-                        [1.0, 0.0, 0.0],
-                        [1.0, 1.0, 0.0],
-                        [1.0, 1.0, 1.0],
-                        [0.5, 0.5, 1.0],
-                        [0.0, 0.0, 0.5],
-                        [-0.5, 0.0, 0.5],
-                        [-0.5, 0.0, 0.0],
-                    ]
-                ),
-            },
-            {
-                "knots": [0.0, 0.0, 0.0, 0.21, 0.49, 0.76, 1.0, 1.0, 1.0],
-                "degree": 3,
-                "control_points": np.array(
-                    [
-                        [0.0, 0.0, 0.0],
-                        [1.0, 0.0, 0.0],
-                        [1.0, 1.0, 0.0],
-                        [1.0, 1.0, 1.0],
-                        [0.5, 0.5, 1.0],
-                        [0.0, 0.0, 0.5],
-                    ]
-                ),
-            },
-            {
-                "knots": [0.0, 0.0, 0.21, 0.49, 0.76, 1.0, 1.0],
-                "degree": 2,
-                "control_points": np.array(
-                    [
-                        [0.0, 0.0, 0.0],
-                        [1.0, 0.0, 0.0],
-                        [1.0, 1.0, 0.0],
-                        [1.0, 1.0, 1.0],
-                        [0.5, 0.5, 1.0],
-                    ]
-                ),
-            },
-            {
-                "knots": [0.0, 0.21, 0.49, 0.76, 1.0],
-                "degree": 2,
-                "control_points": np.array(
-                    [
-                        [0.0, 0.0, 0.0],
-                        [1.0, 0.0, 0.0],
-                        [1.0, 1.0, 0.0],
-                        [1.0, 1.0, 1.0],
-                    ]
-                ),
-            },
-        ]
-
-        for i, case in enumerate(test_cases):
+    def test_first_derivative_autodiff(self):
+        for i, case in enumerate(self.autodiff_test_cases):
             with self.subTest(i=i):
                 spline = BSpline(knot_vector=case["knots"], degree=case["degree"])
                 curve = BSplineCurve(
                     spline=spline, control_points=mi.TensorXf(case["control_points"])
                 )
 
-                n_points = 99
-                h = 1.0e-3
+                params = dr.linspace(mi.TensorXf, 0.0, 1.0, self.samples)
+                params = dr.reshape(mi.TensorXf, params, (-1, 1))
 
-                sample_pts = np.arange(1, n_points) / n_points
-                sample_pts_low = sample_pts - 0.5 * h
-                sample_pts_high = sample_pts + 0.5 * h
+                dr.enable_grad(params)
+                evaluation = curve.evaluate_coordinates(parametric_coords=params)
 
-                eval_low = curve.evaluate_coordinates(
-                    parametric_coords=mi.TensorXf(sample_pts_low.reshape(-1, 1))
-                )
-                eval_high = curve.evaluate_coordinates(
-                    parametric_coords=mi.TensorXf(sample_pts_high.reshape(-1, 1))
-                )
+                dr.forward(params)
+                derivative_ad = mi.TensorXf(evaluation.grad)
 
-                derivative = curve.evaluate_first_derivatives(
-                    parametric_coords=mi.TensorXf(sample_pts.reshape(-1, 1))
-                )
-                finite_diff = (eval_high - eval_low) / h
+                derivative = curve.evaluate_first_derivatives(parametric_coords=params)
 
                 np.testing.assert_array_almost_equal(
-                    derivative.numpy(), finite_diff.numpy(), decimal=3
+                    derivative.numpy(), derivative_ad.numpy(), decimal=3
+                )
+
+    def test_second_derivative_autodiff(self):
+        for i, case in enumerate(self.autodiff_test_cases[2:]):
+            with self.subTest(i=i):
+                spline = BSpline(knot_vector=case["knots"], degree=case["degree"])
+                curve = BSplineCurve(
+                    spline=spline, control_points=mi.TensorXf(case["control_points"])
+                )
+
+                params = dr.linspace(mi.TensorXf, 0.0, 1.0, self.samples)
+                params = dr.reshape(mi.TensorXf, params, (-1, 1))
+
+                dr.enable_grad(params)
+                evaluation = curve.evaluate_first_derivatives(parametric_coords=params)
+
+                dr.forward(params)
+                derivative_ad = mi.TensorXf(evaluation.grad)
+
+                derivative = curve.evaluate_second_derivatives(parametric_coords=params)
+
+                np.testing.assert_array_almost_equal(
+                    derivative.numpy(), derivative_ad.numpy(), decimal=3
                 )
 
     def test_knot_insertion(self):

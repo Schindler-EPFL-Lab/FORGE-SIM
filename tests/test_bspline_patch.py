@@ -1,5 +1,6 @@
 import unittest
 
+import drjit as dr
 import jsonpickle
 import mitsuba as mi
 import numpy as np
@@ -70,6 +71,160 @@ class TestBSplinePatch(unittest.TestCase):
             v_spline=cls.bezier_2_v_spline,
             control_points=cls.bezier_2_control_points,
         )
+
+        cls.samples_per_dir = 19
+        """
+        Number of samples per each direction when evaluating the surface.
+        Should be kept small to avoid long test times, but large enough
+        to ensure that the surface is well sampled.
+        """
+
+        cls.bezier_3_u_knots = [0.0, 0.0, 0.0, 1.0, 1.0, 1.0]
+        cls.bezier_3_v_knots = [0.0, 0.0, 0.0, 1.0, 1.0, 1.0]
+        cls.bezier_3_control_points = mi.TensorXf(
+            np.array(
+                [
+                    [0.0, 0.0, 0.0],
+                    [1.0, 0.0, 1.0],
+                    [2.0, 0.0, 0.0],
+                    [0.0, 0.0, 1.0],
+                    [1.0, 0.5, 0.0],
+                    [2.0, 1.0, 1.0],
+                    [0.0, 1.0, 0.0],
+                    [1.0, 1.0, 1.0],
+                    [2.0, 1.0, 0.0],
+                ]
+            )
+        )
+        cls.bezier_3_u_spline = BSpline(knot_vector=cls.bezier_3_u_knots, degree=2)
+        cls.bezier_3_v_spline = BSpline(knot_vector=cls.bezier_3_v_knots, degree=2)
+        cls.bezier_3_surface = BSplinePatch(
+            name="bezier_3_surface",
+            u_spline=cls.bezier_3_u_spline,
+            v_spline=cls.bezier_3_v_spline,
+            control_points=cls.bezier_3_control_points,
+        )
+
+        cls.autodiff_test_cases_dict = [
+            {
+                "u_knots": [0.0, 0.0, 0.49, 1.0, 1.0],
+                "v_knots": [0.0, 0.0, 0.51, 1.0, 1.0],
+                "u_degree": 1,
+                "v_degree": 1,
+                "control_points": np.array(
+                    [
+                        [0.0, 0.0, 0.0],
+                        [1.0, 0.0, 0.0],
+                        [2.0, 0.0, 0.0],
+                        [0.0, 1.0, 0.0],
+                        [1.0, 1.0, 2.0],
+                        [2.0, 1.0, 0.0],
+                        [0.0, 2.0, 0.0],
+                        [1.0, 2.0, 0.0],
+                        [2.0, 2.0, 0.0],
+                    ]
+                ),
+                "u_insertion_knots": [0.33, 0.66],
+                "v_insertion_knots": [0.3, 0.7],
+            },
+            {
+                "u_knots": [0.0, 0.0, 0.0, 0.55, 1.0, 1.0, 1.0],
+                "v_knots": [0.0, 0.0, 0.47, 1.0, 1.0],
+                "u_degree": 2,
+                "v_degree": 1,
+                "control_points": np.array(
+                    [
+                        [0.0, 0.0, 0.0],
+                        [1.0, 0.0, 1.0],
+                        [2.0, 0.0, 0.6],
+                        [3.0, 0.0, 0.0],
+                        [0.0, 1.0, 0.0],
+                        [1.0, 1.0, 1.0],
+                        [2.0, 1.0, 0.9],
+                        [3.0, 1.0, 0.0],
+                        [0.0, 0.0, 0.0],
+                        [1.0, 0.0, 1.32],
+                        [2.0, 0.0, 0.34],
+                        [3.0, 0.0, 0.0],
+                    ]
+                ),
+                "u_insertion_knots": [0.25, 0.75],
+                "v_insertion_knots": [0.2, 0.8],
+            },
+            {
+                "u_knots": [0.0, 0.0, 0.0, 1.0, 1.0, 1.0],
+                "v_knots": [0.0, 0.0, 0.0, 1.0, 1.0, 1.0],
+                "u_degree": 2,
+                "v_degree": 2,
+                "control_points": np.array(
+                    [
+                        [0.0, 0.0, 0.0],
+                        [1.0, 0.0, 0.0],
+                        [2.0, 0.0, 0.0],
+                        [0.0, 1.0, 0.0],
+                        [1.0, 1.0, 2.0],
+                        [2.0, 1.0, 0.0],
+                        [0.0, 2.0, 0.0],
+                        [1.0, 2.0, 0.0],
+                        [2.0, 2.0, 0.0],
+                    ]
+                ),
+                "u_insertion_knots": [0.25, 0.4, 0.75],
+                "v_insertion_knots": [0.3, 0.5, 0.7],
+            },
+            {
+                "u_knots": [0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0],
+                "v_knots": [0.0, 0.0, 0.0, 1.0, 1.0, 1.0],
+                "u_degree": 3,
+                "v_degree": 2,
+                "control_points": np.array(
+                    [
+                        [0.0, 0.0, 0.0],
+                        [1.0, 0.0, 0.0],
+                        [2.0, 0.0, 0.0],
+                        [3.0, 0.0, 0.0],
+                        [0.0, 1.0, 0.0],
+                        [1.0, 1.0, 2.0],
+                        [2.0, 1.0, 0.0],
+                        [3.0, 1.0, 0.0],
+                        [0.0, 2.0, 0.0],
+                        [1.0, 2.0, 0.0],
+                        [2.0, 2.0, 0.0],
+                        [3.0, 2.0, 0.0],
+                    ]
+                ),
+                "u_insertion_knots": [0.27, 0.39, 0.58, 0.83],
+                "v_insertion_knots": [0.32, 0.51, 0.77],
+            },
+            {
+                "u_knots": [0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0],
+                "v_knots": [0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0],
+                "u_degree": 3,
+                "v_degree": 3,
+                "control_points": np.array(
+                    [
+                        [0.0, 0.0, 0.0],
+                        [1.0, 0.0, 0.0],
+                        [2.0, 0.0, 0.0],
+                        [3.0, 0.0, 0.0],
+                        [0.0, 1.0, 0.0],
+                        [1.0, 1.0, 2.0],
+                        [2.0, 1.0, 0.0],
+                        [3.0, 1.0, 0.0],
+                        [0.0, 2.0, 0.0],
+                        [1.0, 2.0, 0.0],
+                        [2.0, 2.0, 0.0],
+                        [3.0, 2.0, 0.0],
+                        [0.0, 3.0, 0.0],
+                        [1.0, 3.0, 0.0],
+                        [2.0, 3.0, 0.0],
+                        [3.0, 3.0, 0.0],
+                    ]
+                ),
+                "u_insertion_knots": [0.24, 0.4, 0.6, 0.81],
+                "v_insertion_knots": [0.3, 0.5, 0.7],
+            },
+        ]
 
     def test_basic_properties(self):
         """Tests whether the basic initialization is correct."""
@@ -342,71 +497,8 @@ class TestBSplinePatch(unittest.TestCase):
 
         np.testing.assert_array_almost_equal(normals.numpy(), expected_normals)
 
-    def test_first_derivative_finite_difference(self):
-        test_cases = [
-            {
-                "u_knots": [0.0, 0.0, 0.49, 1.0, 1.0],
-                "v_knots": [0.0, 0.0, 0.51, 1.0, 1.0],
-                "u_degree": 1,
-                "v_degree": 1,
-                "control_points": np.array(
-                    [
-                        [0.0, 0.0, 0.0],
-                        [1.0, 0.0, 0.0],
-                        [2.0, 0.0, 0.0],
-                        [0.0, 1.0, 0.0],
-                        [1.0, 1.0, 2.0],
-                        [2.0, 1.0, 0.0],
-                        [0.0, 2.0, 0.0],
-                        [1.0, 2.0, 0.0],
-                        [2.0, 2.0, 0.0],
-                    ]
-                ),
-            },
-            {
-                "u_knots": [0.0, 0.0, 0.0, 0.55, 1.0, 1.0, 1.0],
-                "v_knots": [0.0, 0.0, 0.47, 1.0, 1.0],
-                "u_degree": 2,
-                "v_degree": 1,
-                "control_points": np.array(
-                    [
-                        [0.0, 0.0, 0.0],
-                        [1.0, 0.0, 1.0],
-                        [2.0, 0.0, 0.6],
-                        [3.0, 0.0, 0.0],
-                        [0.0, 1.0, 0.0],
-                        [1.0, 1.0, 1.0],
-                        [2.0, 1.0, 0.9],
-                        [3.0, 1.0, 0.0],
-                        [0.0, 0.0, 0.0],
-                        [1.0, 0.0, 1.32],
-                        [2.0, 0.0, 0.34],
-                        [3.0, 0.0, 0.0],
-                    ]
-                ),
-            },
-            {
-                "u_knots": [0.0, 0.0, 0.0, 1.0, 1.0, 1.0],
-                "v_knots": [0.0, 0.0, 0.0, 1.0, 1.0, 1.0],
-                "u_degree": 2,
-                "v_degree": 2,
-                "control_points": np.array(
-                    [
-                        [0.0, 0.0, 0.0],
-                        [1.0, 0.0, 0.0],
-                        [2.0, 0.0, 0.0],
-                        [0.0, 1.0, 0.0],
-                        [1.0, 1.0, 2.0],
-                        [2.0, 1.0, 0.0],
-                        [0.0, 2.0, 0.0],
-                        [1.0, 2.0, 0.0],
-                        [2.0, 2.0, 0.0],
-                    ]
-                ),
-            },
-        ]
-
-        for i, case in enumerate(test_cases):
+    def test_first_derivative_autodiff(self):
+        for i, case in enumerate(self.autodiff_test_cases_dict):
             with self.subTest(i=i):
                 u_spline = BSpline(knot_vector=case["u_knots"], degree=case["u_degree"])
                 v_spline = BSpline(knot_vector=case["v_knots"], degree=case["v_degree"])
@@ -417,55 +509,70 @@ class TestBSplinePatch(unittest.TestCase):
                     control_points=mi.TensorXf(case["control_points"]),
                 )
 
-                n_points = 19
-                h = 1.0e-3
-
                 # Create a grid of parametric coordinates
-                u_vals = np.linspace(0.1, 0.9, n_points)
-                v_vals = np.linspace(0.1, 0.9, n_points)
-                u_grid, v_grid = np.meshgrid(u_vals, v_vals)
-                params = np.column_stack((u_grid.flatten(), v_grid.flatten()))
+                u_vals = dr.linspace(mi.Float, 0.0, 1.0, self.samples_per_dir)
+                v_vals = dr.linspace(mi.Float, 0.0, 1.0, self.samples_per_dir)
+                u_grid, v_grid = dr.meshgrid(u_vals, v_vals, indexing="xy")
 
-                # Create offset parametric coordinates for finite difference
-                params_u_low = params.copy()
-                params_u_high = params.copy()
-                params_v_low = params.copy()
-                params_v_high = params.copy()
+                params = dr.empty(dtype=mi.TensorXf, shape=(self.samples_per_dir**2, 2))
+                params[:, 0] = u_grid
+                params[:, 1] = v_grid
 
-                params_u_low[:, 0] -= 0.5 * h
-                params_u_high[:, 0] += 0.5 * h
-                params_v_low[:, 1] -= 0.5 * h
-                params_v_high[:, 1] += 0.5 * h
+                dr.enable_grad(params)
+                evaluation = surface.evaluate_coordinates(parametric_coords=params)
 
-                # Evaluate surface at offset coordinates
-                eval_u_low = surface.evaluate_coordinates(
-                    parametric_coords=mi.TensorXf(params_u_low)
-                )
-                eval_u_high = surface.evaluate_coordinates(
-                    parametric_coords=mi.TensorXf(params_u_high)
-                )
-                eval_v_low = surface.evaluate_coordinates(
-                    parametric_coords=mi.TensorXf(params_v_low)
-                )
-                eval_v_high = surface.evaluate_coordinates(
-                    parametric_coords=mi.TensorXf(params_v_high)
-                )
-
-                # Calculate finite differences
-                u_finite_diff = (eval_u_high - eval_u_low) / h
-                v_finite_diff = (eval_v_high - eval_v_low) / h
+                dr.forward(params)
+                derivative_ad_u_plus_v = mi.TensorXf(evaluation.grad)
 
                 # Calculate analytical derivatives
                 u_derivative, v_derivative = surface.evaluate_first_derivatives(
-                    parametric_coords=mi.TensorXf(params)
+                    parametric_coords=params
                 )
 
-                # Compare analytical derivatives with finite differences
+                # Compare analytical derivatives with automatic differentiation
                 np.testing.assert_array_almost_equal(
-                    u_derivative.numpy(), u_finite_diff.numpy(), decimal=3
+                    (u_derivative + v_derivative).numpy(),
+                    derivative_ad_u_plus_v,
+                    decimal=5,
                 )
+
+    def test_second_derivative_autodiff(self):
+        for i, case in enumerate(self.autodiff_test_cases_dict[2:]):
+            with self.subTest(i=i):
+                u_spline = BSpline(knot_vector=case["u_knots"], degree=case["u_degree"])
+                v_spline = BSpline(knot_vector=case["v_knots"], degree=case["v_degree"])
+                surface = BSplinePatch(
+                    name=f"test_surface_{i}",
+                    u_spline=u_spline,
+                    v_spline=v_spline,
+                    control_points=mi.TensorXf(case["control_points"]),
+                )
+
+                # Create a grid of parametric coordinates
+                u_vals = dr.linspace(mi.Float, 0.0, 1.0, self.samples_per_dir)
+                v_vals = dr.linspace(mi.Float, 0.0, 1.0, self.samples_per_dir)
+                u_grid, v_grid = dr.meshgrid(u_vals, v_vals, indexing="xy")
+
+                params = dr.empty(dtype=mi.TensorXf, shape=(self.samples_per_dir**2, 2))
+                params[:, 0] = u_grid
+                params[:, 1] = v_grid
+
+                dr.enable_grad(params)
+                du, dv = surface.evaluate_first_derivatives(parametric_coords=params)
+
+                dr.forward(params)
+                derivative_ad_uu_plus_2uv_plus_vv = mi.TensorXf(du.grad + dv.grad)
+
+                # Calculate analytical derivatives
+                uu_derivative, uv_derivative, vv_derivative = (
+                    surface.evaluate_second_derivatives(parametric_coords=params)
+                )
+
+                # Compare analytical second derivatives with autodiff values
                 np.testing.assert_array_almost_equal(
-                    v_derivative.numpy(), v_finite_diff.numpy(), decimal=3
+                    (uu_derivative + 2 * uv_derivative + vv_derivative).numpy(),
+                    derivative_ad_uu_plus_2uv_plus_vv,
+                    decimal=5,
                 )
 
     def test_evaluate_jacobian(self):
@@ -490,102 +597,52 @@ class TestBSplinePatch(unittest.TestCase):
 
         np.testing.assert_array_almost_equal(jacobian.numpy(), expected_jac)
 
-    def test_metric_tensor(self):
+    def test_evaluate_hessian(self):
         """
-        Tests whether the metric tensor is computed correctly for the Bezier surface.
+        Tests whether the Hessian of the Bezier surface with degrees 2
+        in the u and v directions is computed correctly.
+
+
+        The surface of the Bezier curve defined as
+        S(u, v) = (1 - u)^2 (1 - v)^2 P_{0, 0} + \
+            + (1 - u)^2 2(1 - v)v P_{0, 1} + \
+            + (1 - u)^2 v^2 P_{0, 2} + \
+            + 2(1 - u)u (1 - v)^2 P_{1, 0} + \
+            + 2(1 - u)u 2(1 - v)v P_{1, 1} + \
+            + 2(1 - u)u v^2 P_{1, 2} + \
+            + u^2 (1 - v)^2 P_{2, 0} + \
+            + u^2 2(1 - v)v P_{2, 1} + \
+            + u^2 v^2 P_{2, 2}
+
+        One can manually derive _uu, _uv, _vv
         """
-        jacobian = self.bezier_2_surface.evaluate_jacobian(
+        hessian = self.bezier_3_surface.evaluate_hessian(
             parametric_coords=self.parametric_coords
         )
 
-        metric_tensor = self.bezier_2_surface.metric_tensor(jacobian=jacobian)
-
-        expected_metric_tensor = np.array(
+        second_derivatives = np.array(
             [
-                [[8.0, 0.0], [0.0, 1.0]],
-                [[8.0, 0.0], [0.0, 1.0]],
-                [[8.0, 0.0], [0.0, 1.0]],
-                [[8.0, 0.0], [0.0, 1.0]],
-                [[4.0, 0.0], [0.0, 1.0]],
+                [[0, 0, -4], [0, 0, -4], [0, 0, -4], [0, 0, -4], [0, 0, 0]],  # uu
+                [[0, 2, -8], [0, 2, 8], [0, -2, 8], [0, -2, -8], [0, 0, 0]],  # uv
+                [[0, 2, -4], [0, -2, -4], [0, 2, -4], [0, -2, -4], [0, 0, 0]],  # vv
             ]
         )
 
-        np.testing.assert_array_almost_equal(
-            metric_tensor.numpy(), expected_metric_tensor
-        )
+        expected_hessian = np.empty((5, 3, 2, 2), dtype=np.float32)
+        for point_idx in range(5):
+            for coord_idx in range(3):
+                expected_hessian[point_idx, coord_idx, :, :] = [
+                    [
+                        second_derivatives[0, point_idx, coord_idx],
+                        second_derivatives[1, point_idx, coord_idx],
+                    ],
+                    [
+                        second_derivatives[1, point_idx, coord_idx],
+                        second_derivatives[2, point_idx, coord_idx],
+                    ],
+                ]
 
-    def test_metric_tensor_invalid_input(self):
-        """
-        Tests whether the metric tensor raises an error when an invalid jacobian is
-        provided.
-        """
-        invalid_jacobian = mi.TensorXf(np.ones((5, 3, 3)))
-        with self.assertRaises(ValueError):
-            self.bezier_2_surface.metric_tensor(jacobian=invalid_jacobian)
-
-        invalid_jacobian = mi.TensorXf(np.ones((5, 2, 3)))
-        with self.assertRaises(ValueError):
-            self.bezier_2_surface.metric_tensor(jacobian=invalid_jacobian)
-
-        invalid_jacobian = mi.TensorXf(np.ones((3, 2)))
-        with self.assertRaises(ValueError):
-            self.bezier_2_surface.metric_tensor(jacobian=invalid_jacobian)
-
-        invalid_jacobian = mi.TensorXf(np.ones((5, 5, 3, 2)))
-        with self.assertRaises(ValueError):
-            self.bezier_2_surface.metric_tensor(jacobian=invalid_jacobian)
-
-    def test_inv_metric_tensor(self):
-        """
-        Tests whether the inverse metric tensor and its determinant are computed
-        correctly.
-        """
-        jacobian = self.bezier_2_surface.evaluate_jacobian(
-            parametric_coords=self.parametric_coords
-        )
-
-        metric_tensor = self.bezier_2_surface.metric_tensor(jacobian=jacobian)
-        inv_metric_tensor, det_metric_tensor = self.bezier_2_surface.inv_metric_tensor(
-            metric=metric_tensor
-        )
-
-        expected_inv_metric_tensor = np.array(
-            [
-                [[0.125, 0.0], [0.0, 1.0]],
-                [[0.125, 0.0], [0.0, 1.0]],
-                [[0.125, 0.0], [0.0, 1.0]],
-                [[0.125, 0.0], [0.0, 1.0]],
-                [[0.25, 0.0], [0.0, 1.0]],
-            ]
-        )
-        expected_det_metric_tensor = np.array([8.0, 8.0, 8.0, 8.0, 4.0])
-        np.testing.assert_array_almost_equal(
-            inv_metric_tensor.numpy(), expected_inv_metric_tensor
-        )
-        np.testing.assert_array_almost_equal(
-            det_metric_tensor.numpy(), expected_det_metric_tensor
-        )
-
-    def test_inv_metric_tensor_invalid_input(self):
-        """
-        Tests whether the inverse metric tensor raises an error when an invalid metric
-        is provided.
-        """
-        invalid_metric = mi.TensorXf(np.ones((5, 3, 2)))
-        with self.assertRaises(ValueError):
-            self.bezier_2_surface.inv_metric_tensor(metric=invalid_metric)
-
-        invalid_metric = mi.TensorXf(np.ones((5, 2, 3)))
-        with self.assertRaises(ValueError):
-            self.bezier_2_surface.inv_metric_tensor(metric=invalid_metric)
-
-        invalid_metric = mi.TensorXf(np.ones((2, 2)))
-        with self.assertRaises(ValueError):
-            self.bezier_2_surface.inv_metric_tensor(metric=invalid_metric)
-
-        invalid_metric = mi.TensorXf(np.ones((5, 5, 2, 2)))
-        with self.assertRaises(ValueError):
-            self.bezier_2_surface.inv_metric_tensor(metric=invalid_metric)
+        np.testing.assert_array_almost_equal(hessian.numpy(), expected_hessian)
 
     def test_knot_insertion(self):
         """
@@ -595,75 +652,7 @@ class TestBSplinePatch(unittest.TestCase):
         Implicitly tests whether `BivariateBSpline.insert_knot_and_update_values_u`
         and `BivariateBSpline.insert_knot_and_update_values_v` work correctly.
         """
-        test_cases = [
-            {
-                "u_knots": [0.0, 0.0, 0.49, 1.0, 1.0],
-                "v_knots": [0.0, 0.0, 0.51, 1.0, 1.0],
-                "u_degree": 1,
-                "v_degree": 1,
-                "control_points": np.array(
-                    [
-                        [0.0, 0.0, 0.0],
-                        [1.0, 0.0, 0.0],
-                        [2.0, 0.0, 0.0],
-                        [0.0, 1.0, 0.0],
-                        [1.0, 1.0, 2.0],
-                        [2.0, 1.0, 0.0],
-                        [0.0, 2.0, 0.0],
-                        [1.0, 2.0, 0.0],
-                        [2.0, 2.0, 0.0],
-                    ]
-                ),
-                "u_insertion_knots": [0.33, 0.66],
-                "v_insertion_knots": [0.3, 0.7],
-            },
-            {
-                "u_knots": [0.0, 0.0, 0.0, 0.55, 1.0, 1.0, 1.0],
-                "v_knots": [0.0, 0.0, 0.47, 1.0, 1.0],
-                "u_degree": 2,
-                "v_degree": 1,
-                "control_points": np.array(
-                    [
-                        [0.0, 0.0, 0.0],
-                        [1.0, 0.0, 1.0],
-                        [2.0, 0.0, 0.6],
-                        [3.0, 0.0, 0.0],
-                        [0.0, 1.0, 0.0],
-                        [1.0, 1.0, 1.0],
-                        [2.0, 1.0, 0.9],
-                        [3.0, 1.0, 0.0],
-                        [0.0, 0.0, 0.0],
-                        [1.0, 0.0, 1.32],
-                        [2.0, 0.0, 0.34],
-                        [3.0, 0.0, 0.0],
-                    ]
-                ),
-                "u_insertion_knots": [0.25, 0.75],
-                "v_insertion_knots": [0.2, 0.8],
-            },
-            {
-                "u_knots": [0.0, 0.0, 0.0, 1.0, 1.0, 1.0],
-                "v_knots": [0.0, 0.0, 0.0, 1.0, 1.0, 1.0],
-                "u_degree": 2,
-                "v_degree": 2,
-                "control_points": np.array(
-                    [
-                        [0.0, 0.0, 0.0],
-                        [1.0, 0.0, 0.0],
-                        [2.0, 0.0, 0.0],
-                        [0.0, 1.0, 0.0],
-                        [1.0, 1.0, 2.0],
-                        [2.0, 1.0, 0.0],
-                        [0.0, 2.0, 0.0],
-                        [1.0, 2.0, 0.0],
-                        [2.0, 2.0, 0.0],
-                    ]
-                ),
-                "u_insertion_knots": [0.25, 0.4, 0.75],
-                "v_insertion_knots": [0.3, 0.5, 0.7],
-            },
-        ]
-        for i, case in enumerate(test_cases):
+        for i, case in enumerate(self.autodiff_test_cases_dict):
             with self.subTest(i=i):
                 u_spline = BSpline(knot_vector=case["u_knots"], degree=case["u_degree"])
                 v_spline = BSpline(knot_vector=case["v_knots"], degree=case["v_degree"])
@@ -674,8 +663,8 @@ class TestBSplinePatch(unittest.TestCase):
                     control_points=mi.TensorXf(case["control_points"]),
                 )
 
-                u_sample_points = np.linspace(0.0, 1.0, 19)
-                v_sample_points = np.linspace(0.0, 1.0, 19)
+                u_sample_points = np.linspace(0.0, 1.0, self.samples_per_dir)
+                v_sample_points = np.linspace(0.0, 1.0, self.samples_per_dir)
                 parametric_coords = np.array(
                     np.meshgrid(u_sample_points, v_sample_points, indexing="xy")
                 ).reshape(-1, 2)
@@ -718,8 +707,9 @@ class TestBSplinePatch(unittest.TestCase):
         Implicitly tests the implementation of `BSpline.h_refinement` method with
         control point positions passed as values.
         """
-        u_sample_points = np.linspace(0.0, 1.0, 19)
-        v_sample_points = np.linspace(0.0, 1.0, 19)
+        u_sample_points = np.linspace(0.0, 1.0, self.samples_per_dir)
+        v_sample_points = np.linspace(0.0, 1.0, self.samples_per_dir)
+
         parametric_coords = np.array(
             np.meshgrid(u_sample_points, v_sample_points, indexing="xy")
         ).reshape(-1, 2)

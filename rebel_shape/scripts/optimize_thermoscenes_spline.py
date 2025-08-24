@@ -35,9 +35,8 @@ from rebel_shape.property_optimizers.spline_texture_optimizer import (
     SplineTextureOptimizer,
 )
 from rebel_shape.regularization.composite_regularization import CompositeRegularization
+from rebel_shape.regularization.spline_curvature_loss import SplineCurvatureLoss
 from rebel_shape.regularization.spline_g1_loss import SplineG1Loss
-from rebel_shape.regularization.spline_normal_loss import SplineNormalLoss
-from rebel_shape.regularization.spline_position_loss import SplinePositionLoss
 from rebel_shape.scene_optimizers.composite_scene_optimizer import (
     CompositeSceneOptimizer,
 )
@@ -61,7 +60,7 @@ class ThermoSceneSplineOptimizationParameters(ReverseCli):
     """
     environment_map_path: Path | None = None
     """
-    Path to the envionment map that is used as background in optimization. If not 
+    Path to the envionment map that is used as background in optimization. If not
     provided, a solid white background is used instead.
     """
     optimize_initial_pose: bool = True
@@ -71,7 +70,7 @@ class ThermoSceneSplineOptimizationParameters(ReverseCli):
     """number of samples per pixel used for continuous derivatives"""
     visibility_samples: int = 9
     """number of samples per pixel used for direct and indirect visibility"""
-    optimization_iterations: int = 150
+    optimization_iterations: int = 180
     """Adam iterations executed on the initial mesh"""
 
     pose_params: PoseOptimizationConfig = field(
@@ -99,7 +98,7 @@ class ThermoSceneSplineOptimizationParameters(ReverseCli):
             uniform_adam=True,
             batch_size=None,
             lbfgs_history_size=15,
-            h_refinement_iterations=[15, 30, 50, 75],
+            h_refinement_iterations=[15, 30, 50, 80, 120],
             degree=3,
             knot_spans=2,
             tessellation_subdivisions=256,
@@ -123,7 +122,7 @@ class ThermoSceneSplineOptimizationParameters(ReverseCli):
     """Where to save the meshes and images (created if it does not exist)"""
     num_of_images_to_save: int = 3
     """
-    Number of images to save after each optimization step. The images are taken from 
+    Number of images to save after each optimization step. The images are taken from
     the evaluation set.
     """
     use_gpu: bool = True
@@ -378,8 +377,7 @@ def optimize_thermoscenes_scene(
     shape_regularization = CompositeRegularization(
         regularization_terms=[
             SplineG1Loss(composite_spline=tessellated_spline, weight=1.0),
-            SplinePositionLoss(tessellated_spline=tessellated_spline, weight=2.0),
-            SplineNormalLoss(tessellated_spline=tessellated_spline, weight=0.05),
+            SplineCurvatureLoss(tessellated_spline=tessellated_spline, weight=2e-3),
         ],
         composite_weight=1.0e-2,
     )

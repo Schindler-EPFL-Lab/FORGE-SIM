@@ -4,7 +4,7 @@ import numpy as np
 
 from rebel_shape.isogeometric_analysis.iga_problem import IGAProblem
 from rebel_shape.meshing.composite_iga_spline_surface import CompositeIGASplineSurface
-from rebel_shape.splines.iga_spline_patch import IGASplinePatch
+from rebel_shape.splines.spline_patch import SplinePatch
 
 
 class IGAManifoldProblem(IGAProblem):
@@ -49,7 +49,7 @@ class IGAManifoldProblem(IGAProblem):
         """
 
         def __init__(
-            self, patch: IGASplinePatch, integration_order: int | None = None
+            self, patch: SplinePatch, integration_order: int | None = None
         ) -> None:
             """
             Initializes the KnotSpanHandler with a given `patch`.
@@ -227,6 +227,51 @@ class IGAManifoldProblem(IGAProblem):
                     )
 
             return evaluation_coords_and_weights
+
+        @property
+        def full_gl_coords_and_weights(self) -> tuple["mi.TensorXf", "mi.TensorXf"]:
+            """
+            Returns all parametric coordinates and weights for Gauss-Legendre
+            quadrature over all knot spans.
+
+            While it is typically advantageous to go through the individual coordinates
+            and weights using the `gl_coords_and_weights` method (to avoid storing
+            large intermediate tensors), this property provides a convenient way to
+            obtain all quadrature points and weights in a single call.
+
+            This is useful for smaller problems where memory is not a concern and the
+            GPU is used, which benefits from fewer kernel launches and larger
+            computations. The coordinates and weights are concatenated for all
+            quadrature points across all knot spans.
+
+            :returns: A tuple containing:
+
+                - all_parametric_coords: A tensor of shape
+                (n_knot_spans * integration_order^2, 2) with all parametric
+                coordinates for quadrature points across all knot spans.
+                - all_weights: A tensor of shape (n_knot_spans * integration_order^2,)
+                with the corresponding quadrature weights.
+            """
+            coords_and_weights = self.gl_coords_and_weights()
+
+            all_parametric_coords = dr.empty(
+                dtype=mi.TensorXf,
+                shape=(self.num_knot_spans * len(coords_and_weights), 2)
+            )
+            all_weights = dr.empty(
+                dtype=mi.TensorXf,
+                shape=(self.num_knot_spans * len(coords_and_weights),)
+            )
+
+            for i, (coords, weights) in enumerate(coords_and_weights):
+                start = i * self.num_knot_spans
+                end = (i + 1) * self.num_knot_spans
+
+                all_parametric_coords[start:end, 0] = dr.ravel(coords[:, 0])
+                all_parametric_coords[start:end, 1] = dr.ravel(coords[:, 1])
+                all_weights[start:end] = dr.ravel(weights)
+
+            return all_parametric_coords, all_weights
 
         @property
         def min_span_size(self) -> float:

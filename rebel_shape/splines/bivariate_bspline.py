@@ -9,14 +9,16 @@ from rebel_shape.splines.interpolating_spline import InterpolatingSpline
 
 
 class BivariateBSpline(InterpolatingSpline):
-    """
+    r"""
     Represents a tensor product B-Spline surface made up of two `BSpline` instances.
 
     B-splines form a tensor product basis, i.e. they consist of a number of univariate
     B-splines (implemented in `BSpline`). For surfaces, this means that the basis
     functions used to interpolate the values can be expressed as:
-
-        B_k(u, v) = M_j(v) N_i(u),  k = n_basis_functions_u * j + i,
+    ```math
+        B_k(u, v) = M_j(v) N_i(u),  \\
+        k = \text{n_basis_functions_u} * j + i,
+    ```
 
     where B_k are the bivariate basis functions, N are the univariate B-Spline basis
     functions along u, M are the univariate B-spline basis functions along v, k is the
@@ -90,7 +92,7 @@ class BivariateBSpline(InterpolatingSpline):
         values: "mi.TensorXf",
         parametric_coords: "mi.TensorXf",
     ) -> "mi.TensorXf":
-        """
+        r"""
         Compute the B-spline curve coordinates at the given `parametric_coords`.
 
         `parametric_coords` is a 2D tensor of shape (n_points, 2) where n_points
@@ -98,13 +100,15 @@ class BivariateBSpline(InterpolatingSpline):
         a surface has two parametric directions (u, v).
 
         The curve is evaluated at parametric points with the formula:
-            I_d(u, v) = sum_{i=0 to n_u} sum_{j=0 to n_v}
-                        N_{i,p_u}(u) * M_{j,p_v}(v) * I_{i,j,d},
+        ```math
+            I_d(u, v) = \sum_{i=0}{n_u} \sum_{j=0}{n_v}
+                        N_{i,p_u}(u) M_{j,p_v}(v) I_{i,j,d},
+        ```
         where:
             - d is the coordinate index (0, 1, or 2)
-            - P_{i,j,d} is the d-th coordinate of the control point P_{i,j}
-            - N_{i,p_u}(u) is the i-th B-spline basis function in the u direction
-            - M_{j,p_v}(v) is the j-th B-spline basis function in the v direction
+            - $P_{i,j,d}$ is the d-th coordinate of the control point $P_{i,j}$
+            - $N_{i,p_u}(u)$ is the i-th B-spline basis function in the u direction
+            - $M_{j,p_v}(v)$ is the j-th B-spline basis function in the v direction
 
         Only a subset of basis functions are non-zero at a given point (u, v).
         Specifically, the u and v parameters are mapped to the appropriate knot spans
@@ -137,16 +141,13 @@ class BivariateBSpline(InterpolatingSpline):
             dtype=mi.TensorXf, shape=(parametric_coords.shape[0], values.shape[1])
         )
 
-        for j in range(self._v_spline.degree + 1):
-            basis_index_v = v_span_data.global_basis_function_index(local_index=j)
-
-            for k in range(self._u_spline.degree + 1):
-                basis_index_u = u_span_data.global_basis_function_index(local_index=k)
-
+        for j, basis_index_v in enumerate(v_span_data.basis_function_indices):
+            for i, basis_index_u in enumerate(u_span_data.basis_function_indices):
                 cp_index = dr.ravel(
                     basis_index_v * self._u_spline.num_basis_functions + basis_index_u
                 )
-                result += (v_basis_funcs[:, j] * u_basis_funcs[:, k])[:, None] * values[
+
+                result += (v_basis_funcs[:, j] * u_basis_funcs[:, i])[:, None] * values[
                     cp_index, :
                 ]
 
@@ -155,7 +156,7 @@ class BivariateBSpline(InterpolatingSpline):
     def evaluate_basis_functions(
         self, parametric_coords: "mi.TensorXf"
     ) -> "mi.TensorXf":
-        """
+        r"""
         Evaluates the basis functions of the B-spline surface at the given
         `parametric_coords`.
 
@@ -169,7 +170,10 @@ class BivariateBSpline(InterpolatingSpline):
         them to form the bivariate basis functions.
 
         The formula is simply:
-            B_k(u, v) = M_j(v) N_i(u), k = n_basis_functions_u * j + i,
+        ```math
+            B_k(u, v) = M_j(v) N_i(u), \\
+            k = \text{n_basis_functions_u} * j + i,
+        ```
 
         :returns: A Mitsuba tensor of shape (n_points, n_basis_functions) where each row
                   corresponds to the evaluated basis functions at the respective
@@ -194,8 +198,8 @@ class BivariateBSpline(InterpolatingSpline):
             shape=(parametric_coords.shape[0], self.basis_functions_per_span),
         )
 
-        for j in range(self._v_spline.degree + 1):
-            for i in range(self._u_spline.degree + 1):
+        for j in range(self._v_spline.basis_functions_per_span):
+            for i in range(self._u_spline.basis_functions_per_span):
                 k = j * (self._u_spline.degree + 1) + i
 
                 result[:, k] = dr.ravel(v_basis_funcs[:, j] * u_basis_funcs[:, i])
@@ -205,7 +209,7 @@ class BivariateBSpline(InterpolatingSpline):
     def evaluate_basis_functions_first_derivative(
         self, parametric_coords: "mi.TensorXf"
     ) -> "mi.TensorXf":
-        """
+        r"""
         Evaluate the first derivatives of the basis functions of the B-spline surface
         at the given `parametric_coords`.
 
@@ -219,9 +223,12 @@ class BivariateBSpline(InterpolatingSpline):
         them to obtain two tensors of first derivatives along the u and v directions.
 
         The formula is:
-            partial_u B_k(u, v) = M_j(v) N_i'(u),
-            partial_v B_k(u, v) = M_j'(v) N_i(u),
-            k = j * n_basis_functions_u + i,    (denoted as `cp_index` in the code)
+        ```math
+            \partial_u B_k(u, v) = M_j(v) N_i'(u),\\
+            \partial_v B_k(u, v) = M_j'(v) N_i(u),\\
+            k = j * \text{n_basis_functions_u} + i, \\
+        ```
+        and k is denoted as `cp_index` in the code.
 
         :returns: A Mitsuba tensor of shape (n_points, n_basis_functions, 2) where
             each row corresponds to the evaluated first derivatives of the basis
@@ -266,6 +273,83 @@ class BivariateBSpline(InterpolatingSpline):
 
         return result
 
+    def evaluate_basis_functions_second_derivative(
+        self, parametric_coords: "mi.TensorXf"
+    ) -> "mi.TensorXf":
+        r"""
+        Evaluate the second derivatives of the basis functions of the B-spline surface
+        at the given `parametric_coords`.
+
+        `parametric_coords` is a 2D tensor of shape (n_points, 2) where n_points
+        is the number of points to evaluate, and the second dimension is 2 because
+        a surface has two parametric directions (u, v).
+
+        Since the bivariate B-spline surface is a tensor product of two univariate
+        B-splines, the second derivatives are computed by evaluating the basis functions
+        and their first/second derivatives in both directions separately, and then
+        combining them to obtain tensor of second derivatives _uu, _uv, _vu, _vv
+
+        The formula is:
+        ```math
+            \partial_{uu} B_k(u, v) = M_j(v) N_i''(u), \\
+            \partial_{uv} B_k(u, v) = \partial_{vu} B_k(u, v) = M_j(v)' N_i'(u) \\
+            \partial_{vv} B_k(u, v) = M_j''(v) N_i(u), \\
+            k = j * \text{n_basis_functions_u} + i,
+        ```
+         and k is denoted as `cp_index` in the code.
+
+        :returns: A Mitsuba tensor of shape (n_points, n_basis_functions, 2, 2) where
+            each tensor[index, function_index] represents [[uu, uv], [uv, vv]]
+            derivatives of basis function function_index at index of `parametric_coords`
+
+        :raises ValueError: If `parametric_coords` is not a 2D tensor of shape
+            (n_points, 2).
+        """
+
+        self.validate_parametric_coords(parametric_coords)
+
+        u_span_data = self._u_spline.compute_span_data(parametric_coords[:, 0])
+        v_span_data = self._v_spline.compute_span_data(parametric_coords[:, 1])
+
+        u_basis_func_values_and_derivatives = (
+            self._u_spline.evaluate_basis_function_derivatives(
+                parametric_span_data=u_span_data, derivative_order=2
+            )
+        )
+        v_basis_func_values_and_derivatives = (
+            self._v_spline.evaluate_basis_function_derivatives(
+                parametric_span_data=v_span_data, derivative_order=2
+            )
+        )
+
+        result = dr.zeros(
+            dtype=mi.TensorXf,
+            shape=(parametric_coords.shape[0], self.basis_functions_per_span, 2, 2),
+        )
+
+        for j in range(self._v_spline.basis_functions_per_span):
+            for i in range(self._u_spline.basis_functions_per_span):
+                cp_index = j * self._u_spline.basis_functions_per_span + i
+
+                result[:, cp_index, 0, 0] = dr.ravel(
+                    u_basis_func_values_and_derivatives[:, 2, i]
+                    * v_basis_func_values_and_derivatives[:, 0, j]
+                )
+                result[:, cp_index, 0, 1] = dr.ravel(
+                    u_basis_func_values_and_derivatives[:, 1, i]
+                    * v_basis_func_values_and_derivatives[:, 1, j]
+                )
+                result[:, cp_index, 1, 0] = dr.ravel(
+                    u_basis_func_values_and_derivatives[:, 1, i]
+                    * v_basis_func_values_and_derivatives[:, 1, j]
+                )
+                result[:, cp_index, 1, 1] = dr.ravel(
+                    u_basis_func_values_and_derivatives[:, 0, i]
+                    * v_basis_func_values_and_derivatives[:, 2, j]
+                )
+
+        return result
+
     def active_basis_function_indices(
         self, parametric_coords: "mi.TensorXf"
     ) -> "mi.TensorXu":
@@ -300,28 +384,23 @@ class BivariateBSpline(InterpolatingSpline):
         self.validate_parametric_coords(parametric_coords)
 
         n_points = parametric_coords.shape[0]
-        u_coords = dr.reshape(
-            dtype=mi.TensorXf, value=parametric_coords[:, 0], shape=n_points
-        )
-        v_coords = dr.reshape(
-            dtype=mi.TensorXf, value=parametric_coords[:, 1], shape=n_points
-        )
 
-        u_span_data = self._u_spline.compute_span_data(u_coords)
-        v_span_data = self._v_spline.compute_span_data(v_coords)
+        u_span_data = self._u_spline.compute_span_data(parametric_coords[:, 0])
+        v_span_data = self._v_spline.compute_span_data(parametric_coords[:, 1])
 
-        result = dr.zeros(
+        result = dr.empty(
             dtype=mi.TensorXu,
-            shape=(n_points, (self._u_spline.degree + 1) * (self._v_spline.degree + 1)),
+            shape=(
+                n_points,
+                self._u_spline.basis_functions_per_span
+                * self._v_spline.basis_functions_per_span,
+            ),
         )
 
-        for j in range(self._v_spline.degree + 1):
-            basis_index_v = v_span_data.global_basis_function_index(local_index=j)
+        for j, basis_index_v in enumerate(v_span_data.basis_function_indices):
+            for i, basis_index_u in enumerate(u_span_data.basis_function_indices):
+                cp_index = j * self._u_spline.basis_functions_per_span + i
 
-            for k in range(self._u_spline.degree + 1):
-                basis_index_u = u_span_data.global_basis_function_index(local_index=k)
-
-                cp_index = j * (self._u_spline.degree + 1) + k
                 result[:, cp_index] = dr.ravel(
                     basis_index_v * self._u_spline.num_basis_functions + basis_index_u
                 )

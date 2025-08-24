@@ -130,6 +130,26 @@ class IGASplinePatch(SplinePatch):
         """
         return self._spline_patch.evaluate_jacobian(parametric_coords)
 
+    def evaluate_hessian(self, parametric_coords: "mi.TensorXf") -> "mi.TensorXf":
+        """
+        Computes the Hessian of the spline patch at the given `parametric_coords`.
+
+        `parametric_coords` is a 2D tensor of shape (n_points, 2) where n_points
+        is the number of points to evaluate, and the second dimension is 2 because
+        a surface has two parametric directions (u, v).
+
+        The Hessian is a rank-3 tensor that describes how the surface curvature changes
+        with respect to the parametric coordinates. It is useful for computing
+        principal curvatures and understanding the local geometry of the surface.
+
+        :returns: A tensor of shape (n_points, 3, 2, 2) representing the Hessian at
+                  the specified parametric coordinates.
+
+        :raises ValueError: If `parametric_coords` is not a 2D tensor (n_points, 2),
+            or if the values in `parametric_coords` are outside the knot vector range.
+        """
+        return self._spline_patch.evaluate_hessian(parametric_coords)
+
     def evaluate_field(self, parametric_coords: "mi.TensorXf") -> "mi.TensorXf":
         """
         Computes the interpolated field values at the specified `parametric_coords`.

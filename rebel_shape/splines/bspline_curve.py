@@ -7,7 +7,7 @@ from rebel_shape.splines.coordinate_spline import CoordinateSpline
 
 
 class BSplineCurve(CoordinateSpline):
-    """
+    r"""
     Mitsuba compatible explicit B-Spline curve in 3D space. A B-Spline curve is
     defined by a univariate B-Spline `spline` and `control_points`.
 
@@ -28,11 +28,13 @@ class BSplineCurve(CoordinateSpline):
     vector and the degree of the spline.
 
     A general B-Spline curve is defined as a function of one parametric variable (u):
-        C_d(u) = sum(i=0 to n_u) N_{i,p}(u) * P_{i,d}
+    ```math
+        C_d(u) = \sum_{i=0}^{n_u} N_{i,p}(u) P_{i,d}
+    ```
     where:
         - C(u) is the curve point (3D value) at (u)
-        - N_{i,p} (u) are the B-Spline basis functions of order p
-        - P_{i,d} are the control points (d is the coordinate, x, y, or z)
+        - $N_{i,p} (u)$ are the B-Spline basis functions of order p
+        - $P_{i,d}$ are the control points (d is the coordinate, x, y, or z)
     In general most of the basis functions are zero, and only `degree + 1` from an
     appropriate knot span are non-zero.
 
@@ -59,7 +61,7 @@ class BSplineCurve(CoordinateSpline):
         super().__init__(control_points=control_points)
 
     def evaluate_coordinates(self, parametric_coords: "mi.TensorXf") -> "mi.TensorXf":
-        """
+        r"""
         Compute the B-spline curve coordinates at the given parametric coordinates.
 
         `parametric_coords` is a 2D tensor of shape (n_points, 1) where n_points
@@ -68,7 +70,9 @@ class BSplineCurve(CoordinateSpline):
 
         The interpolated point on the curve is computed using the B-spline basis
         functions weighted by the control points:
-            C_d(u) = sum_{i=0}^{n} N_{i,p}(u) * P_{i,d},
+        ```math
+            C_d(u) = \sum_{i=0}^{n_u} N_{i,p}(u) P_{i,d}
+        ```
         where d is the coordinate (x, y, or z), and n is the number of control points.
 
         Most B-Spline basis functions N_{i,p}(u) are zero, and only `degree + 1` from
@@ -90,7 +94,7 @@ class BSplineCurve(CoordinateSpline):
     def evaluate_first_derivatives(
         self, parametric_coords: "mi.TensorXf"
     ) -> "mi.TensorXf":
-        """
+        r"""
         Compute the derivative of the B-spline curve at the given `parametric_coords`.
 
         `parametric_coords` is a 2D tensor of shape (n_points, 1) where n_points
@@ -109,7 +113,9 @@ class BSplineCurve(CoordinateSpline):
 
         The interpolated derivative vector on the curve is computed using the
         first derivatives of B-spline basis functions weighted by the control points:
-            C'_d(u) = sum_{i=0}^{n} N_{i,p}'(u) * P_{i,d},
+        ```math
+            C_d(u)' = \sum_{i=0}^{n_u} N_{i,p}(u)' P_{i,d}
+        ```
         where d is the coordinate (x, y, or z), and n is the number of control points.
 
         :returns: A tensor of shape (n_points, 3) representing the derivative vectors
@@ -132,12 +138,53 @@ class BSplineCurve(CoordinateSpline):
         result = dr.zeros(dtype=mi.TensorXf, shape=(n_points, 3))
         values = self._control_points
 
-        for j in range(self.degree + 1):
-            basis_func_index = dr.ravel(
-                span_data.global_basis_function_index(local_index=j)
-            )
+        for i, basis_func_index in enumerate(span_data.basis_function_indices):
+            result += basis_funcs[:, i][:, None] * values[basis_func_index]
 
-            result += basis_funcs[:, j][:, None] * values[basis_func_index]
+        return result
+
+    def evaluate_second_derivatives(
+        self, parametric_coords: "mi.TensorXf"
+    ) -> "mi.TensorXf":
+        r"""
+        Compute the second derivative of the B-spline curve at the given
+        `parametric_coords`.
+
+        `parametric_coords` is a 2D tensor of shape (n_points, 1) where n_points
+        is the number of points to evaluate, and the second dimension is 1 because
+        a curve has a single parametric direction (u).
+
+        The interpolated derivative vector on the curve is computed using the
+        first derivatives of B-spline basis functions weighted by the control points:
+        ```math
+            C_d(u)'' = \sum_{i=0}^{n_u} N_{i,p}(u)'' P_{i,d}
+        ```
+        where d is the coordinate (x, y, or z), and n is the number of control points.
+
+        :returns: A tensor of shape (n_points, 3) representing the second derivative
+                  vectors at the specified `parametric_coords`.
+
+        :raises ValueError: If `parametric_coords` is not a 2D tensor (n_points, 1), or
+            if the values in `parametric_coords` are outside the knot vector range.
+        """
+        self._spline.validate_parametric_coords(parametric_coords)
+
+        n_points = parametric_coords.shape[0]
+        span_data = self._spline.compute_span_data(
+            parametric_coords=parametric_coords[:, 0]
+        )
+        basis_function_derivatives = self._spline.evaluate_basis_function_derivatives(
+            parametric_span_data=span_data, derivative_order=2
+        )[:, 2, :]
+
+        # Compute point on curve
+        result = dr.zeros(dtype=mi.TensorXf, shape=(n_points, 3))
+        values = self._control_points
+
+        for i, basis_func_index in enumerate(span_data.basis_function_indices):
+            result += (
+                basis_function_derivatives[:, i][:, None] * values[basis_func_index]
+            )
 
         return result
 

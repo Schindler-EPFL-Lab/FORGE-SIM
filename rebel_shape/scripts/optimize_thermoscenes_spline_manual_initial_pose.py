@@ -38,9 +38,8 @@ from rebel_shape.property_optimizers.spline_texture_optimizer import (
     SplineTextureOptimizer,
 )
 from rebel_shape.regularization.composite_regularization import CompositeRegularization
+from rebel_shape.regularization.spline_curvature_loss import SplineCurvatureLoss
 from rebel_shape.regularization.spline_g1_loss import SplineG1Loss
-from rebel_shape.regularization.spline_normal_loss import SplineNormalLoss
-from rebel_shape.regularization.spline_position_loss import SplinePositionLoss
 from rebel_shape.scene_optimizers.composite_scene_optimizer import (
     CompositeSceneOptimizer,
 )
@@ -61,13 +60,13 @@ class ThermoSceneSplineOptimizationParameters(ReverseCli):
     Path to the ThermoScenes scene that is optimized. Assumes the foreground
     has been extracted.
     """
+    bbox_transforms_path: Path
+    """Path to the transforms of the bounding box"""
     environment_map_path: Path | None = None
     """
     Path to the envionment map that is used as background in optimization. If not
     provided, a solid white background is used instead.
     """
-    bbox_transforms_path: Path | None = None
-    """Path to the transforms of the bounding box"""
     optimize_initial_pose: bool = True
     """Whether to execute pose optimization before shape and texture optimization"""
 
@@ -75,7 +74,7 @@ class ThermoSceneSplineOptimizationParameters(ReverseCli):
     """number of samples per pixel used for continuous derivatives"""
     visibility_samples: int = 9
     """number of samples per pixel used for direct and indirect visibility"""
-    optimization_iterations: int = 150
+    optimization_iterations: int = 180
     """Adam iterations executed on the initial mesh"""
 
     shape_params: SplineShapeOptimizationConfig = field(
@@ -88,7 +87,7 @@ class ThermoSceneSplineOptimizationParameters(ReverseCli):
             uniform_adam=True,
             batch_size=None,
             lbfgs_history_size=15,
-            h_refinement_iterations=[15, 30, 50, 75],
+            h_refinement_iterations=[15, 30, 50, 80, 120],
             degree=3,
             knot_spans=2,
             tessellation_subdivisions=256,
@@ -153,11 +152,11 @@ def initialize_scene(
     spline_degree: int,
     spline_subdivisions: int,
     mesh_subdivisions: int,
-    bbox_transforms_path: Path | None = None,
+    bbox_transforms_path: Path,
 ) -> tuple[
     "mi.Scene",
-    list["MaskedPoseImage"],
-    list["MaskedPoseImage"],
+    list[MaskedPoseImage],
+    list[MaskedPoseImage],
     TessellatedSplineSurface,
 ]:
     """
@@ -208,13 +207,13 @@ def initialize_scene(
     ref_images, tf_dataloader = preprocess_rgb_images(
         scene_path=thermoscenes_scene_path,
         environment_map_path=envmap_path,
-        spp=4,
+        spp=continuous_samples,
         sampler=sampler,
     )
     eval_images, _ = preprocess_rgb_images(
         scene_path=thermoscenes_scene_path,
         environment_map_path=envmap_path,
-        spp=4,
+        spp=continuous_samples,
         train=False,
         sampler=sampler,
     )
@@ -239,10 +238,11 @@ def initialize_scene(
             radius=1.0,
         )
 
-        if bbox_transforms_path is not None:
-            tf_bbox = load_bounding_bbox_transforms(bbox_transforms_path)
-            tf_initial_pose = mi.Transform4f(tf_dataloader) @ tf_bbox
-            cubedsphere.transform_global_control_points(tf_initial_pose)
+        tf_bbox = load_bounding_bbox_transforms(bbox_transforms_path)
+        tf_initial_pose = mi.Transform4f(tf_dataloader) @ tf_bbox
+        logger.debug("tf_initial_pose:", tf_initial_pose)
+        logger.debug("tf_dataloader:", tf_dataloader)
+        cubedsphere.transform_global_control_points(tf_initial_pose)
 
         environment = (
             {"type": "envmap", "filename": str(envmap_path)}
@@ -268,19 +268,6 @@ def initialize_scene(
         scene_source: "mi.Scene" = mi.load_dict(scene_dict)
 
     return scene_source, ref_images, eval_images, cubedsphere
-
-
-def save_to_ply(
-    tessellated_spline: TessellatedSplineSurface,
-    output_directory: Path | None = None,
-    prefix: str = "0",
-) -> None:
-    if output_directory is None:
-        return
-    for mesh in tessellated_spline:
-        mesh_name = f"{mesh.name}"
-
-        mesh.save_to_ply(output_dir=output_directory, save_name=f"{prefix}_{mesh_name}")
 
 
 def optimize_thermoscenes_scene(
@@ -368,8 +355,7 @@ def optimize_thermoscenes_scene(
     shape_regularization = CompositeRegularization(
         regularization_terms=[
             SplineG1Loss(composite_spline=tessellated_spline, weight=1.0),
-            SplinePositionLoss(tessellated_spline=tessellated_spline, weight=2.0),
-            SplineNormalLoss(tessellated_spline=tessellated_spline, weight=0.05),
+            SplineCurvatureLoss(tessellated_spline=tessellated_spline, weight=2e-3),
         ],
         composite_weight=1.0e-2,
     )

@@ -35,9 +35,8 @@ from rebel_shape.property_optimizers.spline_texture_optimizer import (
     SplineTextureOptimizer,
 )
 from rebel_shape.regularization.composite_regularization import CompositeRegularization
+from rebel_shape.regularization.spline_curvature_loss import SplineCurvatureLoss
 from rebel_shape.regularization.spline_g1_loss import SplineG1Loss
-from rebel_shape.regularization.spline_normal_loss import SplineNormalLoss
-from rebel_shape.regularization.spline_position_loss import SplinePositionLoss
 from rebel_shape.scene_optimizers.composite_scene_optimizer import (
     CompositeSceneOptimizer,
 )
@@ -304,8 +303,7 @@ def optimize_suzanne(params: SuzanneSplineTextureParameters) -> None:
     shape_regularization = CompositeRegularization(
         regularization_terms=[
             SplineG1Loss(composite_spline=tessellated_spline, weight=1.0),
-            SplinePositionLoss(tessellated_spline=tessellated_spline, weight=2.0),
-            SplineNormalLoss(tessellated_spline=tessellated_spline, weight=0.05),
+            SplineCurvatureLoss(tessellated_spline=tessellated_spline, weight=2e-3),
         ],
         composite_weight=1.0e-2,
     )

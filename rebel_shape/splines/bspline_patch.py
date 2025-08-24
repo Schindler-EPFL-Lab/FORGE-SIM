@@ -13,7 +13,7 @@ from rebel_shape.splines.spline_patch import SplinePatch
 
 
 class BSplinePatch(SplinePatch):
-    """
+    r"""
     Mitsuba compatible implementation of a B-Spline patch.
 
     A B-Spline patch uses the tensor product of basis functions from two abstract
@@ -21,12 +21,14 @@ class BSplinePatch(SplinePatch):
     3D space.
 
     In general, a B-Spline patch can be defined as a function of two parameters (u, v):
-        S(u, v) = sum(i=0 to n_u) sum(j=0 to n_v) N_i(u) * M_j(v) * P_ij
+    ```math
+        S(u, v) = \sum_{i=0}^{n_u} \sum_{j=0}^{n_v} N_i(u) M_j(v) P_ij
+    ```
     where:
         - S(u, v) is the surface point (3D value) at (u, v)
-        - N_i(u) are the basis functions in the u direction
-        - M_j(v) are the basis functions in the v direction
-        - P_ij are the control points
+        - $N_i(u)$ are the basis functions in the u direction
+        - $M_j(v)$ are the basis functions in the v direction
+        - $P_ij$ are the control points
     The tensor product name comes from the fact that basis functions in the u and v
     directions are independent. In general, most basis functions evaluate to zero:
     only `u.degree + 1` * `v.degree + 1` basis functions are non-zero at a given
@@ -146,7 +148,7 @@ class BSplinePatch(SplinePatch):
         return quad_indices
 
     def evaluate_coordinates(self, parametric_coords: "mi.TensorXf") -> "mi.TensorXf":
-        """
+        r"""
         Compute the B-spline patch coordinates at the given `parametric_coords`.
 
         `parametric_coords` is a 2D tensor of shape (n_points, 2) where n_points
@@ -154,13 +156,15 @@ class BSplinePatch(SplinePatch):
         a surface has two parametric directions (u, v).
 
         The curve is evaluated at parametric points with the formula:
-            S_d(u, v) = sum_{i=0 to n_u} sum_{j=0 to n_v}
-                        N_{i,p_u}(u) * M_{j,p_v}(v) * P_{i,j,d},
+        ```math
+            S_d(u, v) = \sum_{i=0}^{n_u} \sum_{j=0}^{n_v}
+                        N_{i,p_u}(u) M_{j,p_v}(v) P_{i,j,d},
+        ```
         where:
             - d is the coordinate index (0, 1, or 2)
-            - P_{i,j,d} is the d-th coordinate of the control point P_{i,j}
-            - N_{i,p_u}(u) is the i-th B-spline basis function in the u direction
-            - M_{j,p_v}(v) is the j-th B-spline basis function in the v direction
+            - $P_{i,j,d}$ is the d-th coordinate of the control point P_{i,j}
+            - $N_{i,p_u}(u)$ is the i-th B-spline basis function in the u direction
+            - $M_{j,p_v}(v)$ is the j-th B-spline basis function in the v direction
 
         There are a total of `(degree_u + 1) * (degree_v + 1)` non-zero basis
         functions at a given point (u, v).
@@ -186,7 +190,7 @@ class BSplinePatch(SplinePatch):
     def evaluate_first_derivatives(
         self, parametric_coords: "mi.TensorXf"
     ) -> tuple["mi.TensorXf", "mi.TensorXf"]:
-        """
+        r"""
         Compute the partial derivatives of the B-spline surface at the given
         `parametric_coordinates`.
 
@@ -194,23 +198,18 @@ class BSplinePatch(SplinePatch):
         is the number of points to evaluate, and the second dimension is 2 because
         a surface has two parametric directions (u, v).
 
-        The derivative of the B-spline curve can be computed in one of two ways:
-        either by evaluating the derivative of the B-spline basis functions of a lower
-        order and then weighting them by control point differences, or by directly
-        computing the derivatives of the B-spline basis functions.
-
         The derivatives are computed by taking a derivative of the formula used in
         evaluation, and they follow the same logic as the implementation from
         `BSplineCurve.evaluate_first_derivative`. The formula for the u derivative is:
-
-            d_u C_d(u, v) = sum_{i=0 to n_u - } sum_{j=0 to n_v}
-                            M_{j,p_v}(v) * N_{i+1,p-1}(u)
-                            * p * (P_{i+1,j,d} - P{i,j,d}) / (u_{i+p+1} - u_{i+1}),
+        ```math
+            d_u C_d(u, v) = \sum_{i=0}^{n_u} \sum_{j=0}^{n_v}
+                            M_{j,p_v}(v) N_{i,p_u}(u)' P_{i,j,d}
+        ```
         where:
             - d is the coordinate index (0, 1, or 2)
-            - P_{i,j,d} is the d-th coordinate of the control point P_{i,j}
-            - N_{i,p_u}(u) is the i-th B-spline basis function in the u direction
-            - M_{j,p_v}(v) is the j-th B-spline basis function in the v direction
+            - $P_{i,j,d}$ is the d-th coordinate of the control point P_{i,j}
+            - $N_{i,p_u}(u)$ is the i-th B-spline basis function in the u direction
+            - $M_{j,p_v}(v)$ is the j-th B-spline basis function in the v direction
 
         The algorithm proceeds as in `evaluate_coordinates`; the u component uses
         the derivative of the basis function in the u direction, while the v component
@@ -242,18 +241,15 @@ class BSplinePatch(SplinePatch):
         du = dr.zeros(dtype=mi.TensorXf, shape=(parametric_coords.shape[0], 3))
         dv = dr.zeros(dtype=mi.TensorXf, shape=(parametric_coords.shape[0], 3))
 
-        for j in range(self._spline.v_spline.degree + 1):
-            basis_index_v = v_span_data.global_basis_function_index(local_index=j)
-
-            for k in range(self._spline.u_spline.degree + 1):
-                basis_index_u = u_span_data.global_basis_function_index(local_index=k)
-
+        for j, basis_index_v in enumerate(v_span_data.basis_function_indices):
+            for i, basis_index_u in enumerate(u_span_data.basis_function_indices):
                 cp_index = dr.ravel(basis_index_v * self._num_cps_u + basis_index_u)
 
-                du += (u_basis_func_ders[:, 1, k] * v_basis_funcs_ders[:, 0, j])[
+                du += (u_basis_func_ders[:, 1, i] * v_basis_funcs_ders[:, 0, j])[
                     :, None
                 ] * self._control_points[cp_index]
-                dv += (u_basis_func_ders[:, 0, k] * v_basis_funcs_ders[:, 1, j])[
+
+                dv += (u_basis_func_ders[:, 0, i] * v_basis_funcs_ders[:, 1, j])[
                     :, None
                 ] * self._control_points[cp_index]
 
@@ -284,10 +280,127 @@ class BSplinePatch(SplinePatch):
         """
         du, dv = self.evaluate_first_derivatives(parametric_coords=parametric_coords)
         jacobian = dr.empty(dtype=mi.TensorXf, shape=(parametric_coords.shape[0], 3, 2))
-        jacobian[:, :, 0] = dr.ravel(du[:, :])
-        jacobian[:, :, 1] = dr.ravel(dv[:, :])
+        jacobian[:, :, 0] = dr.ravel(du)
+        jacobian[:, :, 1] = dr.ravel(dv)
 
         return jacobian
+
+    def evaluate_second_derivatives(
+        self, parametric_coords: "mi.TensorXf"
+    ) -> tuple["mi.TensorXf", "mi.TensorXf", "mi.TensorXf"]:
+        r"""
+        Compute the second derivatives of the B-spline surface at the given
+        `parametric_coords`.
+
+        `parametric_coords` is a 2D tensor of shape (n_points, 2) where n_points
+        is the number of points to evaluate, and the second dimension is 2 because
+        a surface has two parametric directions (u, v).
+
+        The algorithm uses the exact derivatives of the BSplines. The formulas for the
+        uu, uv, vv derivatives are:
+        ```math
+            d_{uu} C_d(u, v) = \sum_{i=0}^{n_u} \sum_{j=0}^{n_v}
+                            M_{j,p_v}(v) N_{i,p_u}(u)'' P_{i,j,d} \\
+            d_{uv} C_d(u, v) = \sum_{i=0}^{n_u} \sum_{j=0}^{n_v}
+                            M_{j,p_v}(v)' N_{i,p_u}(u)' P_{i,j,d} \\
+            d_{vv} C_d(u, v) = \sum_{i=0}^{n_u} \sum_{j=0}^{n_v}
+                            M_{j,p_v}(v)' N_{i,p_u}(u)' P_{i,j,d}
+        ```
+        where:
+            - d is the coordinate index (0, 1, or 2)
+            - $P_{i,j,d}$ is the d-th coordinate of the control point $P_{i,j}$
+            - $N_{i,p_u}(u)$ is the i-th B-spline basis function in the u direction
+            - $M_{j,p_v}(v)$ is the j-th B-spline basis function in the v direction
+
+        :returns: A tuple of tensors (duu, duv, dvv) where:
+                 - duu: the second derivative d()/du^2, shape (n_points, 3)
+                 - duv: the second derivative d()/dudv, shape (n_points, 3)
+                 - dvv: the second derivative d()/dv^2, shape (n_points, 3)
+
+        :raises ValueError: If `parametric_coords` is not a 2D tensor (n_points, 2), or
+            if the values in `parametric_coords` are outside the knot vector range.
+        """
+        self._spline.validate_parametric_coords(parametric_coords)
+
+        u_span_data = self._spline.u_spline.compute_span_data(parametric_coords[:, 0])
+        v_span_data = self._spline.v_spline.compute_span_data(parametric_coords[:, 1])
+
+        u_basis_func_ders = self._spline.u_spline.evaluate_basis_function_derivatives(
+            parametric_span_data=u_span_data, derivative_order=2
+        )
+        v_basis_func_ders = self._spline.v_spline.evaluate_basis_function_derivatives(
+            parametric_span_data=v_span_data, derivative_order=2
+        )
+
+        duu = dr.zeros(dtype=mi.TensorXf, shape=(parametric_coords.shape[0], 3))
+        duv = dr.zeros(dtype=mi.TensorXf, shape=(parametric_coords.shape[0], 3))
+        dvv = dr.zeros(dtype=mi.TensorXf, shape=(parametric_coords.shape[0], 3))
+
+        for j, basis_index_v in enumerate(v_span_data.basis_function_indices):
+            for i, basis_index_u in enumerate(u_span_data.basis_function_indices):
+                cp_index = dr.ravel(basis_index_v * self._num_cps_u + basis_index_u)
+
+                duu += (u_basis_func_ders[:, 2, i] * v_basis_func_ders[:, 0, j])[
+                    :, None
+                ] * self._control_points[cp_index]
+
+                duv += (u_basis_func_ders[:, 1, i] * v_basis_func_ders[:, 1, j])[
+                    :, None
+                ] * self._control_points[cp_index]
+
+                dvv += (u_basis_func_ders[:, 0, i] * v_basis_func_ders[:, 2, j])[
+                    :, None
+                ] * self._control_points[cp_index]
+
+        return duu, duv, dvv
+
+    def evaluate_hessian(self, parametric_coords: "mi.TensorXf") -> "mi.TensorXf":
+        r"""
+        Compute the Hessian of the B-spline surface at the given `parametric_coords`.
+
+        `parametric_coords` is a 2D tensor of shape (n_points, 2) where n_points
+        is the number of points to evaluate, and the second dimension is 2 because
+        a surface has two parametric directions (u, v).
+
+        The Hessian is a tensor that describes the local curvature of a function of
+        many variables. It is useful for understanding the local geometry of the
+        surface.
+
+        The Hessian is computed as a 4D tensor of shape (n_points, 3, 2, 2)
+        where n_points is the number of points to evaluate, and the second dimension is
+        3 because a surface has three spatial dimensions (x, y, z), and the third and
+        forth dimensions are 2 because a surface has two parametric directions (u, v).
+
+        :returns: A tensor of shape (n_points, 3, 2, 2) representing the Hessian at
+          the specified parametric coordinates. The tensor element at
+          [point_idx, coord_idx] is a 2x2 matrix of second derivatives:
+          ```math
+            \begin{bmatrix}
+            \frac{\partial^2(\dots)}{\partial u^2} & \frac{\partial^2(\dots)}
+            {\partial u \partial v} \\
+            \frac{\partial^2(\dots)}{\partial u \partial v} & \frac{\partial^2(\dots)}
+            {\partial u^2}
+            \end{bmatrix}
+          ```
+
+          where derivatives are taken with respect to the coordinate specified
+          by coord_idx (0, 1, 2 for x, y, and z, respectively), at the parametric
+          coordinate indexed by point_idx.
+
+        :raises ValueError: If `parametric_coords` is not a 2D tensor (n_points, 2), or
+            if the values in `parametric_coords` are outside the knot vector range.
+        """
+        duu, duv, dvv = self.evaluate_second_derivatives(parametric_coords)
+
+        hessian = dr.empty(
+            dtype=mi.TensorXf, shape=(parametric_coords.shape[0], 3, 2, 2)
+        )
+        hessian[:, :, 0, 0] = dr.ravel(duu)
+        hessian[:, :, 0, 1] = dr.ravel(duv)
+        hessian[:, :, 1, 0] = dr.ravel(duv)
+        hessian[:, :, 1, 1] = dr.ravel(dvv)
+
+        return hessian
 
     def evaluate_normals(self, parametric_coords: "mi.TensorXf") -> "mi.TensorXf":
         """
@@ -310,7 +423,7 @@ class BSplinePatch(SplinePatch):
         du, dv = self.evaluate_first_derivatives(parametric_coords=parametric_coords)
         n_points = du.shape[0]
 
-        normals = dr.zeros(dtype=mi.TensorXf, shape=(n_points, 3))
+        normals = dr.empty(dtype=mi.TensorXf, shape=(n_points, 3))
         normals[:, 0] = dr.ravel(du[:, 1] * dv[:, 2] - du[:, 2] * dv[:, 1])
         normals[:, 1] = dr.ravel(du[:, 2] * dv[:, 0] - du[:, 0] * dv[:, 2])
         normals[:, 2] = dr.ravel(du[:, 0] * dv[:, 1] - du[:, 1] * dv[:, 0])
@@ -551,14 +664,14 @@ class BSplinePatch(SplinePatch):
             name=patch_name,
             u_spline=u_spline,
             v_spline=v_spline,
-            control_points=mi.TensorXf(control_points_np)
+            control_points=mi.TensorXf(control_points_np),
         )
 
         for i in range(u_subdivisions - 1):
-            patch.insert_knot_u(knot_position = (i + 1) / u_subdivisions)
+            patch.insert_knot_u(knot_position=(i + 1) / u_subdivisions)
 
         for j in range(v_subdivisions - 1):
-            patch.insert_knot_v(knot_position = (j + 1) / v_subdivisions)
+            patch.insert_knot_v(knot_position=(j + 1) / v_subdivisions)
 
         return patch
 

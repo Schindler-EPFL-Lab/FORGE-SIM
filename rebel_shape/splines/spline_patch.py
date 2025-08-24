@@ -8,9 +8,10 @@ from rebel_shape.meshing.patch import Patch
 from rebel_shape.meshing.rectangular_mesh import RectangularMesh
 from rebel_shape.plugin_wrappers.diffuse_bsdf import DiffuseBSDF
 from rebel_shape.splines.coordinate_spline import CoordinateSpline
+from rebel_shape.splines.manifold import Manifold
 
 
-class SplinePatch(CoordinateSpline, Patch, abc.ABC):
+class SplinePatch(CoordinateSpline, Patch, Manifold, abc.ABC):
     """
     Abstract base class for spline patches in 3D space.
 
@@ -22,6 +23,9 @@ class SplinePatch(CoordinateSpline, Patch, abc.ABC):
     It also inherits from `Patch`, allowing it to be used in composite spline
     surfaces and other mesh structures.
     """
+
+    def evaluate_positions(self, parametric_coords: "mi.TensorXf") -> "mi.TensorXf":
+        return self.evaluate_coordinates(parametric_coords)
 
     @property
     @abc.abstractmethod
@@ -37,117 +41,6 @@ class SplinePatch(CoordinateSpline, Patch, abc.ABC):
             "Classes inheriting from `SplinePatch` need to implement the "
             + "`control_points_grid` property."
         )
-
-    @abc.abstractmethod
-    def evaluate_normals(self, parametric_coords: "mi.TensorXf") -> "mi.TensorXf":
-        """
-        Evaluate the normals of the spline patch at the given parametric coordinates.
-
-        A 2D tensor of shape (n_points, 2) representing the parametric coordinates
-        at which the normals are evaluated.
-
-        :returns: A tensor of shape (n_points, 3) representing the normal vectors
-                  at the specified parametric coordinates.
-        :raises NotImplementedError: If a child class does not implement this property.
-        """
-        raise NotImplementedError(
-            "Classes inheriting from `SplinePatch` need to implement the "
-            + "`evaluate_normals` method."
-        )
-
-    @abc.abstractmethod
-    def evaluate_jacobian(self, parametric_coords: "mi.TensorXf") -> "mi.TensorXf":
-        """
-        Evaluate the Jacobian of the spline patch at the given `parametric_coords`.
-
-        The Jacobian is a tensor that describes how the surface changes with respect
-        to the parametric coordinates. It is useful for computing derivatives and
-        understanding the local geometry of the surface.
-
-        :returns: A tensor of shape (n_points, 3, 2) representing the Jacobian at
-                  the specified parametric coordinates.
-        """
-        raise NotImplementedError(
-            "Classes inheriting from `SplinePatch` need to implement the "
-            + "`evaluate_jacobian` method."
-        )
-
-    @staticmethod
-    def metric_tensor(jacobian: "mi.TensorXf") -> "mi.TensorXf":
-        """
-        Compute the metric tensor from the `jacobian`.
-
-        The Jacobian is a tensor of shape (n_jacobians, 3, 2) where each slice
-        represents the partial derivatives of the surface with respect to the
-        parametric coordinates (u, v). It was evaluated at the given parametric
-        coordinates.
-
-        The metric tensor is derived from the Jacobian as J^T @ J and is used to
-        compute lengths, angles, and areas on the surface. From the definition, it
-        follows that it is a symmetric 2x2 matrix for each point on the patch.
-
-        :returns: A tensor of shape (n_jacobians, 2, 2) representing the metric tensor
-            from the provided `jacobian` tensor.
-
-        :raises ValueError: If the shape of `jacobian` is not (n_jacobians, 3, 2).
-        """
-        if len(jacobian.shape) != 3 or jacobian.shape[1] != 3 or jacobian.shape[2] != 2:
-            raise ValueError(
-                "Jacobian must be a 3D tensor of shape (n_jacobians, 3, 2)."
-            )
-
-        metric = dr.empty(dtype=mi.TensorXf, shape=(jacobian.shape[0], 2, 2))
-
-        metric[:, 0, 0] = dr.ravel(dr.sum(jacobian[:, :, 0] ** 2, axis=1))
-        metric[:, 1, 1] = dr.ravel(dr.sum(jacobian[:, :, 1] ** 2, axis=1))
-
-        metric[:, 0, 1] = dr.ravel(
-            dr.sum(jacobian[:, :, 0] * jacobian[:, :, 1], axis=1)
-        )
-        metric[:, 1, 0] = dr.ravel(metric[:, 0, 1])
-
-        return metric
-
-    @staticmethod
-    def inv_metric_tensor(metric: "mi.TensorXf") -> tuple["mi.TensorXf", "mi.TensorXf"]:
-        """
-        Compute the inverse of the metric tensor.
-
-        The `metric` tensor is a 2D tensor of shape (n_points, 2, 2), expected to be
-        computed by the `metric_tensor` method. It represents the local geometry of the
-        spline patch at the given parametric coordinates.
-
-        This method computes the inverse of the metric tensor and returns it along with
-        its determinant as it is a useful intermediate result. The inverse is computed
-        using the formula for the inverse of a 2x2 matrix, noting that the 2x2
-        metric tensor is symmetric.
-
-        :returns: A tuple of two Mitsuba tensors:
-
-            - `inv_metric`: A tensor of shape (n_points, 2, 2) representing
-                the inverse of the metric tensor.
-            - `det_metric`: A tensor of shape (n_points,) representing the
-                determinant of the metric tensor at each point. This is a useful
-                intermediate value that is necessary for computing the inverse.
-
-        :raises ValueError: If the shape of `metric` is not (n_points, 2, 2).
-        """
-        if len(metric.shape) != 3 or metric.shape[1] != 2 or metric.shape[2] != 2:
-            raise ValueError(
-                "Metric tensor must be a 3D tensor of shape (n_points, 2, 2)."
-            )
-
-        det_metric = (
-            metric[:, 0, 0] * metric[:, 1, 1] - metric[:, 0, 1] * metric[:, 1, 0]
-        )
-        inv_metric = dr.empty(dtype=mi.TensorXf, shape=metric.shape)
-
-        inv_metric[:, 0, 0] = dr.ravel(metric[:, 1, 1] / det_metric)
-        inv_metric[:, 1, 1] = dr.ravel(metric[:, 0, 0] / det_metric)
-        inv_metric[:, 0, 1] = dr.ravel(-metric[:, 0, 1] / det_metric)
-        inv_metric[:, 1, 0] = dr.ravel(-metric[:, 1, 0] / det_metric)
-
-        return inv_metric, det_metric
 
     @property
     @abc.abstractmethod

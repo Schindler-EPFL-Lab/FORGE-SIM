@@ -1,3 +1,5 @@
+from collections.abc import Iterator
+
 import drjit as dr
 import mitsuba as mi
 
@@ -13,8 +15,8 @@ class ParametricSpanData:
 
     def __init__(
         self,
-        parametric_coords: "mi.ArrayXf",
-        knot_spans: "mi.ArrayXu",
+        parametric_coords: "mi.TensorXf",
+        knot_spans: "mi.UInt",
         num_basis_functions: int,
         spline_degree: int,
     ) -> None:
@@ -53,7 +55,7 @@ class ParametricSpanData:
         self._num_control_points = num_basis_functions
         self._degree = spline_degree
 
-    def global_basis_function_index(self, local_index: int = 0) -> "mi.ArrayXu":
+    def global_basis_function_index(self, local_index: int = 0) -> "mi.Uint":
         """
         Returns the index of the basis function with index `shift` in the
         appropriate knot span.
@@ -80,7 +82,7 @@ class ParametricSpanData:
                 f"There are {self._degree + 1} active basis functions in a knot span."
                 f"`local_index` must be in interval [0, {self._degree}]."
             )
-        knot_spans_int = dr.ravel(mi.TensorXi(self._knot_spans))
+        knot_spans_int = mi.Int(self._knot_spans)
 
         wrapped_spans = dr.select(
             knot_spans_int - self._degree + local_index >= 0,
@@ -88,7 +90,7 @@ class ParametricSpanData:
             knot_spans_int + self._num_control_points - self._degree + local_index,
         )
 
-        return dr.ravel(mi.TensorXu(wrapped_spans))
+        return mi.UInt(wrapped_spans)
 
     @property
     def parametric_coords(self) -> "mi.TensorXf":
@@ -97,3 +99,20 @@ class ParametricSpanData:
     @property
     def knot_spans(self) -> "mi.ArrayXu":
         return self._knot_spans
+
+    @property
+    def basis_function_indices(self) -> Iterator["mi.UInt"]:
+        """
+        An iterator that yields the global basis function indices for each active
+        basis function in the knot span.
+
+        Each B-spline has `degree + 1` active basis functions in a knot span. This
+        iterator yields the global indices of these basis functions, which are
+        equivalent to the control point indices that influence the parametric
+        coordinates.
+
+        :yields: A 1D array (ravelled) of indices that designate the index of the
+            spline basis function / control point index for each active basis function.
+        """
+        for local_index in range(self._degree + 1):
+            yield self.global_basis_function_index(local_index)

@@ -5,7 +5,7 @@ import mitsuba as mi
 
 
 class InterpolatingSpline(abc.ABC):
-    """
+    r"""
     Basic interface that is implemented by all interpolating splines and reflects their
     fundamental property - interpolation.
 
@@ -21,14 +21,16 @@ class InterpolatingSpline(abc.ABC):
     basis functions, at the specified parametric coordinates u.
 
     The general interpolating spline equation can thus be written as follows:
-        I_{d}(u) = sum(i = 0 to n_basis) B_{i}(u) * V_{i,d}
+    ```math
+        I_{d}(u) = \sum_{i = 0}^{\text{n_basis}} B_{i}(u) V_{i,d}
+    ```
     where:
         - V is a tensor of shape (n_basis, n_dimensions) representing the values
         - n_basis is the number of basis functions
         - n_dimensions is the number of dimensions of the values
         - d is an index representing the specific dimension of the values (e.g. x, y, z)
-        - B_{i}(u) is the i-th basis function evaluated at u
-        - I_d(u) is the d-th component of the interpolated values at
+        - $B_{i}(u)$ is the i-th basis function evaluated at u
+        - $I_d(u)$ is the d-th component of the interpolated values at
           the parametric coordinate u
 
     Thus, the interface requires implementing the `interpolate` method, which performs
@@ -50,7 +52,7 @@ class InterpolatingSpline(abc.ABC):
     def interpolate(
         self, values: "mi.TensorXf", parametric_coords: "mi.TensorXf"
     ) -> "mi.TensorXf":
-        """
+        r"""
         Interpolates the provided `values` at the specified `parametric_coords`.
 
         The `values` is a tensor of shape (n_basis_functions, n_dimensions),
@@ -63,11 +65,13 @@ class InterpolatingSpline(abc.ABC):
         surfaces have 2, etc.
 
         All implementations should in general be expressed as:
-            I_d(u) = sum_{i=0 to n_basis} B_i(u) * V_{i, d}
+        ```math
+            I_{d}(u) = \sum_{i = 0}^{\text{n_basis}} B_{i}(u) V_{i,d}
+        ```
         where:
-            - V{i, d} is the value at the i-th basis function and d-th dimension
-            - B_{i}(u) is the i-th basis function evaluated at u
-            - I_d(u) is the d-th component of the interpolated values at coordinate u
+            - $V{i, d}$ is the value at the i-th basis function and d-th dimension
+            - $B_{i}(u)$ is the i-th basis function evaluated at u
+            - $I_d(u)$ is the d-th component of the interpolated values at coordinate u
 
         Typically, only a small subset of basis functions are non-zero at a given
         point in parametric space so the cost of evaluating the spline is proportional
@@ -159,6 +163,41 @@ class InterpolatingSpline(abc.ABC):
         raise NotImplementedError(
             "Classes that inherit from `InterpolatingSpline` need to implement the "
             "`evaluate_basis_functions` method."
+        )
+
+    @abc.abstractmethod
+    def evaluate_basis_functions_second_derivative(
+        self, parametric_coords: "mi.TensorXf"
+    ) -> "mi.TensorXf":
+        """
+        Evaluates the second derivative of the basis functions derivative at the
+        specified `parametric_coords`.
+
+        Like `evaluate_basis_functions`, this method is used to compute the values of
+        basis function second derivatives at specific points in parametric space.
+        These can then be used to compute the second derivatives of the interpolated
+        values.
+
+        Additionally, this method is used can be used to assemble the local stiffness
+        matrices for isogeometric analysis problems with biharmonic terms,
+        where the second basis function derivatives are evaluated at specific points in
+        parametric space to compute the local contributions to the global stiffness
+        matrix.
+
+        :returns: A Mitsuba tensor of shape
+            (n_points, n_basis_functions, n_directions, n_directions)
+            representing the derivatives of the basis functions at the specified
+            `parametric_coords` with respect to all parametric directions.
+
+        :raises ValueError: If the shape of `parametric_coords` does not match the
+            expected number of parametric dimensions or if the values are out of bounds
+            of the parametric space defined by the spline.
+
+        :raises NotImplementedError: If a child class does not implement this method.
+        """
+        raise NotImplementedError(
+            "Classes that inherit from `InterpolatingSpline` need to implement the "
+            + "`evaluate_basis_functions` method."
         )
 
     @abc.abstractmethod

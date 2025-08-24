@@ -29,6 +29,10 @@ class TrainingParametersAzure:
     """Version of the environment"""
     compute: str = "rebel-nerf-t4-ssh"
     """Compute target"""
+    description: str = (
+        "Spline optimization of diffuse "
+        "ThermoScenes mesh spline and manual initialization"
+    )
 
     @property
     def environment(self) -> str:
@@ -86,6 +90,7 @@ def main() -> None:
         experiment_name=model_type + "-" + parameters.experiment_name,
         display_name=job_name,
         name=job_name,
+        description=parameters.description,
     )
 
     job = ml_client.create_or_update(job)

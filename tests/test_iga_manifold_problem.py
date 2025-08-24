@@ -319,6 +319,40 @@ class TestIGAManifoldProblem(unittest.TestCase):
                     weights.numpy(), expected_weights.numpy()
                 )
 
+    def test_full_gl_coords_and_weights(self):
+        knot_span_handler = IGAManifoldProblem.KnotSpanHandler(
+            patch=self.patch_1, integration_order=2
+        )
+        gl_positions = (-1.0 / np.sqrt(3.0), 1.0 / np.sqrt(3.0))
+
+        coords_and_weights = knot_span_handler.gl_coords_and_weights()
+        expected_intervals = [
+            [
+                [0.5 + 0.5 * gl_positions[j], 0.25 + 0.25 * gl_positions[i]],
+                [0.5 + 0.5 * gl_positions[j], 0.75 + 0.25 * gl_positions[i]]
+            ]
+            for i in range(2) for j in range(2)
+        ]
+        expected_weights = [0.5 * 0.25, 0.5 * 0.25] * 4
+
+        # Concatenate intervals and weights from coords_and_weights
+        actual_intervals: list[np.ndarray] = []
+        actual_weights: list[np.ndarray] = []
+
+        for pair in coords_and_weights:
+            actual_intervals.append(pair[0].numpy())
+            actual_weights.extend(pair[1].numpy())
+
+        # Check concatenated intervals
+        np.testing.assert_array_almost_equal(
+            np.array(actual_intervals), np.array(expected_intervals)
+        )
+
+        # Check concatenated weights
+        np.testing.assert_array_almost_equal(
+            np.array(actual_weights), np.array(expected_weights)
+        )
+
     def test_transform_basis_derivative_identity_metric(self):
         """Test basis function derivative transformation."""
         num_knot_spans = 3

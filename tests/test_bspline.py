@@ -1,5 +1,6 @@
 import unittest
 
+import drjit as dr
 import mitsuba as mi
 import numpy as np
 
@@ -43,6 +44,13 @@ class TestBSpline(unittest.TestCase):
         values. This is used to ensure that the tests cover a range of parametric
         coordinates. Should not be too large to avoid long test execution times.
         """
+
+        cls.autodiff_test_cases = [
+            (1, [0.0, 0.0, 0.24, 0.49, 0.74, 1.0, 1.0]),
+            (2, [0.0, 0.0, 0.0, 0.26, 0.51, 0.76, 1.0, 1.0, 1.0]),
+            (3, [0.0, 0.0, 0.0, 0.0, 0.21, 0.47, 0.79, 1.0, 1.0, 1.0, 1.0]),
+            (3, [0.0, 0.21, 0.47, 0.79, 1.0]),
+        ]
 
     def test_basic_properties(self):
         """Tests whether the basic initialization of the three splines is correct."""
@@ -168,6 +176,24 @@ class TestBSpline(unittest.TestCase):
         np.testing.assert_array_equal(index_0, np.array([0, 1, 2, 3, 5, 5]))
         np.testing.assert_array_equal(index_1, np.array([1, 2, 3, 4, 6, 6]))
         np.testing.assert_array_equal(index_2, np.array([2, 3, 4, 5, 7, 7]))
+
+    def test_basic_function_indices(self):
+        """Tests the function basis_function_indices of ParametricSpanData class"""
+
+        parametric_coords = mi.TensorXf([0.0, 1.0, 2.0, 3.0, 4.0, 5.0])
+
+        span_data = self.spline_1.compute_span_data(
+            parametric_coords=parametric_coords,
+        )
+
+        result_arrays = [
+            np.array([0, 1, 2, 3, 5, 5]),
+            np.array([1, 2, 3, 4, 6, 6]),
+            np.array([2, 3, 4, 5, 7, 7]),
+        ]
+
+        for i, index in zip(range(3), span_data.basis_function_indices):
+            np.testing.assert_array_equal(index, result_arrays[i])
 
     def test_parametric_span_data_periodic(self):
         """Tests the ParametricSpanData class."""
@@ -393,43 +419,56 @@ class TestBSpline(unittest.TestCase):
             decimal=6,
         )
 
-    def test_basis_function_first_derivative_finite_difference(self):
+    def test_basis_function_first_derivative_autodiff(self):
         """
         Tests the evaluation of the basis function derivatives using finite differences.
         """
-
-        test_cases = [
-            (1, [0.0, 0.0, 0.24, 0.49, 0.74, 1.0, 1.0]),
-            (2, [0.0, 0.0, 0.0, 0.26, 0.51, 0.76, 1.0, 1.0, 1.0]),
-            (3, [0.0, 0.0, 0.0, 0.0, 0.21, 0.47, 0.79, 1.0, 1.0, 1.0, 1.0]),
-            (3, [0.0, 0.21, 0.47, 0.79, 1.0]),
-        ]
-
-        for i, (degree, knots) in enumerate(test_cases):
+        for i, (degree, knots) in enumerate(self.autodiff_test_cases):
             with self.subTest(i=i):
                 spline = BSpline(knot_vector=knots, degree=degree)
 
-                n_points = self.evaluation_samples
-                h = 1.0e-3
+                params = dr.linspace(mi.TensorXf, 0.0, 1.0, self.evaluation_samples)
+                params = dr.reshape(mi.TensorXf, params, (-1, 1))
 
-                sample_pts = mi.TensorXf(np.arange(1, n_points) / n_points)
-                sample_pts_low = mi.TensorXf(sample_pts - 0.5 * h)
-                sample_pts_high = mi.TensorXf(sample_pts + 0.5 * h)
+                dr.enable_grad(params)
+                evaluation = spline.evaluate_basis_functions(parametric_coords=params)
 
-                eval_low = spline.evaluate_basis_functions(
-                    parametric_coords=sample_pts_low[:, None]
-                )
-                eval_high = spline.evaluate_basis_functions(
-                    parametric_coords=sample_pts_high[:, None]
-                )
+                dr.forward(params)
+                derivative_ad = mi.TensorXf(evaluation.grad)
 
                 derivative = spline.evaluate_basis_functions_first_derivative(
-                    parametric_coords=sample_pts[:, None]
+                    parametric_coords=params
                 )
-                finite_diff = (eval_high - eval_low) / h
 
                 np.testing.assert_array_almost_equal(
-                    derivative.numpy(), finite_diff.numpy(), decimal=3
+                    derivative[:, :, 0].numpy(), derivative_ad.numpy(), decimal=5
+                )
+
+    def test_basis_function_second_derivative_autodiff(self):
+        """
+        Tests the evaluation of the basis function derivatives using finite differences.
+        """
+        for i, (degree, knots) in enumerate(self.autodiff_test_cases[2:]):
+            with self.subTest(i=i):
+                spline = BSpline(knot_vector=knots, degree=degree)
+
+                params = dr.linspace(mi.TensorXf, 0.0, 1.0, self.evaluation_samples)
+                params = dr.reshape(mi.TensorXf, params, (-1, 1))
+
+                dr.enable_grad(params)
+                evaluation = spline.evaluate_basis_functions_first_derivative(
+                    parametric_coords=params
+                )
+
+                dr.forward(params)
+                derivative_ad = mi.TensorXf(evaluation.grad)
+
+                derivative = spline.evaluate_basis_functions_second_derivative(
+                    parametric_coords=params
+                )
+
+                np.testing.assert_array_almost_equal(
+                    derivative[:, :, :, 0].numpy(), derivative_ad.numpy(), decimal=4
                 )
 
     def test_active_basis_function_indices(self):

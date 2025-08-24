@@ -30,12 +30,39 @@ class TestBivariateBSpline(unittest.TestCase):
         cls.v_spline = BSpline(cls.knots_v, degree=2)
         cls.bivariate_bspline = BivariateBSpline(cls.u_spline, cls.v_spline)
 
-        cls.evaluation_samples_per_direction = 13
+        cls.samples_per_dir = 19
         """
         Number of samples per each direction when evaluating the surface.
         Should be kept small to avoid long test times, but large enough
         to ensure that the surface is well sampled.
         """
+
+        cls.autodiff_test_cases_dicts = [
+            {
+                "u_knots": [0.0, 0.0, 0.49, 1.0, 1.0],
+                "v_knots": [0.0, 0.0, 0.51, 1.0, 1.0],
+                "u_degree": 1,
+                "v_degree": 1,
+            },
+            {
+                "u_knots": [0.0, 0.0, 0.0, 0.55, 1.0, 1.0, 1.0],
+                "v_knots": [0.0, 0.0, 0.47, 1.0, 1.0],
+                "u_degree": 2,
+                "v_degree": 1,
+            },
+            {
+                "u_knots": [0.0, 0.0, 0.0, 1.0, 1.0, 1.0],
+                "v_knots": [0.0, 0.0, 0.0, 1.0, 1.0, 1.0],
+                "u_degree": 2,
+                "v_degree": 2,
+            },
+            {
+                "u_knots": [0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0],
+                "v_knots": [0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0],
+                "u_degree": 3,
+                "v_degree": 3,
+            },
+        ]
 
     def test_num_basis_functions(self):
         """Test property for number of basis functions"""
@@ -142,29 +169,8 @@ class TestBivariateBSpline(unittest.TestCase):
 
         self.assertFalse(closed_bivariate_bspline.has_open_knot_vectors)
 
-    def test_first_derivative_finite_difference(self):
-        test_cases = [
-            {
-                "u_knots": [0.0, 0.0, 0.49, 1.0, 1.0],
-                "v_knots": [0.0, 0.0, 0.51, 1.0, 1.0],
-                "u_degree": 1,
-                "v_degree": 1,
-            },
-            {
-                "u_knots": [0.0, 0.0, 0.0, 0.55, 1.0, 1.0, 1.0],
-                "v_knots": [0.0, 0.0, 0.47, 1.0, 1.0],
-                "u_degree": 2,
-                "v_degree": 1,
-            },
-            {
-                "u_knots": [0.0, 0.0, 0.0, 1.0, 1.0, 1.0],
-                "v_knots": [0.0, 0.0, 0.0, 1.0, 1.0, 1.0],
-                "u_degree": 2,
-                "v_degree": 2,
-            },
-        ]
-
-        for i, case in enumerate(test_cases):
+    def test_first_derivative_autodiff(self):
+        for i, case in enumerate(self.autodiff_test_cases_dicts):
             with self.subTest(i=i):
                 u_spline = BSpline(knot_vector=case["u_knots"], degree=case["u_degree"])
                 v_spline = BSpline(knot_vector=case["v_knots"], degree=case["v_degree"])
@@ -173,43 +179,20 @@ class TestBivariateBSpline(unittest.TestCase):
                     v_spline=v_spline,
                 )
 
-                n_points = self.evaluation_samples_per_direction
-                h = 1.0e-3
-
                 # Create a grid of parametric coordinates
-                u_vals = np.linspace(0.1, 0.9, n_points)
-                v_vals = np.linspace(0.1, 0.9, n_points)
-                u_grid, v_grid = np.meshgrid(u_vals, v_vals)
-                params = np.column_stack((u_grid.flatten(), v_grid.flatten()))
+                u_vals = dr.linspace(mi.Float, 0.0, 1.0, self.samples_per_dir)
+                v_vals = dr.linspace(mi.Float, 0.0, 1.0, self.samples_per_dir)
+                u_grid, v_grid = dr.meshgrid(u_vals, v_vals, indexing="xy")
 
-                # Create offset parametric coordinates for finite difference
-                params_u_low = params.copy()
-                params_u_high = params.copy()
-                params_v_low = params.copy()
-                params_v_high = params.copy()
+                params = dr.empty(dtype=mi.TensorXf, shape=(self.samples_per_dir**2, 2))
+                params[:, 0] = u_grid
+                params[:, 1] = v_grid
 
-                params_u_low[:, 0] -= 0.5 * h
-                params_u_high[:, 0] += 0.5 * h
-                params_v_low[:, 1] -= 0.5 * h
-                params_v_high[:, 1] += 0.5 * h
+                dr.enable_grad(params)
+                values = surface.evaluate_basis_functions(parametric_coords=params)
 
-                # Evaluate surface at offset coordinates
-                eval_u_low = surface.evaluate_basis_functions(
-                    parametric_coords=mi.TensorXf(params_u_low)
-                )
-                eval_u_high = surface.evaluate_basis_functions(
-                    parametric_coords=mi.TensorXf(params_u_high)
-                )
-                eval_v_low = surface.evaluate_basis_functions(
-                    parametric_coords=mi.TensorXf(params_v_low)
-                )
-                eval_v_high = surface.evaluate_basis_functions(
-                    parametric_coords=mi.TensorXf(params_v_high)
-                )
-
-                # Calculate finite differences
-                u_finite_diff = (eval_u_high - eval_u_low) / h
-                v_finite_diff = (eval_v_high - eval_v_low) / h
+                dr.forward(params)
+                derivative_ad_u_plus_v = mi.TensorXf(values.grad)
 
                 # Calculate analytical derivatives
                 first_derivative = surface.evaluate_basis_functions_first_derivative(
@@ -218,10 +201,57 @@ class TestBivariateBSpline(unittest.TestCase):
 
                 # Compare analytical derivatives with finite differences
                 np.testing.assert_array_almost_equal(
-                    first_derivative[:, :, 0].numpy(), u_finite_diff.numpy(), decimal=3
+                    (first_derivative[:, :, 0] + first_derivative[:, :, 1]).numpy(),
+                    derivative_ad_u_plus_v.numpy(),
+                    decimal=5,
+                )
+
+    def test_second_derivative_autodiff(self):
+        for i, case in enumerate(self.autodiff_test_cases_dicts[2:]):
+            with self.subTest(i=i):
+                u_spline = BSpline(knot_vector=case["u_knots"], degree=case["u_degree"])
+                v_spline = BSpline(knot_vector=case["v_knots"], degree=case["v_degree"])
+                surface = BivariateBSpline(
+                    u_spline=u_spline,
+                    v_spline=v_spline,
+                )
+
+                # Create a grid of parametric coordinates
+                u_vals = dr.linspace(mi.Float, 0.0, 1.0, self.samples_per_dir)
+                v_vals = dr.linspace(mi.Float, 0.0, 1.0, self.samples_per_dir)
+                u_grid, v_grid = dr.meshgrid(u_vals, v_vals, indexing="xy")
+
+                params = dr.empty(dtype=mi.TensorXf, shape=(self.samples_per_dir**2, 2))
+                params[:, 0] = u_grid
+                params[:, 1] = v_grid
+
+                dr.enable_grad(params)
+                values = surface.evaluate_basis_functions_first_derivative(
+                    parametric_coords=params
+                )
+
+                dr.forward(params)
+                second_derivative_ad = mi.TensorXf(values.grad)
+
+                # Calculate analytical derivatives
+                first_derivative = surface.evaluate_basis_functions_second_derivative(
+                    parametric_coords=mi.TensorXf(params)
+                )
+
+                # Compare analytical derivatives with automatic differentiation
+                np.testing.assert_array_almost_equal(
+                    (
+                        first_derivative[:, :, 0, 0] + first_derivative[:, :, 0, 1]
+                    ).numpy(),
+                    second_derivative_ad[:, :, 0].numpy(),
+                    decimal=5,
                 )
                 np.testing.assert_array_almost_equal(
-                    first_derivative[:, :, 1], v_finite_diff.numpy(), decimal=3
+                    (
+                        first_derivative[:, :, 1, 0] + first_derivative[:, :, 1, 1]
+                    ).numpy(),
+                    second_derivative_ad[:, :, 1].numpy(),
+                    decimal=5,
                 )
 
     def test_active_basis_function_indices(self):
@@ -257,7 +287,7 @@ class TestBivariateBSpline(unittest.TestCase):
         projected_values = spline.project_function(
             func=lambda coords: (coords[:, 0] + coords[:, 1])[:, None]
         )
-        samples = self.evaluation_samples_per_direction
+        samples = self.samples_per_dir
 
         u = np.linspace(spline.u_spline.knots[0], spline.u_spline.knots[-1], samples)
         v = np.linspace(spline.v_spline.knots[0], spline.v_spline.knots[-1], samples)
@@ -320,7 +350,7 @@ class TestBivariateBSpline(unittest.TestCase):
         surface.h_refinement(factor=12, values_list=[])
 
         projected_values = surface.project_function(func=sine_function)
-        samples = self.evaluation_samples_per_direction
+        samples = self.samples_per_dir
 
         u = np.linspace(surface.u_spline.knots[0], surface.u_spline.knots[-1], samples)
         v = np.linspace(surface.v_spline.knots[0], surface.v_spline.knots[-1], samples)
