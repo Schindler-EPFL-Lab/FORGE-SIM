@@ -109,6 +109,7 @@ class ThermoScenesLoader:
         applied_transform = np.eye(4)
         if "applied_transform" in transform_data:
             applied_transform[:3, :] = np.array(transform_data["applied_transform"])
+        applied_transform_inv = np.linalg.inv(applied_transform)
 
         # Supported image extensions
         image_extensions = (".JPG", ".jpg", ".JPEG", ".jpeg", ".PNG", ".png")
@@ -185,8 +186,9 @@ class ThermoScenesLoader:
 
             # Nerfstudio exported transform_matrix
             pose_matrix = np.array(frame["transform_matrix"])
-            # Inverse of the applied transform is the transform itself
-            pose_matrix = applied_transform @ pose_matrix
+            # Apply the inverse of applied_transform to convert poses
+            # to the COLMAP global frame
+            pose_matrix = applied_transform_inv @ pose_matrix
 
             # Going from Nerfstudio to Mitsuba requires flipping the sign of x and z
             pose_matrix = mi.ScalarTransform4f(pose_matrix)
