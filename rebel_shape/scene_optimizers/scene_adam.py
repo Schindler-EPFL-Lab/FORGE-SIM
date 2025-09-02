@@ -115,4 +115,4 @@ class SceneAdam(SceneOptimizer, abc.ABC):
             `mi.Float` or `mi.TensorXf` objects representing the current state of
             the parameters.
         """
-        return self._adam.variables
+        return dict(self._adam)

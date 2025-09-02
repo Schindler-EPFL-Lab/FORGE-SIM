@@ -4,11 +4,11 @@ Verifies the correctness of the `MeshTextureOptimizer` class.
 """
 
 import sys
-import tempfile
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
 
+import drjit as dr
 import mitsuba as mi
 import mlflow
 import tyro
@@ -26,9 +26,6 @@ from rebel_shape.data_processing.masked_pose_image import MaskedPoseImage
 from rebel_shape.plugin_wrappers.diffuse_bsdf import DiffuseBSDF
 from rebel_shape.plugin_wrappers.prb_integrator import GuidingOptions, PRBIntegrator
 from rebel_shape.plugin_wrappers.sampler import Sampler
-from rebel_shape.property_optimizers.bitmap_texture_optimizer import (
-    BitmapTextureOptimizer,
-)
 from rebel_shape.property_optimizers.mesh_texture_optimizer import MeshTextureOptimizer
 from rebel_shape.scene_optimizers.composite_scene_optimizer import (
     CompositeSceneOptimizer,
@@ -207,21 +204,17 @@ def initialize_scene(
     )
 
     # Set the initial texture of the object - solid grey
-    # The texture only needs to exist until mi.load_dict is called
-    with tempfile.TemporaryDirectory() as temp_dir:
-        initial_texture_path = Path(temp_dir) / "initial_texture.exr"
-        BitmapTextureOptimizer.generate_empty_texture(
-            base_color=mi.Color3f(0.5, 0.5, 0.5),
-            texture_output_path=initial_texture_path,
-            width=texture_resolution,
-            height=texture_resolution,
+    scene_dict["shape"]["bsdf"] = DiffuseBSDF(
+        DiffuseBSDF.TextureFromTensor(
+            tensor=dr.full(
+                dtype=mi.TensorXf,
+                value=0.5,
+                shape=(texture_resolution, texture_resolution, 3),
+            )
         )
+    ).mitsuba_dict
 
-        scene_dict["shape"]["bsdf"] = DiffuseBSDF(
-            reflectance=DiffuseBSDF.Texture(texture_path=initial_texture_path)
-        ).mitsuba_dict
-
-        scene_source: "mi.Scene" = mi.load_dict(scene_dict)
+    scene_source: "mi.Scene" = mi.load_dict(scene_dict)
 
     return scene_source, ref_images
 

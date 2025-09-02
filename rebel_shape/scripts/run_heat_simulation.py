@@ -176,16 +176,16 @@ def initialize_scene(
     scene_dict = {"type": "scene", "integrator": {"type": "path"}}
 
     with tempfile.TemporaryDirectory() as temp_dir:
-        initial_texture_path = Path(temp_dir) / "initial_texture.exr"
-
-        FieldTextureOptimizer.generate_empty_texture(
-            base_color=mi.Color3f(0.5, 0.5, 0.5),
-            texture_output_path=initial_texture_path,
-            width=texture_resolution,
-            height=texture_resolution,
-        )
-
         for mesh in tessellated_spline_surface:
+            initial_texture_path = Path(temp_dir) / f"initial_texture_{mesh.name}.exr"
+
+            FieldTextureOptimizer.generate_empty_texture(
+                base_color=mi.Color3f(0.5, 0.5, 0.5),
+                texture_output_path=initial_texture_path,
+                width=texture_resolution,
+                height=texture_resolution,
+            )
+
             mesh.save_to_ply(output_dir=Path(temp_dir), save_name=mesh.name)
 
             scene_dict[mesh.name] = {

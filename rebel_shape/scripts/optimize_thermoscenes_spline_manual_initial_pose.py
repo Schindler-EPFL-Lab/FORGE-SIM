@@ -4,10 +4,10 @@ Performs shape, and texture optimizationm the initial pose is determined manuall
 """
 
 import sys
-import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
 
+import drjit as dr
 import mitsuba as mi
 import mlflow
 import tyro
@@ -31,9 +31,6 @@ from rebel_shape.meshing.tessellated_spline_surface import TessellatedSplineSurf
 from rebel_shape.plugin_wrappers.diffuse_bsdf import DiffuseBSDF
 from rebel_shape.plugin_wrappers.prb_integrator import GuidingOptions, PRBIntegrator
 from rebel_shape.plugin_wrappers.sampler import Sampler
-from rebel_shape.property_optimizers.bitmap_texture_optimizer import (
-    BitmapTextureOptimizer,
-)
 from rebel_shape.property_optimizers.spline_texture_optimizer import (
     SplineTextureOptimizer,
 )
@@ -218,54 +215,51 @@ def initialize_scene(
         sampler=sampler,
     )
 
-    # The texture only needs to exist until mi.load_dict is called
-    with tempfile.TemporaryDirectory() as temp_dir:
-        initial_texture_path = Path(temp_dir) / "initial_texture.exr"
-        BitmapTextureOptimizer.generate_empty_texture(
-            base_color=mi.Color3f(0.5, 0.5, 0.5),
-            texture_output_path=initial_texture_path,
-            width=texture_resolution,
-            height=texture_resolution,
-        )
+    # Set the initial shape of the object - ico-sphere
+    cubedsphere = cubed_sphere(
+        name="shape",
+        degree=spline_degree,
+        spline_subdivisions=spline_subdivisions,
+        tessellation_subdivisions=mesh_subdivisions,
+        bsdf=DiffuseBSDF(
+            DiffuseBSDF.TextureFromTensor(
+                tensor=dr.full(
+                    dtype=mi.TensorXf,
+                    value=0.5,
+                    shape=(texture_resolution, texture_resolution, 3),
+                )
+            )
+        ),
+        radius=1.0,
+    )
 
-        # Set the initial shape of the object - ico-sphere
-        cubedsphere = cubed_sphere(
-            name="shape",
-            degree=spline_degree,
-            spline_subdivisions=spline_subdivisions,
-            tessellation_subdivisions=mesh_subdivisions,
-            bsdf=DiffuseBSDF(DiffuseBSDF.Texture(texture_path=initial_texture_path)),
-            radius=1.0,
-        )
-
+    if bbox_transforms_path is not None:
         tf_bbox = load_bounding_bbox_transforms(bbox_transforms_path)
         tf_initial_pose = mi.Transform4f(tf_dataloader) @ tf_bbox
-        logger.debug("tf_initial_pose:", tf_initial_pose)
-        logger.debug("tf_dataloader:", tf_dataloader)
         cubedsphere.transform_global_control_points(tf_initial_pose)
 
-        environment = (
-            {"type": "envmap", "filename": str(envmap_path)}
-            if envmap_path is not None
-            else {
-                "type": "constant",
-                "radiance": {
-                    "type": "rgb",
-                    "value": 1.0,
-                },
-            }
-        )
-
-        scene_dict = {
-            "type": "scene",
-            "integrator": integrator.mitsuba_dict,
-            "emitter": environment,
+    environment = (
+        {"type": "envmap", "filename": str(envmap_path)}
+        if envmap_path is not None
+        else {
+            "type": "constant",
+            "radiance": {
+                "type": "rgb",
+                "value": 1.0,
+            },
         }
+    )
 
-        for mesh in reversed(cubedsphere):
-            scene_dict[mesh.name] = mesh.mitsuba_dict
+    scene_dict = {
+        "type": "scene",
+        "integrator": integrator.mitsuba_dict,
+        "emitter": environment,
+    }
 
-        scene_source: "mi.Scene" = mi.load_dict(scene_dict)
+    for mesh in reversed(cubedsphere):
+        scene_dict[mesh.name] = mesh.mitsuba_dict
+
+    scene_source: "mi.Scene" = mi.load_dict(scene_dict)
 
     return scene_source, ref_images, eval_images, cubedsphere
 

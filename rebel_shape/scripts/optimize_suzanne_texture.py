@@ -4,11 +4,11 @@ Verifies the implementation of the `BitmapTextureOptimizer` class.
 """
 
 import sys
-import tempfile
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
 
+import drjit as dr
 import mitsuba as mi
 import mlflow
 import tyro
@@ -173,21 +173,17 @@ def initialize_scene(
     logger.info(f"Rendered target images. Took {time.time() - start_time:.2f} seconds.")
 
     # Modify the fields that will be optimized
-    # The texture only needs to exist until mi.load_dict is called
-    with tempfile.TemporaryDirectory() as temp_dir:
-        initial_texture_path = Path(temp_dir) / "initial_texture.exr"
-        BitmapTextureOptimizer.generate_empty_texture(
-            base_color=mi.Color3f(0.5, 0.5, 0.5),
-            texture_output_path=initial_texture_path,
-            width=texture_resolution,
-            height=texture_resolution,
+    scene_dict["shape"]["bsdf"] = DiffuseBSDF(
+        DiffuseBSDF.TextureFromTensor(
+            tensor=dr.full(
+                dtype=mi.TensorXf,
+                value=0.5,
+                shape=(texture_resolution, texture_resolution, 3),
+            )
         )
+    )
 
-        scene_dict["shape"]["bsdf"] = DiffuseBSDF(
-            reflectance=DiffuseBSDF.Texture(texture_path=initial_texture_path)
-        ).mitsuba_dict
-
-        scene_source: "mi.Scene" = mi.load_dict(scene_dict)
+    scene_source: "mi.Scene" = mi.load_dict(scene_dict)
 
     return scene_source, ref_images
 

@@ -42,8 +42,8 @@ class PoseOptimizer(PropertyOptimizer):
 
     SCALE_EPSILON = 1e-3
     """
-    Smallest scale that is allowed for the scaling part of the transform. 
-    The inverse is the largest scale that is allowed. 
+    Smallest scale that is allowed for the scaling part of the transform.
+    The inverse is the largest scale that is allowed.
     """
 
     def __init__(
@@ -94,8 +94,8 @@ class PoseOptimizer(PropertyOptimizer):
 
         For more details on the convention, see `optimization_parameters`.
         """
-        # Enable slicing
-        params = mi.TensorXf(params)
+
+        params = dr.reshape(mi.TensorXf, params, (9, 1))
 
         translation = mi.Point3f(params[0:3])
         scaling = mi.Point3f(

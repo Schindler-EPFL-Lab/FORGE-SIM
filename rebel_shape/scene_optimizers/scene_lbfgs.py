@@ -295,4 +295,4 @@ class SceneLBFGS(SceneOptimizer):
             `mi.Float` or `mi.TensorXf` objects representing the current state of
             the parameters.
         """
-        return self._lbfgs.variables
+        return dict(self._lbfgs)

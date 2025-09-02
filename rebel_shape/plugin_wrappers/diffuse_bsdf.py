@@ -2,6 +2,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+import drjit as dr
+import mitsuba as mi
+
 from rebel_shape.plugin_wrappers.mitsuba_plugin import MitsubaPlugin
 
 
@@ -88,6 +91,36 @@ class DiffuseBSDF(MitsubaPlugin):
             }
 
     @dataclass
+    class TextureFromTensor(MitsubaPlugin):
+        """
+        A texture-based reflectance loaded from TensorXf data.
+
+        Uses a TensorXf tensor to create a spatially varying reflectance pattern that
+        is mapped to the surface of an object.
+        """
+
+        tensor: "mi.TensorXf"
+        """Texture tensor"""
+
+        def __post_init__(self) -> None:
+            if self.tensor.ndim != 3:
+                raise ValueError("`tensor` must be a 3D tensor for RGB texture.")
+            if self.tensor.shape[-1] != 3:
+                raise ValueError("`tensor` must be have 3 channels for RGB texture.")
+            if dr.min(self.tensor) < 0.0 or dr.max(self.tensor) > 1.0:
+                raise ValueError(
+                    "All tensor values must be in the interval [0.0, 1.0]."
+                )
+            self.tensor = dr.detach(self.tensor)
+
+        @property
+        def mitsuba_dict(self) -> dict[str, Any]:
+            return {
+                "type": "bitmap",
+                "data": dr.copy(self.tensor),
+            }
+
+    @dataclass
     class MeshAttributeTexture(MitsubaPlugin):
         """
         Uses a mesh attribute `attribute_key` to define the color on the mesh.
@@ -99,7 +132,7 @@ class DiffuseBSDF(MitsubaPlugin):
 
         attribute_key: str
         """
-        Name/key of the attribute that is used for color information. Must start with 
+        Name/key of the attribute that is used for color information. Must start with
         either `vertex_` or `face_`
         """
 
@@ -120,7 +153,11 @@ class DiffuseBSDF(MitsubaPlugin):
 
     def __init__(
         self,
-        reflectance: Albedo | SolidColor | Texture | MeshAttributeTexture = Albedo(),
+        reflectance: Albedo
+        | SolidColor
+        | Texture
+        | TextureFromTensor
+        | MeshAttributeTexture = Albedo(),
     ) -> None:
         """
         Initialize a diffuse (Lambertian) BSDF with the specified reflectance.
@@ -129,6 +166,7 @@ class DiffuseBSDF(MitsubaPlugin):
         - Albedo: A uniform grayscale reflectance
         - SolidColor: A uniform RGB color
         - Texture: A bitmap texture from an image file
+        - TextureFromData: A bitmap texture from a TensorXf tensor
         - MeshAttributeTexture: A mesh attribute defining vertex or face colors
 
         The default is a uniform albedo of 0.5 (mid-gray), matches Mitsuba default.

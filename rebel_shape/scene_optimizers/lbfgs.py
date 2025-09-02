@@ -2,6 +2,7 @@ from collections.abc import Callable
 
 import drjit as dr
 import mitsuba as mi
+from drjit.opt import LearningRate
 
 from rebel_shape import logger
 from rebel_shape.scene_optimizers.scene_optimizer import MitsubaOptimizationType
@@ -120,8 +121,8 @@ class LBFGS(mi.ad.Optimizer):
 
         self._use_wolfe_curvature = use_wolfe_curvature
         """
-        Whether to use the Wolfe condition on the gradient when conducing line search 
-        or to just use the Armijo condition. Typically not recommended as it 
+        Whether to use the Wolfe condition on the gradient when conducing line search
+        or to just use the Armijo condition. Typically not recommended as it
         can lead to stalling of the optimization process.
         """
         self._history_size = history_size
@@ -156,18 +157,22 @@ class LBFGS(mi.ad.Optimizer):
         self._line_search_iterations = line_search_iterations
         """Number of iterations of backtracking line search to run."""
 
-    def reset(self, variable_key: str) -> None:
+    def _reset(self, key: str, value: dr.ArrayBase, promoted: bool) -> None:
         """
-        Reset the optimization history for a specific variable with key `variable_key`.
+        Reset the optimization history for a specific variable with key `key` and
+        updates the `value` assigned to the variable. The `promoted` variable is
+        used only to support mitsuba signature.
 
         Clears all stored state differences, gradient differences, and dot products
         for the specified variable. This is automatically called when a variable
         is first encountered or when its shape changes.
         """
-        self._state_difference[variable_key] = []
-        self._gradient_differences[variable_key] = []
-        self._gradient_diff_dot_state_diff[variable_key] = []
-        self._iterations[variable_key] = 0
+        self._state_difference[key]: list[MitsubaOptimizationType] = []
+        self._gradient_differences[key]: list[MitsubaOptimizationType] = []
+        self._gradient_diff_dot_state_diff[key]: list[MitsubaOptimizationType] = []
+        self._iterations[key] = 0
+
+        self.state[key] = value, promoted, None, None
 
     def _update_history(self, variable_key: str) -> None:
         """
@@ -185,8 +190,8 @@ class LBFGS(mi.ad.Optimizer):
         This method is called automatically during the optimization step and typically
         should not be called manually.
         """
-        params = dr.ravel(dr.detach(self.variables[variable_key]))
-        params_gradient = dr.ravel(self.variables[variable_key].grad)
+        params = dr.ravel(dr.detach(self[variable_key]))
+        params_gradient = dr.ravel(self[variable_key].grad)
         dr.schedule(params, params_gradient)
 
         # Update history if not the first iteration
@@ -284,7 +289,7 @@ class LBFGS(mi.ad.Optimizer):
     def _fill_new_values(
         old_params_dict: dict[str, MitsubaOptimizationType],
         new_params_dict: dict[str, MitsubaOptimizationType],
-        alpha: dict[str, float],
+        alpha: LearningRate,
         search_dirs: dict[str, MitsubaOptimizationType],
         enable_grad: bool = True,
     ) -> None:
@@ -302,13 +307,10 @@ class LBFGS(mi.ad.Optimizer):
             does not include the `new_params_dict` as it can be empty when passed to
             this method).
         """
-        if (
-            old_params_dict.keys() != alpha.keys()
-            or old_params_dict.keys() != search_dirs.keys()
-        ):
+        if old_params_dict.keys() != search_dirs.keys():
             raise ValueError(
                 "All input dictionaries must have the same keys! Got "
-                f"{old_params_dict.keys()}, {alpha.keys()}, {search_dirs.keys()}."
+                f"{old_params_dict.keys()}, {search_dirs.keys()}."
             )
 
         for variable_key, params in old_params_dict.items():
@@ -318,14 +320,10 @@ class LBFGS(mi.ad.Optimizer):
                     value=search_dirs[variable_key],
                     shape=params.shape,
                 )
-                new_params_dict[variable_key] = dr.detach(
-                    params + alpha[variable_key] * reshaped
-                )
+                new_params_dict[variable_key] = dr.detach(params + alpha * reshaped)
             else:
                 new_params_dict[variable_key] = dr.detach(
-                    params
-                    + alpha[variable_key]
-                    * dr.unravel(type(params), search_dirs[variable_key])
+                    params + alpha * dr.unravel(type(params), search_dirs[variable_key])
                 )
 
             if enable_grad:
@@ -339,19 +337,19 @@ class LBFGS(mi.ad.Optimizer):
         previous_params: dict[str, MitsubaOptimizationType],
         previous_gradients: dict[str, MitsubaOptimizationType],
         search_directions: dict[str, MitsubaOptimizationType],
-        initial_step_sizes: dict[str, float],
+        initial_step_size: LearningRate,
         use_wolfe_curvature: bool,
         objective_function: Callable[
             [dict[str, MitsubaOptimizationType]], MitsubaOptimizationType
         ],
         line_search_iterations: int = 20,
-    ) -> dict[str, float]:
+    ) -> LearningRate:
         """
         Perform backtracking line search to find an acceptable step size that
         satisfies the Armijo condition.
 
         Given the current `objective` value, `previous_params`,
-        `previous_gradients`, `initial_step_sizes`, and the computed search
+        `previous_gradients`, `initial_step_size`, and the computed search
         `search_directions`, this method iteratively reduces the step size by half
         until the Armijo condition, and optionally the Wolfe curvature condition,
         is satisfied for all variables. These two conditions are defined as follows:
@@ -377,27 +375,26 @@ class LBFGS(mi.ad.Optimizer):
         optimization problems. Right now it is not used outside L-BFGS so it is
         associated with this class.
 
-        :returns: A dictionary of step sizes for each variable that satisfies the
-            Armijo condition (and Wolfe conditions if enabled).
+        :returns: A step size that satisfy the Armijo condition (and Wolfe conditions
+            if enabled).
 
         :raises ValueError: If the keys of the input dictionaries do not match.
         """
         if (
             previous_params.keys() != previous_gradients.keys()
             or previous_params.keys() != search_directions.keys()
-            or previous_params.keys() != initial_step_sizes.keys()
         ):
             raise ValueError(
                 "All input dictionaries must have the same keys! Got "
                 f"{previous_params.keys()}, {previous_gradients.keys()}, "
-                f"{search_directions.keys()}, {initial_step_sizes.keys()}."
+                f"{search_directions.keys()}."
             )
 
-        alpha = initial_step_sizes
+        alpha = initial_step_size
 
         armijo_const: float = 1e-4
         """
-        Armijo condition parameter for sufficient decrease. Default value from 
+        Armijo condition parameter for sufficient decrease. Default value from
         Nocedal and Wright's book on numerical optimization.
         """
         wolfe_const: float = 0.9
@@ -409,7 +406,7 @@ class LBFGS(mi.ad.Optimizer):
         for it in range(line_search_iterations):
             candidate_params_dict: dict[str, MitsubaOptimizationType] = {}
             """
-            Candidate new parameters after adding the search direction with the 
+            Candidate new parameters after adding the search direction with the
             current step size to the old parameters.
             """
 
@@ -433,7 +430,7 @@ class LBFGS(mi.ad.Optimizer):
                     previous_gradients[variable_key], search_directions[variable_key]
                 )
 
-                alpha_g_dot_z += alpha[variable_key] * g_dot_z_variable
+                alpha_g_dot_z += alpha * g_dot_z_variable
                 g_dot_z += g_dot_z_variable
 
             armijo_condition = new_objective <= objective + armijo_const * alpha_g_dot_z
@@ -463,8 +460,7 @@ class LBFGS(mi.ad.Optimizer):
                 )
                 break
 
-            for variable_key in alpha.keys():
-                alpha[variable_key] *= 0.5
+            alpha *= 0.5
 
         return alpha
 
@@ -494,7 +490,7 @@ class LBFGS(mi.ad.Optimizer):
         """Search directions for each variable, computed using the L-BFGS algorithm."""
 
         # Compute search directions
-        for variable_key, params in self.variables.items():
+        for variable_key, params in self.items():
             if variable_key not in self._state_difference:
                 self.reset(variable_key)
 
@@ -525,22 +521,25 @@ class LBFGS(mi.ad.Optimizer):
         # satisfied or the maximum number of iterations is reached.
         alpha = self._backtracking_line_search(
             objective=objective,
-            previous_params=self.variables,
+            previous_params=dict(self),
             previous_gradients=self._previous_gradient,
             search_directions=search_directions,
-            initial_step_sizes=self.lr_v,
+            initial_step_size=self.lr,
             use_wolfe_curvature=self._use_wolfe_curvature,
             objective_function=self._line_search_fn,
             line_search_iterations=self._line_search_iterations,
         )
 
+        new_params_dict: dict[str, MitsubaOptimizationType] = {}
         self._fill_new_values(
-            old_params_dict=self.variables,
-            new_params_dict=self.variables,
+            old_params_dict=dict(self),
+            new_params_dict=new_params_dict,
             alpha=alpha,
             search_dirs=search_directions,
-            enable_grad=True,
+            enable_grad=False,
         )
+        for variable_key in new_params_dict.keys():
+            self[variable_key] = new_params_dict[variable_key]
 
     @property
     def line_search_fn(

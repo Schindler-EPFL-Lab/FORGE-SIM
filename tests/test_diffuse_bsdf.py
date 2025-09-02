@@ -1,10 +1,19 @@
 import unittest
 from pathlib import Path
 
+import drjit as dr
+import mitsuba as mi
+import numpy as np
+
 from rebel_shape.plugin_wrappers.diffuse_bsdf import DiffuseBSDF
 
 
 class TestDiffuseBSDF(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        """Set up a mi_variant for testing."""
+        mi.set_variant("llvm_ad_rgb")
+
     def setUp(self):
         """Set up test resources."""
         local_dir = Path(__file__).parent.resolve()
@@ -135,3 +144,34 @@ class TestDiffuseBSDF(unittest.TestCase):
             mesh_property_texture.mitsuba_dict,
             {"type": "mesh_attribute", "name": "vertex_colors"},
         )
+
+    def test_texture_from_tensor_invalid_input(self):
+        """Test TextureFromTensor raises ValueError for invalid input."""
+        tensor_invalid_cases = [
+            dr.full(dtype=mi.TensorXf, value=0.5, shape=(1, 128, 128, 3)),
+            dr.full(dtype=mi.TensorXf, value=0.5, shape=(128, 128, 4)),
+            dr.full(dtype=mi.TensorXf, value=-1.0, shape=(128, 128, 3)),
+            dr.full(dtype=mi.TensorXf, value=2.0, shape=(128, 128, 3)),
+        ]
+        for i, tensor_invalid in enumerate(tensor_invalid_cases):
+            with self.subTest(i=i):
+                with self.assertRaises(ValueError):
+                    _ = DiffuseBSDF.TextureFromTensor(tensor=tensor_invalid)
+
+    def test_texture_from_tensor(self):
+        """Test TextureFromTensor outputs correct Mitsuba dict for valid tensors."""
+        np.random.seed(42)
+        tensor_valid_cases = [
+            mi.TensorXf(np.random.rand(103, 97, 3)) for _ in range(10)
+        ]
+
+        for i, tensor_valid in enumerate(tensor_valid_cases):
+            with self.subTest(i=i):
+                bsdf_mitsuba_dict = DiffuseBSDF.TextureFromTensor(
+                    tensor=tensor_valid
+                ).mitsuba_dict
+
+                expected_keys = set(["type", "data"])
+                self.assertEqual(set(bsdf_mitsuba_dict.keys()), expected_keys)
+                self.assertEqual(bsdf_mitsuba_dict["type"], "bitmap")
+                self.assertTrue(dr.allclose(bsdf_mitsuba_dict["data"], tensor_valid))

@@ -90,7 +90,7 @@ class ThermalSplineInpaintingParameters(ReverseCli):
     """Where to save the model and outputs (created if it does not exist)"""
     num_of_images_to_save: int = 6
     """
-    Number of images to save after each optimization step. The images are taken from 
+    Number of images to save after each optimization step. The images are taken from
     the evaluation set.
     """
 
@@ -184,16 +184,16 @@ def initialize_scene(
     scene_dict = {"type": "scene", "integrator": integrator.mitsuba_dict}
 
     with tempfile.TemporaryDirectory() as temp_dir:
-        initial_texture_path = Path(temp_dir) / "initial_texture.exr"
-
-        FieldTextureOptimizer.generate_empty_texture(
-            base_color=mi.Color3f(0.5, 0.5, 0.5),
-            texture_output_path=initial_texture_path,
-            width=texture_resolution,
-            height=texture_resolution,
-        )
-
         for mesh in tessellated_iga_spline_surface:
+            initial_texture_path = Path(temp_dir) / f"initial_texture_{mesh.name}.exr"
+
+            FieldTextureOptimizer.generate_empty_texture(
+                base_color=mi.Color3f(0.5, 0.5, 0.5),
+                texture_output_path=initial_texture_path,
+                width=texture_resolution,
+                height=texture_resolution,
+            )
+
             mesh.save_to_ply(output_dir=Path(temp_dir), save_name=mesh.name)
 
             scene_dict[mesh.name] = {
@@ -206,7 +206,7 @@ def initialize_scene(
                     "type": "area",
                     "radiance": {
                         "type": "bitmap",
-                        "filename": temp_dir + "/initial_texture.exr",
+                        "filename": str(initial_texture_path),
                     },
                 },
             }
