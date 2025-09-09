@@ -83,6 +83,12 @@ class HeatSimulationParameters(ReverseCli):
     concrete_thickness: float = 0.2
     """Thickness of the concrete layer in meters"""
 
+    use_gpu: bool = True
+    """
+    Whether to use GPU for rendering or not. Note that the compute instance
+    must have GPU support for this to work. For local testing, set to False.
+    """
+
     def __post_init__(self):
         if not self.spline_path.exists():
             raise ValueError(f"Spline path {self.spline_path} does not exist.")
@@ -285,7 +291,12 @@ def simulate_heat_cn(params: HeatSimulationParameters) -> None:
     using Mitsuba in monochromatic mode (having rgb visualization would be very nice)
     and saved to the output folder.
     """
-    mi.set_variant("llvm_ad_mono")
+    if params.use_gpu:
+        mi.set_variant("cuda_ad_rgb")
+        logger.info("Using the GPU for rendering.")
+    else:
+        mi.set_variant("llvm_ad_rgb")
+        logger.info("Using the CPU for rendering.")
 
     start_time = time.time()
 
