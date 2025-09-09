@@ -9,7 +9,7 @@ description = "Perform shape optimization with Mitsuba"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
-    "mitsuba>=3.6.4",
+    "mitsuba>=3.7.0",
     "matplotlib>=3.10.0",
     "cholespy>=2.1.0",
     "gpytoolbox>=0.3.3",
