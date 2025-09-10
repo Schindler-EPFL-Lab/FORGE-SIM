@@ -12,12 +12,13 @@ class ThermoScenesLoader:
     """
     Specialized loader for the ThermoScenes dataset.
 
-    It loads RGB and thermal images along with their associated camera poses.
-    They are stored in separate lists and the order is guaranteed to match.
-    Images are further split into training and evaluation sets.
+    It loads RGB, thermal images, and foreground masks along with their associated
+    camera poses. They are stored in separate lists and the order is guaranteed to
+    match. Images are further split into training and evaluation sets.
 
     Thermal images are assumed to be 8-bit linear grayscale images so no gamma
     correction is applied to them. RGB images are assumed to be sRGB gamma corrected.
+    Foreground masks are assumed to be 8-bit linear grayscale images.
 
     The images are of type `mi.TensorXf` since this is the native format for Mitsuba
     operations (gradient computation, etc.), while the camera information and pose
@@ -56,10 +57,12 @@ class ThermoScenesLoader:
         self._scene_path = scene_path
 
         self._train_images_rgb: list["mi.TensorXf"] = []
+        self._train_foreground_masks: list["mi.TensorXf | None"] = []
         self._train_images_thermal: list["mi.TensorXf"] = []
         self._train_cameras: list[PerspectiveCamera] = []
 
         self._eval_images_rgb: list["mi.TensorXf"] = []
+        self._eval_foreground_masks: list["mi.TensorXf | None"] = []
         self._eval_images_thermal: list["mi.TensorXf"] = []
         self._eval_cameras: list[PerspectiveCamera] = []
 
@@ -81,6 +84,7 @@ class ThermoScenesLoader:
         The dataset is assumed to be in the following format:
         - `images` folder contains RGB images
         - `thermal` folder contains thermal images
+        - `foreground_masks` optional folder contains foreground masks
         - `transforms.json` file contains camera poses and other metadata
 
         :raises FileNotFoundError: If the transformation file or rgb image folder or
@@ -91,8 +95,28 @@ class ThermoScenesLoader:
 
         :raises ValueError: If the image names do not contain "train" or "eval".
         """
+
+        def load_image_paths_from_folder(folder: Path) -> dict[str, Path]:
+            """
+            Loads and returns a dictionary mapping image filenames to their full paths
+            from the specified folder.
+            """
+            # Supported image extensions
+            image_extensions = (".JPG", ".jpg", ".JPEG", ".jpeg", ".PNG", ".png")
+            if not folder.exists():
+                return {}
+            image_filenames = sorted(
+                [
+                    image.name
+                    for image in folder.iterdir()
+                    if image.suffix in image_extensions
+                ]
+            )
+            return {image: folder / image for image in image_filenames}
+
         rgb_folder = self._scene_path / "images"
         thermal_folder = self._scene_path / "thermal"
+        foreground_mask_folder = self._scene_path / "foreground_masks"
         transform_path = self._scene_path / "transforms.json"
 
         # Load the transform.json file
@@ -111,28 +135,9 @@ class ThermoScenesLoader:
             applied_transform[:3, :] = np.array(transform_data["applied_transform"])
         applied_transform_inv = np.linalg.inv(applied_transform)
 
-        # Supported image extensions
-        image_extensions = (".JPG", ".jpg", ".JPEG", ".jpeg", ".PNG", ".png")
-
-        image_rgb_filenames = sorted(
-            [
-                image.name
-                for image in rgb_folder.iterdir()
-                if image.suffix in image_extensions
-            ]
-        )
-        image_thermal_filenames = sorted(
-            [
-                image.name
-                for image in thermal_folder.iterdir()
-                if image.suffix in image_extensions
-            ]
-        )
-
-        image_rgb_paths = {image: rgb_folder / image for image in image_rgb_filenames}
-        image_thermal_paths = {
-            image: thermal_folder / image for image in image_thermal_filenames
-        }
+        image_rgb_paths = load_image_paths_from_folder(rgb_folder)
+        image_thermal_paths = load_image_paths_from_folder(thermal_folder)
+        foreground_mask_paths = load_image_paths_from_folder(foreground_mask_folder)
 
         inv_reference_pose_matrix: mi.ScalarTransform4f | None = None
 
@@ -140,17 +145,30 @@ class ThermoScenesLoader:
         for frame in transform_data.get("frames", []):
             rgb_image_filename = Path(frame["file_path"]).name
             thermal_image_filename = Path(frame["thermal_file_path"]).name
+            foreground_mask_filename: None | str = (
+                Path(frame["foreground_mask_file_path"]).name
+                if foreground_mask_folder.exists()
+                else None
+            )
 
             if rgb_image_filename not in image_rgb_paths:
                 raise RuntimeError(
                     f"Image {rgb_image_filename} referenced in transform.json "
-                    "is missing in dataset."
+                    + "is missing in dataset."
                 )
 
             if thermal_image_filename not in image_thermal_paths:
                 raise RuntimeError(
                     f"Image {thermal_image_filename} referenced in transform.json "
-                    "is missing in dataset."
+                    + "is missing in dataset."
+                )
+            if (
+                foreground_mask_filename is not None
+                and foreground_mask_filename in foreground_mask_paths
+            ):
+                raise RuntimeError(
+                    f"Foreground mask {foreground_mask_filename} referenced in "
+                    + "transform.json is missing in dataset."
                 )
 
             image_rgb_path = image_rgb_paths[rgb_image_filename]
@@ -173,6 +191,20 @@ class ThermoScenesLoader:
                     f"Thermal image {thermal_image_filename} is not a single channel "
                     "grayscale image."
                 )
+
+            mitsuba_foreground_mask = None
+            if foreground_mask_filename is not None:
+                foreground_mask_path = foreground_mask_paths[foreground_mask_filename]
+                mitsuba_foreground_mask = mi.TensorXf(
+                    mi.Bitmap(str(foreground_mask_path)).convert(
+                        component_format=mi.Struct.Type.Float32, srgb_gamma=False
+                    )
+                )
+                if mitsuba_foreground_mask.shape[-1] != 1:
+                    raise RuntimeError(
+                        f"Foreground mask image {foreground_mask_filename} is not a "
+                        + "single channel grayscale image."
+                    )
 
             # Mitsuba, COLMAP and nerfstudio use different conventions for camera frame
             # COLMAP (OpenCV):  X - right,  Y - down,   Z - forward
@@ -218,11 +250,13 @@ class ThermoScenesLoader:
             if "train" in rgb_image_filename.lower():
                 self._train_images_rgb.append(mitsuba_image_rgb)
                 self._train_images_thermal.append(mitsuba_image_thermal)
+                self._train_foreground_masks.append(mitsuba_foreground_mask)
                 self._train_cameras.append(camera)
 
             elif "eval" in rgb_image_filename.lower():
                 self._eval_images_rgb.append(mitsuba_image_rgb)
                 self._eval_images_thermal.append(mitsuba_image_thermal)
+                self._eval_foreground_masks.append(mitsuba_foreground_mask)
                 self._eval_cameras.append(camera)
 
             else:
@@ -304,6 +338,11 @@ class ThermoScenesLoader:
         return self._train_images_thermal
 
     @property
+    def train_foreground_masks(self) -> list["mi.TensorXf | None"]:
+        """List of foreground masks in the training set"""
+        return self._train_foreground_masks
+
+    @property
     def train_cameras(self) -> list[PerspectiveCamera]:
         """List of camera poses for the training set with RGB pixel format"""
         return self._train_cameras
@@ -332,6 +371,11 @@ class ThermoScenesLoader:
     def eval_images_thermal(self) -> list["mi.TensorXf"]:
         """List of thermal images in the evaluation set"""
         return self._eval_images_thermal
+
+    @property
+    def eval_foreground_masks(self) -> list["mi.TensorXf | None"]:
+        """List of foreground masks in the eval set"""
+        return self._eval_foreground_masks
 
     @property
     def eval_cameras(self) -> list[PerspectiveCamera]:
