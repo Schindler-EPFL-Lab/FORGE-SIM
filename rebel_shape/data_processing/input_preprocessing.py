@@ -50,6 +50,9 @@ def preprocess_rgb_images(
 
     cameras = loader.train_cameras if train else loader.eval_cameras
     rgb_images = loader.train_images_rgb if train else loader.eval_images_rgb
+    foreground_masks = (
+        loader.train_foreground_masks if train else loader.eval_foreground_masks
+    )
 
     environment_map = (
         {"type": "envmap", "filename": str(environment_map_path)}
@@ -77,7 +80,9 @@ def preprocess_rgb_images(
         output_dir.mkdir(exist_ok=True)
 
     # Process each image and camera
-    for idx, (camera, rgba_image) in enumerate(zip(cameras, rgb_images)):
+    for idx, (camera, rgba_image, foreground_mask) in enumerate(
+        zip(cameras, rgb_images, foreground_masks)
+    ):
         sensor = mi.load_dict(camera.mitsuba_dict)
         background = mi.render(scene=scene, sensor=sensor, spp=spp)
 
@@ -90,7 +95,7 @@ def preprocess_rgb_images(
             composited_image_masked_pose = MaskedPoseImage(
                 image=composited_image,
                 camera=camera,
-                mask=alpha,
+                mask=1.0 - foreground_mask if foreground_mask is not None else alpha,
             )
         else:
             raise RuntimeError("Image does not have an alpha channel")

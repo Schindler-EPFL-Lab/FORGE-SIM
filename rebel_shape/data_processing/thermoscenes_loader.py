@@ -164,7 +164,7 @@ class ThermoScenesLoader:
                 )
             if (
                 foreground_mask_filename is not None
-                and foreground_mask_filename in foreground_mask_paths
+                and foreground_mask_filename not in foreground_mask_paths
             ):
                 raise RuntimeError(
                     f"Foreground mask {foreground_mask_filename} referenced in "
