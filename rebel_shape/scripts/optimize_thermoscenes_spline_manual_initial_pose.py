@@ -380,6 +380,22 @@ def optimize_thermoscenes_scene(
     )
     logger.info("Rendered initial state")
 
+    if params.mask_pixels_during_optimization:
+        save_path = (
+            params.output_folder / "Initial_state_mask.png"
+            if params.output_folder is not None
+            else None
+        )
+        optimizer.show_comparison_with_reference(
+            ref_images=[
+                MaskedPoseImage(image=image.image, mask=image.mask, camera=image.camera)
+                for image in eval_images
+            ],
+            samples_per_pixel=params.continuous_samples * 4,
+            save_path=save_path,
+        )
+        logger.info("Rendered masked initial state")
+
     composite_scene_optimizer = CompositeSceneOptimizer(
         optimizer_config=[
             (params.shape_params.scene_optimizer, [shape_key]),
