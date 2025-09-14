@@ -1,9 +1,11 @@
 from rebel_shape.meshing.composite_iga_spline_surface import CompositeIGASplineSurface
-from rebel_shape.meshing.patch_manager_factory import PatchManagerFactory
+from rebel_shape.meshing.composite_spline_surface_factory import (
+    CompositeSplineSurfaceFactory,
+)
 from rebel_shape.splines.iga_spline_patch import IGASplinePatch
 
 
-class CompositeIGASplineSurfaceFactory(PatchManagerFactory):
+class CompositeIGASplineSurfaceFactory(CompositeSplineSurfaceFactory):
     """
     A factory class for creating composite IGA spline surfaces from a list of IGA
     compatible spline patches.

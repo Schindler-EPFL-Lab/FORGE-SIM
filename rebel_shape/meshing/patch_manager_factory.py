@@ -59,22 +59,22 @@ class PatchManagerFactory(abc.ABC):
         second_patch_side: Patch.Side,
     ) -> None:
         """
-        Links the specified sides of two patches.
+        Links the specified sides of two selected patches.
 
         The `first_patch_index` and `second_patch_index` specify the indices of the
-        patches to be connected, while `first_patch_side` and `second_mesh_side`
+        patches to be connected, while `first_patch_side` and `second_patch_side`
         specify the sides that will be connected.
 
-        The connection is established in both directions and the number of vertices on
-        the two sides must match. If either side of the connection is already
-        connected to another patch, an error is raised.
+        The connection is established in both directions and the number of control
+        points on the two sides must match. If either patch is already connected to
+        another patch on that side, an error is raised.
 
         The patches are not updated with the new connection; it is up to the
         concrete implementations of `PatchManager` to implement the desired behavior.
 
-        :raises IndexError: If the specified patch indices are out of range.
-        :raises ValueError: If the number of vertices on the specified sides do not
-            match, or if either side is already connected to another patch.
+        :raises ValueError: if the provided patch names are incorrect, if the number of
+            nodes on the specified sides do not match, or if either side is already
+            connected to another patch.
         """
         if first_patch_name not in self._name_to_index_map:
             raise ValueError(f"Patch with name {first_patch_name} was not added.")
@@ -87,14 +87,14 @@ class PatchManagerFactory(abc.ABC):
         if self._connection_list[first_patch_index][first_patch_side] is not None:
             raise ValueError(
                 f"Mesh {first_patch_index} is already connected to mesh "
-                f"{self._connection_list[first_patch_index][first_patch_side]} on side "
-                f"{first_patch_side}."
+                + f"{self._connection_list[first_patch_index][first_patch_side]} on "
+                + f"side {first_patch_side}."
             )
         if self._connection_list[second_patch_index][second_patch_side] is not None:
             raise ValueError(
                 f"Mesh {second_patch_index} is already connected to mesh "
-                f"{self._connection_list[second_patch_index][second_patch_side]} on "
-                f"side {second_patch_side}."
+                + f"{self._connection_list[second_patch_index][second_patch_side]} on "
+                + f"side {second_patch_side}."
             )
 
         first_mesh = self._patch_list[first_patch_index]

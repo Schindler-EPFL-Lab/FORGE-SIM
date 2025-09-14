@@ -1,4 +1,7 @@
+import drjit as dr
+
 from rebel_shape.meshing.composite_spline_surface import CompositeSplineSurface
+from rebel_shape.meshing.patch import Patch
 from rebel_shape.meshing.patch_manager_factory import PatchManagerFactory
 from rebel_shape.splines.spline_patch import SplinePatch
 
@@ -36,3 +39,64 @@ class CompositeSplineSurfaceFactory(PatchManagerFactory):
             patch_list=self._patch_list,
             connection_list=self._connection_list,
         )
+
+    def link_sides(
+        self,
+        first_patch_name: str,
+        first_patch_side: Patch.Side,
+        second_patch_name: str,
+        second_patch_side: Patch.Side,
+    ) -> None:
+        """
+        Links the specified sides of two selected patches.
+
+        The `first_patch_index` and `second_patch_index` specify the indices of the
+        patches to be connected, while `first_patch_side` and `second_patch_side`
+        specify the sides of the spline patches that will be connected.
+
+        The connection is established in both directions and the number of control
+        points on the two sides must match. If either patch is already connected to
+        another patch on that side, an error is raised.
+
+        Furthermore, spline knot spans along the specified sides need to match in
+        order to ensure surface continuity (C^0). This check, together with the control
+        point count check, effectively enforces knot vector compatibility along the
+        connected sides.
+
+        The patches are not updated with the new connection; it is up to the
+        concrete implementations of `PatchManager` to implement the desired behavior.
+
+        :raises ValueError: If the provided patch names are incorrect, if the number of
+            control points on the specified sides do not match, if either side is
+            already connected to another spline patch, or if the knot spans along the
+            specified sides do not match
+        """
+        super().link_sides(
+            first_patch_name,
+            first_patch_side,
+            second_patch_name,
+            second_patch_side,
+        )
+
+        first_patch_index = self._name_to_index_map[first_patch_name]
+        second_patch_index = self._name_to_index_map[second_patch_name]
+
+        first_patch = self._patch_list[first_patch_index]
+        second_patch = self._patch_list[second_patch_index]
+
+        first_knot_spans = first_patch.side_knot_spans(side=first_patch_side)
+        second_knot_spans = second_patch.side_knot_spans(side=second_patch_side)
+
+        if first_knot_spans.shape != second_knot_spans.shape:
+            raise ValueError(
+                f"Cannot link sides {first_patch_side} of patch {first_patch_name} "
+                + f"and {second_patch_side} of patch {second_patch_name} due to "
+                + "mismatched number of knot spans."
+            )
+
+        if not dr.allclose(first_knot_spans, second_knot_spans, rtol=1e-5, atol=1e-7):
+            raise ValueError(
+                f"Cannot link sides {first_patch_side} of patch {first_patch_name} "
+                + f"and {second_patch_side} of patch {second_patch_name} due to "
+                + "mismatched knot spans."
+            )

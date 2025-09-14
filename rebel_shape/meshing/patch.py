@@ -29,6 +29,17 @@ class Patch(abc.ABC):
         TOP = 2
         BOTTOM = 3
 
+        @classmethod
+        def all_sides(cls) -> list["Patch.Side"]:
+            """
+            Returns a list of all sides of the patch.
+
+            Useful for operations that require iterating over all sides.
+
+            :returns: A list containing all four sides of the patch.
+            """
+            return [cls.LEFT, cls.RIGHT, cls.BOTTOM, cls.TOP]
+
     @abc.abstractmethod
     def get_node_indices_for(self, side: Side) -> "mi.ArrayXu":
         """

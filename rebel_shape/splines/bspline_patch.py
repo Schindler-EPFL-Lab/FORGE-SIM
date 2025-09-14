@@ -541,6 +541,121 @@ class BSplinePatch(SplinePatch):
             ),
         )
 
+    def side_knot_spans(self, side: Patch.Side) -> "mi.TensorXf":
+        """
+        Returns the knot spans along the specified `side` of the patch.
+
+        This method is important for validating connections between patches, as
+        they must have the same knot vector along shared sides. It is also used
+        for highly accurate numerical integration along the edges of the patch.
+
+        Since the B-spline is a tensor product of two B-splines, the knot spans
+        along the LEFT and RIGHT sides correspond to the knot spans of the `v_spline`,
+        while the knot spans along the TOP and BOTTOM sides correspond to the knot
+        spans of the `u_spline`.
+
+        :returns: A Mitsuba tensor of knot spans along the specified `side`.
+        """
+        if side == Patch.Side.LEFT or side == Patch.Side.RIGHT:
+            return self._spline.v_spline.knot_spans
+        if side == Patch.Side.TOP or side == Patch.Side.BOTTOM:
+            return self._spline.u_spline.knot_spans
+
+    def side_parametric_coords(
+        self, side: Patch.Side, side_coords: "mi.TensorXf", flip: bool = False
+    ) -> "mi.TensorXf":
+        """
+        Returns the full 2D parametric coordinates for points along the specified `side`
+        of the B-spline patch.
+
+        This method takes 1D parametric coordinates `side_coords` along a `side` and
+        converts them to full 2D parametric coordinates (u, v) by fixing one
+        coordinate to the appropriate boundary value and using the input coordinates
+        for the other.
+
+        Note that the provided `side_coords` must be within the valid parametric range
+        for the corresponding spline direction. The `side_coords` are interpreted as
+        v-coordinates for LEFT and RIGHT sides, and as u-coordinates for TOP and
+        BOTTOM sides.
+
+        `flip` indicates whether the input `side_coords` should be reversed before
+        processing. This is useful for operations that require a consistent orientation
+        between adjacent patches.
+
+        :returns: A 2D tensor of shape (n_points, 2) containing the full parametric
+                  coordinates (u, v) for the specified side points.
+
+        :raises ValueError: If side_coords contains values outside the valid
+                            parametric range for the corresponding spline direction, or
+                            if side_coords is not a 1D tensor.
+        """
+        if side_coords.ndim != 1:
+            raise ValueError(
+                f"side_coords must be a 1D tensor, but got shape {side_coords.shape}."
+            )
+
+        full_parametric_coords = dr.empty(
+            dtype=mi.TensorXf, shape=(side_coords.shape[0], 2)
+        )
+
+        oriented_side_coords = dr.ravel(side_coords if not flip else side_coords[::-1])
+
+        if side == Patch.Side.LEFT:
+            full_parametric_coords[:, 0] = dr.full(
+                dtype=mi.Float,
+                value=float(self._spline.u_spline.knots[0]),
+                shape=(side_coords.shape[0],),
+            )
+
+            self._spline.v_spline.validate_parametric_coords(
+                parametric_coords=mi.TensorXf(side_coords)[:, None]
+            )
+            full_parametric_coords[:, 1] = oriented_side_coords
+
+            return full_parametric_coords
+
+        if side == Patch.Side.RIGHT:
+            full_parametric_coords[:, 0] = dr.full(
+                dtype=mi.Float,
+                value=float(self._spline.u_spline.knots[-1]),
+                shape=(side_coords.shape[0],),
+            )
+
+            self._spline.v_spline.validate_parametric_coords(
+                parametric_coords=mi.TensorXf(side_coords)[:, None]
+            )
+            full_parametric_coords[:, 1] = oriented_side_coords
+
+            return full_parametric_coords
+
+        if side == Patch.Side.BOTTOM:
+            self._spline.u_spline.validate_parametric_coords(
+                parametric_coords=mi.TensorXf(side_coords)[:, None]
+            )
+            full_parametric_coords[:, 0] = oriented_side_coords
+
+            full_parametric_coords[:, 1] = dr.full(
+                dtype=mi.Float,
+                value=float(self._spline.v_spline.knots[0]),
+                shape=(side_coords.shape[0],),
+            )
+
+            return full_parametric_coords
+
+        if side == Patch.Side.TOP:
+            self._spline.u_spline.validate_parametric_coords(
+                parametric_coords=mi.TensorXf(side_coords)[:, None]
+            )
+            full_parametric_coords[:, 0] = oriented_side_coords
+
+            full_parametric_coords[:, 1] = dr.full(
+                dtype=mi.Float,
+                value=float(self._spline.v_spline.knots[-1]),
+                shape=(side_coords.shape[0],),
+            )
+
+            return full_parametric_coords
+
     @property
     def quads(self) -> "mi.TensorXu":
         """

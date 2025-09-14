@@ -942,3 +942,85 @@ class TestBSplinePatch(unittest.TestCase):
             ]
         )
         np.testing.assert_array_almost_equal(texcoords, expected_texcoords)
+
+    def test_side_knot_spans(self):
+        """
+        Tests whether the side_knot_spans method returns the correct knot spans
+        for each side of the B-spline patch.
+        """
+        knots_u = [0.0, 0.0, 0.0, 0.24, 0.5, 0.72, 1.0, 1.0, 1.0]
+        knots_v = [0.0, 0.0, 0.32, 0.66, 1.0, 1.0]
+        control_points = mi.TensorXf(np.zeros((((2 + 4) * (1 + 3)), 3)))
+
+        spline_u = BSpline(knot_vector=knots_u, degree=2)
+        spline_v = BSpline(knot_vector=knots_v, degree=1)
+        spline_patch = BSplinePatch(
+            name="test_patch",
+            u_spline=spline_u,
+            v_spline=spline_v,
+            control_points=control_points,
+        )
+
+        # Test with bezier_1_surface (linear, uniform knot vectors)
+        left_spans = spline_patch.side_knot_spans(BSplinePatch.Side.LEFT)
+        right_spans = spline_patch.side_knot_spans(BSplinePatch.Side.RIGHT)
+        top_spans = spline_patch.side_knot_spans(BSplinePatch.Side.TOP)
+        bottom_spans = spline_patch.side_knot_spans(BSplinePatch.Side.BOTTOM)
+
+        # For LEFT/RIGHT sides, should return v_spline knot spans
+        self.assertTrue(dr.allclose(left_spans, spline_v.knot_spans))
+        self.assertTrue(dr.allclose(right_spans, spline_v.knot_spans))
+
+        # For TOP/BOTTOM sides, should return u_spline knot spans
+        self.assertTrue(dr.allclose(top_spans, spline_u.knot_spans))
+        self.assertTrue(dr.allclose(bottom_spans, spline_u.knot_spans))
+
+    def test_side_parametric_coords(self):
+        """
+        Tests whether the side_parametric_coords method returns correct full 2D
+        parametric coordinates for points along each side of the patch.
+        """
+        # Test coordinates along the side
+        side_coords = mi.TensorXf(np.array([0.0, 0.5, 1.0]))
+
+        expected_full_coords = [
+            mi.TensorXf([[0.0, v] for v in side_coords.numpy()]),  # LEFT
+            mi.TensorXf([[1.0, v] for v in side_coords.numpy()]),  # RIGHT
+            mi.TensorXf([[u, 0.0] for u in side_coords.numpy()]),  # BOTTOM
+            mi.TensorXf([[u, 1.0] for u in side_coords.numpy()]),  # TOP
+        ]
+
+        for side, coords in zip(BSplinePatch.Side.all_sides(), expected_full_coords):
+            with self.subTest(side=side):
+                result = self.bezier_1_surface.side_parametric_coords(side, side_coords)
+                self.assertTrue(dr.allclose(result, coords))
+
+    def test_side_parametric_coords_flip(self):
+        """
+        Tests whether the flip parameter correctly reverses the order of
+        side coordinates in side_parametric_coords method.
+        """
+        side_coords = mi.TensorXf(np.array([0.0, 0.5, 1.0]))
+
+        # Test LEFT side with flip=True
+        left_coords_flipped = self.bezier_1_surface.side_parametric_coords(
+            BSplinePatch.Side.LEFT, side_coords, flip=True
+        )
+        expected_left_flipped = mi.TensorXf(
+            [[0.0, v] for v in side_coords.numpy()[::-1]]
+        )
+        self.assertTrue(dr.allclose(left_coords_flipped, expected_left_flipped))
+
+    def test_side_parametric_coords_validation(self):
+        """
+        Tests that side_parametric_coords properly validates input coordinates
+        and raises appropriate errors for invalid values.
+        """
+        # Test with coordinates outside valid range
+        invalid_coords = mi.TensorXf(np.array([-0.1, 0.5, 1.1]))
+
+        # This should raise ValueError due to validation in the underlying splines
+        for side in BSplinePatch.Side.all_sides():
+            with self.subTest(side=side):
+                with self.assertRaises(ValueError):
+                    self.bezier_1_surface.side_parametric_coords(side, invalid_coords)

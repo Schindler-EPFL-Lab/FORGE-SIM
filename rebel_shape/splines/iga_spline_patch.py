@@ -5,6 +5,7 @@ import matplotlib.pyplot as plt
 import mitsuba as mi
 
 from rebel_shape.meshing.patch import Patch
+from rebel_shape.splines.bspline_patch import BSplinePatch
 from rebel_shape.splines.interpolating_spline import InterpolatingSpline
 from rebel_shape.splines.spline_patch import SplinePatch
 
@@ -32,7 +33,7 @@ class IGASplinePatch(SplinePatch):
     with a specified resolution and returns the evaluated field values as a texture.
     """
 
-    def __init__(self, spline_patch: SplinePatch, field_values: "mi.TensorXf") -> None:  # pyright: ignore[reportMissingSuperCall]
+    def __init__(self, spline_patch: BSplinePatch, field_values: "mi.TensorXf") -> None:  # pyright: ignore[reportMissingSuperCall]
         """
         Initializes the IGA spline patch with a `SplinePatch` and `field_values`.
 
@@ -41,6 +42,8 @@ class IGASplinePatch(SplinePatch):
         are a tensor of shape (n_control_points, dofs_per_cp), where n_control_points
         is the number of control points and dofs_per_cp is the number of degrees of
         freedom per control point.
+        For now, the type is annotated as `BSplinePatch` as this is the only
+        concrete implementation of `SplinePatch` available at the time of writing.
 
         Note that the number of control points coincides with the number of basis
         functions of the underlying interpolating spline, and the same holds true for
@@ -267,6 +270,39 @@ class IGASplinePatch(SplinePatch):
                   ((u_min, u_max), (v_min, v_max)).
         """
         return self._spline_patch.parametric_domain_size
+
+    def side_knot_spans(self, side: Patch.Side) -> "mi.TensorXf":
+        """
+        Returns the knot spans along the specified `side` of the patch.
+
+        This method is important for validating connections between patches, as
+        they must have the same knot vector along shared sides. It is also used
+        for highly accurate numerical integration along the edges of the patch.
+
+        :returns: A Mitsuba tensor of knot spans along the specified side.
+        """
+        return self._spline_patch.side_knot_spans(side)
+
+    def side_parametric_coords(
+        self, side: Patch.Side, side_coords: "mi.Float", flip: bool = False
+    ) -> "mi.TensorXf":
+        """
+        Returns the parametric coordinates along the specified `side` of the patch.
+
+        `side_coords` is a 1D tensor containing the parametric coordinates along
+        the specified side. The values in `side_coords` should be within the range
+        defined by the knot vector of the corresponding parametric direction.
+
+        `flip` indicates whether the order of the coordinates should be reversed.
+        This is useful when computing with shared edges between patches to ensure
+        consistent orientation.
+
+        :returns: A 2D tensor of shape (n_points, 2) representing the parametric
+                  coordinates along the specified side.
+        :raises ValueError: If `side_coords` is not a 1D tensor or if the values
+            in `side_coords` are outside the parametric domain of the spline patch.
+        """
+        return self._spline_patch.side_parametric_coords(side, side_coords, flip)
 
     @property
     def quads(self) -> "mi.TensorXu":

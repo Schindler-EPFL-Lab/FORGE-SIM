@@ -62,6 +62,55 @@ class SplinePatch(CoordinateSpline, Patch, Manifold, abc.ABC):
         )
 
     @abc.abstractmethod
+    def side_knot_spans(self, side: Patch.Side) -> "mi.TensorXf":
+        """
+        Returns the knot spans along the specified `side` of the patch.
+
+        This method is important for validating connections between patches, as
+        they must have the same knot vector along shared sides. It is also used
+        for highly accurate numerical integration along the edges of the patch.
+
+        :returns: A 2D tensor of shape (n_spans, 2) containing the knot spans
+                  along the specified side.
+        :raises NotImplementedError: If a child class does not implement this method.
+        """
+        raise NotImplementedError(
+            "Classes inheriting from `SplinePatch` need to implement the "
+            + "`side_knot_spans` method."
+        )
+
+    @abc.abstractmethod
+    def side_parametric_coords(
+        self, side: Patch.Side, side_coords: "mi.Float", flip: bool = False
+    ) -> "mi.TensorXf":
+        """
+        Returns the parametric coordinates along the specified `side` of the patch.
+
+        This method should be implemented by subclasses to provide the parametric
+        coordinates along the specified `side` of the patch. The full coordinates
+        are used for evaluating positions and normals along the side.
+
+        `side_coords` is a 1D tensor containing the parametric coordinates along
+        the side direction (v for LEFT/RIGHT, u for TOP/BOTTOM). These must be
+        within the valid range of the patch's parametric domain in that direction.
+
+        `flip`, if set to `True`, reverses the order of the returned parametric
+        coordinates along the specified side. This is useful when ensuring
+        consistent orientation between adjacent patches.
+
+        :returns: A 2D tensor of shape (n_points, 2) containing the parametric
+                  coordinates along the specified side.
+
+        :raises NotImplementedError: If a child class does not implement this method.
+        :raises ValueError: If `side_coords` is not a 1D tensor or contains values
+                            outside the valid range.
+        """
+        raise NotImplementedError(
+            "Classes inheriting from `SplinePatch` need to implement the "
+            + "`side_parametric_coords` method."
+        )
+
+    @abc.abstractmethod
     def __getstate__(self) -> dict[str, Any]:
         """
         Exports the state of the Patch for serialization.

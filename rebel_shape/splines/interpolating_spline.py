@@ -91,7 +91,7 @@ class InterpolatingSpline(abc.ABC):
         """
         raise NotImplementedError(
             "Classes that inherit from `InterpolatingSpline` need to implement the "
-            "`interpolate` method."
+            + "`interpolate` method."
         )
 
     @abc.abstractmethod
@@ -125,7 +125,7 @@ class InterpolatingSpline(abc.ABC):
         """
         raise NotImplementedError(
             "Classes that inherit from `InterpolatingSpline` need to implement the "
-            "`evaluate_basis_functions` method."
+            + "`evaluate_basis_functions` method."
         )
 
     @abc.abstractmethod
@@ -162,7 +162,7 @@ class InterpolatingSpline(abc.ABC):
         """
         raise NotImplementedError(
             "Classes that inherit from `InterpolatingSpline` need to implement the "
-            "`evaluate_basis_functions` method."
+            + "`evaluate_basis_functions` method."
         )
 
     @abc.abstractmethod
@@ -232,7 +232,7 @@ class InterpolatingSpline(abc.ABC):
         """
         raise NotImplementedError(
             "Classes that inherit from `InterpolatingSpline` need to implement the "
-            "`active_basis_function_indices` method."
+            + "`active_basis_function_indices` method."
         )
 
     @abc.abstractmethod
@@ -268,7 +268,7 @@ class InterpolatingSpline(abc.ABC):
         """
         raise NotImplementedError(
             "Classes that inherit from `InterpolatingSpline` need to implement the "
-            "`h_refinement` method."
+            + "`h_refinement` method."
         )
 
     @abc.abstractmethod
@@ -306,7 +306,7 @@ class InterpolatingSpline(abc.ABC):
         """
         raise NotImplementedError(
             "Classes inheriting from `SplinePatch` need to implement the "
-            "`project_function` method."
+            + "`project_function` method."
         )
 
     @property
@@ -323,7 +323,7 @@ class InterpolatingSpline(abc.ABC):
         """
         raise NotImplementedError(
             "Classes that inherit from `CoordinateSpline` need to implement the "
-            "`degree` property."
+            + "`degree` property."
         )
 
     @property
@@ -341,7 +341,7 @@ class InterpolatingSpline(abc.ABC):
         """
         raise NotImplementedError(
             "Classes that inherit from `InterpolatingSpline` need to implement the "
-            "`num_basis_functions` property."
+            + "`num_basis_functions` property."
         )
 
     @property
@@ -358,7 +358,7 @@ class InterpolatingSpline(abc.ABC):
         """
         raise NotImplementedError(
             "Classes that inherit from `InterpolatingSpline` need to implement the "
-            "`functions_per_span` property."
+            + "`functions_per_span` property."
         )
 
     @property
@@ -387,7 +387,30 @@ class InterpolatingSpline(abc.ABC):
         """
         raise NotImplementedError(
             "Classes that inherit from `InterpolatingSpline` need to implement the "
-            "`knot_spans` property."
+            + "`knot_spans` property."
+        )
+
+    @abc.abstractmethod
+    def validate_parametric_coords(self, parametric_coords: "mi.TensorXf") -> None:
+        """
+        Verifies that the provided `parametric_coords` tensor is valid for the spline.
+
+        This is a utility method that is used to verify that the `parametric_coords`
+        provided for computations are valid. It checks that the tensor is in accordance
+        with the expectation of the `interpolate` method, i.e. it is a 2D tensor
+        where the second dimension matches the number of parametric dimensions of the
+        spline, and that the values are within the range of the knot spans defined by
+        the spline.
+
+        :raises ValueError: If `parametric_coords` is not a 2D tensor, if its second
+            dimension does not match the number of parametric dimensions of the spline,
+            or if any of its values are outside the range of the knot spans defined by
+            the spline.
+        :raises NotImplementedError: If a child class does not implement this method.
+        """
+        raise NotImplementedError(
+            "Classes that inherit from `InterpolatingSpline` need to implement the "
+            + "`validate_parametric_coords` method."
         )
 
     def validate_interpolating_values(self, values: "mi.TensorXf") -> None:

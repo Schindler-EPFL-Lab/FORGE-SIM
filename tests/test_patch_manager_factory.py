@@ -4,9 +4,14 @@ from unittest.mock import MagicMock
 import drjit as dr
 import mitsuba as mi
 
+from rebel_shape.meshing.composite_spline_surface_factory import (
+    CompositeSplineSurfaceFactory,
+)
 from rebel_shape.meshing.patch import Patch
 from rebel_shape.meshing.patch_manager import PatchManager
 from rebel_shape.meshing.patch_manager_factory import PatchManagerFactory
+from rebel_shape.splines.bspline import BSpline
+from rebel_shape.splines.bspline_patch import BSplinePatch
 
 
 class TestPatchManagerFactory(unittest.TestCase):
@@ -221,3 +226,46 @@ class TestPatchManagerFactory(unittest.TestCase):
         self.assertEqual(manager._connection_list[1][Patch.Side.LEFT], 0)
         self.assertEqual(manager._connection_list[1][Patch.Side.TOP], 2)
         self.assertEqual(manager._connection_list[2][Patch.Side.BOTTOM], 1)
+
+    def test_spline_factory(self):
+        """Test building a PatchManager for spline patches."""
+        # The number of control points is 3 in both directions.
+        spline_1 = BSpline(knot_vector=[0.0, 0.0, 0.0, 1.0, 1.0, 1.0], degree=2)
+        spline_2 = BSpline(knot_vector=[0.0, 0.0, 0.5, 1.0, 1.0], degree=1)
+
+        # Control point positions do not matter for this test
+        spline_patch_1 = BSplinePatch(
+            name="spline_patch_1",
+            u_spline=spline_1,
+            v_spline=spline_2,
+            control_points=dr.zeros(dtype=mi.TensorXf, shape=(9, 3)),
+        )
+        spline_patch_2 = BSplinePatch(
+            name="spline_patch_2",
+            u_spline=spline_2,
+            v_spline=spline_1,
+            control_points=dr.zeros(dtype=mi.TensorXf, shape=(9, 3)),
+        )
+
+        factory = CompositeSplineSurfaceFactory(manager_name="test_composite_spline")
+        factory.add_patch(spline_patch_1)
+        factory.add_patch(spline_patch_2)
+
+        # spline_2 knot spans are exposed on the right side of spline_patch_1
+        # and the bottom side of spline_patch_2, so this must pass
+        factory.link_sides(
+            first_patch_name="spline_patch_1",
+            first_patch_side=Patch.Side.RIGHT,
+            second_patch_name="spline_patch_2",
+            second_patch_side=Patch.Side.BOTTOM,
+        )
+
+        # The left side of spline_patch_2 has knot spans that are not present on the
+        # right side of spline_patch_1, so this must fail
+        with self.assertRaises(ValueError):
+            factory.link_sides(
+                first_patch_name="spline_patch_1",
+                first_patch_side=Patch.Side.RIGHT,
+                second_patch_name="spline_patch_2",
+                second_patch_side=Patch.Side.LEFT,
+            )
