@@ -74,6 +74,37 @@ class TessellatedSplineSurface:
         )
 
     @classmethod
+    def from_file(
+        cls,
+        composite_spline_surface_path: Path,
+    ) -> "TessellatedSplineSurface":
+        """
+        Loads a tessellated spline surface from file and sets the bsdf for each patch
+        as a default DiffuseBSDF.
+
+        This class method deserializes a previously saved `TessellatedSplineSurface`
+        from a JSON file. Since BSDF information is not preserved during serialization,
+        the result spline has the default textures.
+
+        :returns: A decoded `TessellatedSplineSurface` instance with default textures
+
+        :raises FileNotFoundError: If the surface file does not exist.
+            JSONDecodeError: If the surface file contains invalid JSON.
+        """
+        if not composite_spline_surface_path.exists():
+            raise FileNotFoundError(
+                f"File {composite_spline_surface_path} does not exist."
+            )
+        if not composite_spline_surface_path.is_file():
+            raise ValueError(f"Path {composite_spline_surface_path} is not a file.")
+
+        with open(composite_spline_surface_path, "r") as tessellated_spline_file:
+            tessellated_spline: TessellatedSplineSurface = jsonpickle.decode(
+                tessellated_spline_file.read()
+            )
+        return tessellated_spline
+
+    @classmethod
     def from_file_with_textures(
         cls, composite_spline_surface_path: Path, texture_paths: Sequence[Path]
     ) -> "TessellatedSplineSurface":
@@ -104,17 +135,9 @@ class TessellatedSplineSurface:
             The texture files will be reordered internally to match the patch order
             in the spline surface, regardless of the order they are provided in.
         """
-        if not composite_spline_surface_path.exists():
-            raise FileNotFoundError(
-                f"File {composite_spline_surface_path} does not exist."
-            )
-        if not composite_spline_surface_path.is_file():
-            raise ValueError(f"Path {composite_spline_surface_path} is not a file.")
-
-        with open(composite_spline_surface_path, "r") as tessellated_spline_file:
-            tessellated_spline: TessellatedSplineSurface = jsonpickle.decode(
-                tessellated_spline_file.read()
-            )
+        tessellated_spline = cls.from_file(
+            composite_spline_surface_path=composite_spline_surface_path
+        )
 
         # Checks the existence of texture files internally
         ordered_files = tessellated_spline.composite_spline.match_files_to_patches(

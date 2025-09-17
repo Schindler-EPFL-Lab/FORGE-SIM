@@ -161,10 +161,7 @@ def initialize_scene(
         scene_path=thermoscenes_scene_path, sensor_sampler=sampler
     )
 
-    with open(spline_path, "r") as tessellated_spline_file:
-        tessellated_spline_surface: TessellatedSplineSurface = jsonpickle.decode(
-            tessellated_spline_file.read()
-        )
+    tessellated_spline_surface = TessellatedSplineSurface.from_file(spline_path)
 
     initial_field_values = [
         0.5 * dr.ones(dtype=mi.TensorXf, shape=(spline.control_points.shape[0], 1))

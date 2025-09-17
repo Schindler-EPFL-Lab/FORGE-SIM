@@ -277,7 +277,10 @@ class TestTessellatedSplineSurface(unittest.TestCase):
                 self.assertEqual(patch.bsdf.mitsuba_dict, expected_mitsuba_dict)
 
     def test_from_file_with_textures_file_errors(self):
-        """Test error handling for file-related issues."""
+        """
+        Test error handling for file-related issues when loading spline surface
+        with textures.
+        """
         import tempfile
 
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -304,6 +307,53 @@ class TestTessellatedSplineSurface(unittest.TestCase):
                     composite_spline_surface_path=invalid_file,
                     texture_paths=[texture_file, texture_file, texture_file],
                 )
+
+    def test_from_file_without_textures_success(self):
+        """Test successful loading of tessellated spline surface without textures."""
+        # First save the current tessellated surface to a file
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+
+            # Save tessellated surface
+            surface_file = temp_path / "test_surface.json"
+            with open(surface_file, "w") as f:
+                _ = f.write(jsonpickle.encode(self.tessellated_surface))
+
+            # Load tessellated surface with textures
+            loaded_surface = TessellatedSplineSurface.from_file(surface_file)
+
+            # Verify the surface was loaded correctly
+            self.assertEqual(loaded_surface.spline_name, "test_composite")
+            self.assertEqual(len(loaded_surface), 3)
+
+            for patch in loaded_surface:
+                self.assertIsInstance(patch.bsdf, DiffuseBSDF)
+
+                expected_mitsuba_dict = DiffuseBSDF().mitsuba_dict
+                self.assertEqual(patch.bsdf.mitsuba_dict, expected_mitsuba_dict)
+
+    def test_from_file_without_textures_file_errors(self):
+        """
+        Test error handling for file-related issues when loading spline surface
+        without textures.
+        """
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+
+            # Test nonexistent surface file
+            nonexistent_file = temp_path / "nonexistent.json"
+
+            with self.assertRaises(FileNotFoundError):
+                TessellatedSplineSurface.from_file(
+                    composite_spline_surface_path=nonexistent_file,
+                )
+
+            # Test invalid JSON file
+            invalid_file = temp_path / "invalid.json"
+            with open(invalid_file, "w") as f:
+                f.write("invalid json content")
 
     @staticmethod
     def _create_simple_tessellated_spline_surface() -> TessellatedSplineSurface:

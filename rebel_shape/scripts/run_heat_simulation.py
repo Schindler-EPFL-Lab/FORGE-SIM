@@ -11,7 +11,6 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import drjit as dr
-import jsonpickle
 import mitsuba as mi
 import mlflow
 import numpy as np
@@ -33,6 +32,7 @@ from rebel_shape.meshing.composite_iga_spline_surface import CompositeIGASplineS
 from rebel_shape.meshing.tessellated_iga_spline_surface import (
     TessellatedIGASplineSurface,
 )
+from rebel_shape.meshing.tessellated_spline_surface import TessellatedSplineSurface
 from rebel_shape.plugin_wrappers.diffuse_bsdf import DiffuseBSDF
 from rebel_shape.plugin_wrappers.sampler import Sampler
 from rebel_shape.property_optimizers.field_texture_optimizer import (
@@ -174,10 +174,7 @@ def initialize_scene(
     :raises FileNotFoundError: If the `spline_path` does not exist.
     """
 
-    with open(spline_path, "r") as tessellated_spline_file:
-        tessellated_spline_surface: TessellatedIGASplineSurface = jsonpickle.decode(
-            tessellated_spline_file.read()
-        )
+    tessellated_spline_surface = TessellatedSplineSurface.from_file(spline_path)
 
     scene_dict = {"type": "scene", "integrator": {"type": "path"}}
 
