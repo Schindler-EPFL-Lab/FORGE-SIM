@@ -6,15 +6,16 @@ import tyro
 from azure.ai.ml import command
 from azure_ml_utils.azure_connect import get_client
 
-from rebel_shape.scripts.optimize_suzanne_spline import SuzanneSplineParameters
+from rebel_shape.scripts.optimize_ply_spline import PLYSplineParameters
+
 
 @dataclass
 class TrainingParametersAzure:
-    script_params: SuzanneSplineParameters
+    script_params: PLYSplineParameters
     """Parameters for the training script"""
-    scene_name: str = "Suzanne_Spline"
+    scene_name: str = "PLY_Spline"
     """Name of the scene/object"""
-    experiment_name: str = "Spline optimization of diffuse Suzanne mesh"
+    experiment_name: str = "Spline optimization of diffuse ply mesh"
     environment_version: str = "latest"
     """Version of the environment"""
     compute: str = "rebel-nerf-t4-ssh"
@@ -42,7 +43,7 @@ def main() -> None:
     )
 
     parameters.experiment_name = parameters.scene_name + "-training-job"
-    cmd = "python3.10 rebel_shape/scripts/optimize_suzanne_spline.py "
+    cmd = "python3.10 rebel_shape/scripts/optimize_ply_spline.py "
     cmd += parameters.script_params.to_command_string("")
 
     if parameters.environment_version.isnumeric():

@@ -1,5 +1,5 @@
 """
-Example script for optimizing Suzanne as a multi-patch B-spline surface.
+Example script for optimizing an arbitrary ply shape as a multi-patch B-spline surface.
 Verifies the implementation of the `SplineOptimizer` class.
 """
 
@@ -40,9 +40,15 @@ from rebel_shape.utils.sensor_utils import create_cameras_fibonacci
 
 
 @dataclass(kw_only=True)
-class SuzanneSplineParameters(ReverseCli):
-    """Parameters used for spline optimization of Suzanne"""
+class PLYSplineParameters(ReverseCli):
+    """Parameters used for spline optimization of an arbitrary shape"""
 
+    shape_path: Path = Path("./data/test_scenes/meshes/suzanne.ply")
+    """Path to the .ply shape"""
+    environment_map_path: Path = Path("./data/test_scenes/textures/envmap2.exr")
+    """
+    Path to the envionment map that is used as background in optimization
+    """
     sensor_count: int = 12
     """Number of camera views used in optimization"""
     reference_samples: int = 961
@@ -96,10 +102,18 @@ class SuzanneSplineParameters(ReverseCli):
             raise ValueError("`resolution` must be a positive integer")
         if self.optimization_iterations < 1:
             raise ValueError("`optimization_iterations` must be a positive integer.")
+        if not self.shape_path.exists():
+            raise ValueError("`shape_path` does not exist.")
+        if not self.shape_path.suffix != ".ply":
+            raise ValueError("`shape_path` is not a .ply file.")
+        if not self.environment_map_path.exists():
+            raise ValueError("`environment_map_path` does not exist.")
 
 
 def initialize_scene(
     sensor_count: int,
+    shape_path: Path,
+    envmap_path: Path,
     continuous_samples: int,
     visibility_samples: int,
     reference_samples: int,
@@ -107,16 +121,18 @@ def initialize_scene(
     spline_degree: int,
     knot_spans: int,
     tessellation_subdivisions: int,
+    output_folder: Path,
 ) -> tuple["mi.Scene", list[MaskedPoseImage], TessellatedSplineSurface]:
     """
     Sets up the scene, sensors, reference images, and tessellated composite B-Spline
     surface for shape optimization.
 
-    There are `sensor_count` cameras and reference images. Reference images are
-    rendered with `reference_samples` per pixel while `continuous_samples` controls
-    how many samples per pixel are used for rendering during optimization. The
-    resolution of images is given by `resolution`. Reference images are shown to the
-    user.
+    There are `sensor_count` reference images of the shape from `shape_path` using the
+    environmental map from `envmap_path`. Reference images are rendered with
+    `reference_samples` per pixel while `continuous_samples` controls how many samples
+    per pixel are used for rendering during optimization. The resolution of images is
+    given by `resolution`. Reference images are shown to the user and saved to
+    `output_folder`/reference_views.png
 
     The number of samples used for rendering the image and continuous derivatives
     is `continuous_samples` while `visibility_samples` control the number of projective
@@ -149,17 +165,16 @@ def initialize_scene(
     mlflow.log_param("spp_projective", visibility_samples)
     mlflow.log_param("spp_indirect", visibility_samples)
 
-    script_dir = Path(__file__).parent.resolve()
     scene_dict = {
         "type": "scene",
         "integrator": integrator.mitsuba_dict,
         "emitter": {
             "type": "envmap",
-            "filename": str(script_dir / "../../data/test_scenes/textures/envmap2.exr"),
+            "filename": str(envmap_path),
         },
         "shape": {
             "type": "ply",
-            "filename": str(script_dir / "../../data/test_scenes/meshes/suzanne.ply"),
+            "filename": str(shape_path),
             "bsdf": DiffuseBSDF().mitsuba_dict,
         },
     }
@@ -179,7 +194,8 @@ def initialize_scene(
         for camera in cameras
     ]
     show_rendered_views(
-        views=[mi.util.convert_to_bitmap(image) for image in ref_images]
+        views=[mi.util.convert_to_bitmap(image) for image in ref_images],
+        save_path=output_folder / "reference_views.png",
     )
     ref_images = [
         MaskedPoseImage(
@@ -193,7 +209,7 @@ def initialize_scene(
 
     # Set the initial shape of the object - ico-sphere
     cubedsphere = cubed_sphere(
-        name="suzanne",
+        name="spline_surface",
         degree=spline_degree,
         spline_subdivisions=knot_spans,
         tessellation_subdivisions=tessellation_subdivisions,
@@ -204,7 +220,7 @@ def initialize_scene(
         "integrator": integrator.mitsuba_dict,
         "emitter": {
             "type": "envmap",
-            "filename": str(script_dir / "../../data/test_scenes/textures/envmap2.exr"),
+            "filename": str(envmap_path),
         },
     }
     for mesh in reversed(cubedsphere):
@@ -215,14 +231,14 @@ def initialize_scene(
     return scene_source, ref_images, cubedsphere
 
 
-def optimize_suzanne(params: SuzanneSplineParameters) -> None:
+def optimize_ply(params: PLYSplineParameters) -> None:
     """
     Optimizes a cubedsphere B-Spline surface to match the reference images of
-    a diffuse Suzanne mesh.
+    a diffuse ply mesh.
 
     A simple example of spline shape optimization used to explore the properties of
     spline optimization in direct comparison to mesh optimization from
-    `optimize_suzanne_mesh.py`.
+    `optimize_ply_mesh.py`.
 
     Unlike for the mesh optimization, some regularization terms are applied to ensure
     smoothness between the patches as well as a light penalty to avoid pinching
@@ -243,8 +259,11 @@ def optimize_suzanne(params: SuzanneSplineParameters) -> None:
         mi.set_variant("llvm_ad_rgb")
         logger.info("Using the CPU for rendering.")
 
+    params.output_folder.mkdir(parents=True, exist_ok=True)
     scene_source, ref_images, tessellated_spline = initialize_scene(
         sensor_count=params.sensor_count,
+        shape_path=params.shape_path,
+        envmap_path=params.environment_map_path,
         continuous_samples=params.continuous_samples,
         visibility_samples=params.visibility_samples,
         reference_samples=params.reference_samples,
@@ -252,6 +271,7 @@ def optimize_suzanne(params: SuzanneSplineParameters) -> None:
         spline_degree=params.shape_params.degree,
         knot_spans=params.shape_params.knot_spans,
         tessellation_subdivisions=params.shape_params.tessellation_subdivisions,
+        output_folder=params.output_folder,
     )
 
     regularization = CompositeRegularization(
@@ -305,7 +325,7 @@ def optimize_suzanne(params: SuzanneSplineParameters) -> None:
 
 
 if __name__ == "__main__":
-    parameters = tyro.cli(SuzanneSplineParameters)
+    parameters = tyro.cli(PLYSplineParameters)
     mlflow.log_params(parameters.to_loggable_dict())
 
-    optimize_suzanne(params=parameters)
+    optimize_ply(params=parameters)
