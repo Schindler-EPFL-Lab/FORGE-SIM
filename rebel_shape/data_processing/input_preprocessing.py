@@ -1,3 +1,4 @@
+from enum import Enum
 from pathlib import Path
 
 import mitsuba as mi
@@ -7,12 +8,18 @@ from rebel_shape.data_processing.thermoscenes_loader import ThermoScenesLoader
 from rebel_shape.plugin_wrappers.sampler import Sampler
 
 
+class MaskStrategy(Enum):
+    OBJECT = 1
+    FOREGROUND = 2
+
+
 def preprocess_rgb_images(
     scene_path: Path,
     environment_map_path: Path | None = None,
     output_dir: Path | None = None,
     spp: int = 16,
     train: bool = True,
+    mask_strategy: MaskStrategy = MaskStrategy.OBJECT,
     sampler: Sampler = Sampler(),
 ) -> tuple[list[MaskedPoseImage], "mi.ScalarTransform4f"]:
     """
@@ -24,21 +31,26 @@ def preprocess_rgb_images(
     or evaluation set (`False`).
 
     Then, the background from `environment_map_path` is rendered for appropriate camera
-    poses. `spp` samples per pixel are used in this step. Choosing a higher value
-    than the default (`16`) has limited benefit. If the path is not provided, a solid
-    white background is used.
+    poses. `spp` samples per pixel are used in this step. Choosing a higher value than
+    the default (`16`) has limited benefit. If the path is not provided, a solid white
+    background is used.
 
-    The `sampler` determines the sampling strategy used for rendering and is passed
-    to all cameras loaded from the ThermoScenes scene.
+    The `sampler` determines the sampling strategy used for rendering and is passed to
+    all cameras loaded from the ThermoScenes scene.
 
-    Finally, the transparent regions of the input RGBA images are replaced
-    by the rendered background. Optionally, the generated images are saved to the
-    `output_dir`.
+    Finally, the transparent regions of the input RGBA images are replaced by the
+    rendered background. Optionally, the generated images are saved to the `output_dir`.
+    The output MaskedPoseImages mask foreground and backgrounds if `mask_strategy` is
+    MaskStrategy.object. They mask foreground if `mask_strategy` is
+    MaskStrategy.foreground.
 
     :returns: A tuple containing a list of masked pose images train/eval images and
     dataloder transform which was applied to camera poses.
 
     :raises FileNotFoundError: If the environment map file cannot be found
+
+    :raises ValueError: if `mask_foreground_and_background` and `mask_foreground` are
+        True.
 
     :raises RuntimeError: If the images in scene_path are not RGBA.
     """
@@ -92,10 +104,16 @@ def preprocess_rgb_images(
 
             composited_image = image * alpha + background * (1.0 - alpha)
 
+            mask = None
+            if mask_strategy is MaskStrategy.OBJECT:
+                mask = alpha
+            if mask_strategy is MaskStrategy.FOREGROUND:
+                mask = 1.0 - foreground_mask
+
             composited_image_masked_pose = MaskedPoseImage(
                 image=composited_image,
                 camera=camera,
-                mask=1.0 - foreground_mask if foreground_mask is not None else alpha,
+                mask=mask,
             )
         else:
             raise RuntimeError("Image does not have an alpha channel")

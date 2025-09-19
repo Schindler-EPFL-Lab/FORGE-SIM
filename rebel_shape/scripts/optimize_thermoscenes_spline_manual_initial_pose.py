@@ -22,7 +22,9 @@ sys.path.append("./")
 from dataclasses_reverse_cli.reverse_cli import ReverseCli
 
 from rebel_shape import logger
-from rebel_shape.data_processing.input_preprocessing import preprocess_rgb_images
+from rebel_shape.data_processing.input_preprocessing import (
+    preprocess_rgb_images,
+)
 from rebel_shape.data_processing.manual_initialization import (
     load_bounding_bbox_transforms,
 )
@@ -157,22 +159,23 @@ def initialize_scene(
     TessellatedSplineSurface,
 ]:
     """
-    Creates and loads Mitsuba dictionary that represents the scene, as well as
-    providing the reference images and sensor views.
+    Creates and loads Mitsuba dictionary that represents the scene, as well as providing
+    the reference images and sensor views.
 
     `continuous_samples` is the number of samples used for optimizing continuous
-    derivatives (e.g. Texture), while `visibility_samples` is the number of samples
-    used for direct and indirect visibility changes.
+    derivatives (e.g. Texture), while `visibility_samples` is the number of samples used
+    for direct and indirect visibility changes.
 
-    `thermoscenes_scene_path` is a `Path` to a scene that can be loaded
-    with `ThermoScenesLoader`. `initial_guess_mesh_path` specifies a path to the mesh
-    file that should be used as an initial guess for optimization. `envmap_path` is the
-    path to the 360 image that is used for the background during optimization.
+    `thermoscenes_scene_path` is a `Path` to a scene that can be loaded with
+    `ThermoScenesLoader`. `initial_guess_mesh_path` specifies a path to the mesh file
+    that should be used as an initial guess for optimization. `envmap_path` is the path
+    to the 360 image that is used for the background during optimization. Masks in
+    MaskedPoseImage contain are the object masks
+
 
     The initial mesh is a cubedsphere, which is created by tessellating a B-spline
-    surface with `spline_degree` and `spline_subdivisions` knot spans. Each patch
-    has 2 * `mesh_subdivisions` ** 2 triangles. its initial radius is
-    `initial_sphere_radius`.
+    surface with `spline_degree` and `spline_subdivisions` knot spans. Each patch has 2
+    * `mesh_subdivisions` ** 2 triangles. its initial radius is `initial_sphere_radius`.
 
     :returns: Tuple of following elements:
 

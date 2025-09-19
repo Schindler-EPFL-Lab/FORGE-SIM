@@ -155,7 +155,8 @@ def initialize_scene(
     `thermoscenes_scene_path` is a `Path` to a scene that can be loaded
     with `ThermoScenesLoader`. `initial_guess_mesh_path` specifies a path to the mesh
     file that should be used as an initial guess for optimization. `envmap_path` is the
-    path to the 360 image that is used for the background during optimization.
+    path to the 360 image that is used for the background during optimization. Masks in
+    MaskedPoseImage contain are the object masks.
 
     :returns: A tuple containing:
 
@@ -241,7 +242,7 @@ def optimize_thermoscenes_scene(params: ThermoSceneOptimizationParameters) -> No
     orientation of the initial mesh for `pose_optimization_iterations`. This step is
     skipped if `optimize_initial_pose` is set to False.
 
-    Optimization is performed for `optimization_iterations`  with two phases;
+    Optimization is performed for `optimization_iterations` with two phases;
     each phase goes through all the images in the dataset:
 
     1. Shape optimization of mesh vertex positions with `shape_batch_size` images and
@@ -254,6 +255,9 @@ def optimize_thermoscenes_scene(params: ThermoSceneOptimizationParameters) -> No
     Optionally, images and meshes can be saved to `params.output_folder`. The path
     should be a directory where the images will be saved. If the directory does not
     exist, it will be created, while if a `None` value is provided, nothing is saved.
+
+    Optimization can be done with masked pixels or with original pixels depending
+    on the `params.mask_pixels_during_optimization` parameter.
 
     Optimization can either be executed on a GPU or CPU, depending on the`use_gpu`
     parameter.

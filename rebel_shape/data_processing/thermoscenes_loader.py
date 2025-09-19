@@ -1,6 +1,7 @@
 import json
 from pathlib import Path
 
+import drjit as dr
 import mitsuba as mi
 import numpy as np
 
@@ -57,12 +58,12 @@ class ThermoScenesLoader:
         self._scene_path = scene_path
 
         self._train_images_rgb: list["mi.TensorXf"] = []
-        self._train_foreground_masks: list["mi.TensorXf | None"] = []
+        self._train_foreground_masks: list["mi.TensorXf"] = []
         self._train_images_thermal: list["mi.TensorXf"] = []
         self._train_cameras: list[PerspectiveCamera] = []
 
         self._eval_images_rgb: list["mi.TensorXf"] = []
-        self._eval_foreground_masks: list["mi.TensorXf | None"] = []
+        self._eval_foreground_masks: list["mi.TensorXf"] = []
         self._eval_images_thermal: list["mi.TensorXf"] = []
         self._eval_cameras: list[PerspectiveCamera] = []
         self._eval_rgb_filenames: list[str] = []
@@ -146,7 +147,7 @@ class ThermoScenesLoader:
         for frame in transform_data.get("frames", []):
             rgb_image_filename = Path(frame["file_path"]).name
             thermal_image_filename = Path(frame["thermal_file_path"]).name
-            foreground_mask_filename: None | str = (
+            foreground_mask_filename = (
                 Path(frame["foreground_mask_file_path"]).name
                 if foreground_mask_folder.exists()
                 else None
@@ -193,7 +194,9 @@ class ThermoScenesLoader:
                     "grayscale image."
                 )
 
-            mitsuba_foreground_mask = None
+            mitsuba_foreground_mask = mi.TensorXf(
+                dr.zeros_like(mitsuba_image_rgb[:, :, 0:1])
+            )
             if foreground_mask_filename is not None:
                 foreground_mask_path = foreground_mask_paths[foreground_mask_filename]
                 mitsuba_foreground_mask = mi.TensorXf(
@@ -340,7 +343,7 @@ class ThermoScenesLoader:
         return self._train_images_thermal
 
     @property
-    def train_foreground_masks(self) -> list["mi.TensorXf | None"]:
+    def train_foreground_masks(self) -> list["mi.TensorXf"]:
         """List of foreground masks in the training set"""
         return self._train_foreground_masks
 
@@ -375,7 +378,7 @@ class ThermoScenesLoader:
         return self._eval_images_thermal
 
     @property
-    def eval_foreground_masks(self) -> list["mi.TensorXf | None"]:
+    def eval_foreground_masks(self) -> list["mi.TensorXf"]:
         """List of foreground masks in the eval set"""
         return self._eval_foreground_masks
 
