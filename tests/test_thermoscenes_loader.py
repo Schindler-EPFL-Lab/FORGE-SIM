@@ -28,6 +28,7 @@ class TestThermoScenesDataloader(unittest.TestCase):
         self.assertEqual(len(self.loader.eval_images_thermal), 1)
         self.assertEqual(len(self.loader.eval_foreground_masks), 1)
         self.assertEqual(len(self.loader.eval_cameras), 1)
+        self.assertEqual(len(self.loader.eval_filenames), 1)
 
     def test_camera_settings(self):
         for camera in self.loader.train_cameras + self.loader.eval_cameras:

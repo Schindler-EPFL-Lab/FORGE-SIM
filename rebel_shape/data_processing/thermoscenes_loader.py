@@ -65,6 +65,7 @@ class ThermoScenesLoader:
         self._eval_foreground_masks: list["mi.TensorXf | None"] = []
         self._eval_images_thermal: list["mi.TensorXf"] = []
         self._eval_cameras: list[PerspectiveCamera] = []
+        self._eval_rgb_filenames: list[str] = []
 
         self._sensor_sampler = sensor_sampler
         self._tf_cameras = mi.ScalarTransform4f()
@@ -258,6 +259,7 @@ class ThermoScenesLoader:
                 self._eval_images_thermal.append(mitsuba_image_thermal)
                 self._eval_foreground_masks.append(mitsuba_foreground_mask)
                 self._eval_cameras.append(camera)
+                self._eval_rgb_filenames.append(rgb_image_filename)
 
             else:
                 raise ValueError(
@@ -396,6 +398,11 @@ class ThermoScenesLoader:
             camera.pixel_format = PerspectiveCamera.PixelFormat.LUMINANCE
 
         return thermal_cameras
+
+    @property
+    def eval_filenames(self) -> list[str]:
+        """List of RGB images filenames in the eval set"""
+        return self._eval_rgb_filenames
 
     def get_train_data_rgb(self) -> list[tuple[PerspectiveCamera, "mi.TensorXf"]]:
         return list(zip(self.train_cameras, self.train_images_rgb))

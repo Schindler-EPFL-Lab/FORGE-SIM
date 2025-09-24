@@ -7,7 +7,6 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
-import drjit as dr
 import mitsuba as mi
 import tyro
 
@@ -20,10 +19,10 @@ sys.path.append("./")
 from dataclasses_reverse_cli.reverse_cli import ReverseCli
 
 from rebel_shape import logger
-from rebel_shape.data_processing.masked_pose_image import MaskedPoseImage
 from rebel_shape.data_processing.thermoscenes_loader import ThermoScenesLoader
 from rebel_shape.meshing.tessellated_spline_surface import TessellatedSplineSurface
 from rebel_shape.plugin_wrappers.sampler import Sampler
+from rebel_shape.render.render import Render
 
 
 @dataclass(kw_only=True)
@@ -47,7 +46,7 @@ class RenderSplineParameters(ReverseCli):
     """
     flip_y: bool = True
     """If the texture was flipped along y axis during saving"""
-    samples_per_pixel: int = 169
+    samples_per_pixel: int = 289
     """Number of samples per pixel used for rendering"""
     output_folder: Path = Path("./outputs/")
     """Where to save the outputs (created if it does not exist)"""
@@ -126,8 +125,10 @@ def render_spline(params: RenderSplineParameters) -> None:
     Render spline surface from eval cameras.
     It loads the saved spline surface from `params.spline_path`. Optionally it also
     loads spline patches textures from `params.textures_paths` if provided. It reads
-    eval_images from `params.thermoscenes_scene_path` and renders the spline surface
-    from the eval cameras.
+    eval cameras from `params.thermoscenes_scene_path` and renders the spline surface
+    based on cameras. It renders RGB images and stores the results in the
+    `params.output_folder`. Names correspond to the eval RGB images from the
+    thermoscenes dataset. The files are stored in .exr format.
 
     :raises ValueError: If `params.thermoscenes_scene_path` is not a valid path, or
         it is not a directory.
@@ -159,38 +160,33 @@ def render_spline(params: RenderSplineParameters) -> None:
     loader = ThermoScenesLoader(
         scene_path=params.thermoscenes_scene_path, sensor_sampler=sampler
     )
-    eval_images = [
-        MaskedPoseImage(image=image, camera=camera, mask=None)
-        for image, camera in zip(loader.eval_images_rgb, loader.eval_cameras)
-    ]
 
     # optionally flip along y axis:
-    if params.flip_y:
+    if params.flip_y and params.textures_paths is not None:
         for mesh in tessellated_spline:
             texture_key = f"{mesh.name}.bsdf.reflectance.data"
             scene_params[texture_key] = scene_params[texture_key][::-1, :, :]
     scene_params.update()
 
+    renderer = Render(scene_source)
+
     # render views and save them
     params.output_folder.mkdir(parents=True, exist_ok=True)
-    rendered_views: list[mi.Bitmap] = []
-    for image in eval_images:
-        rendered_image = mi.render(
-            scene=scene_source,
-            sensor=image.sensor,
-            spp=params.samples_per_pixel,
-        )
-        rendered_image = dr.clip(rendered_image, min=0.0, max=1.0)
-        rendered_image = mi.util.convert_to_bitmap(rendered_image, uint8_srgb=False)
-        rendered_image = rendered_image.convert(
-            mi.Bitmap.PixelFormat.RGB, mi.Struct.Type.Float32, True
-        )
-        rendered_views.append(rendered_image)
+    rendered_images: list[mi.Bitmap] = []
+    for filename, camera in zip(loader.eval_filenames, loader.eval_cameras):
+        eval_filename_exr = Path(filename).stem + ".exr"
+        image_output_path = params.output_folder / eval_filename_exr
 
-    for idx, bitmap in enumerate(rendered_views):
-        output_path = params.output_folder / f"view_{idx:03d}.exr"
-        bitmap.write(str(output_path))
-    logger.info(f"Saved {len(rendered_views)} rendered views to {params.output_folder}")
+        _ = renderer.render(
+            camera=camera,
+            samples_per_pixel=params.samples_per_pixel,
+            output_path=image_output_path,
+            output_type=mi.Struct.Type.Float32,
+        )
+
+    logger.info(
+        f"Saved {len(rendered_images)} rendered images to {params.output_folder}"
+    )
 
 
 if __name__ == "__main__":
