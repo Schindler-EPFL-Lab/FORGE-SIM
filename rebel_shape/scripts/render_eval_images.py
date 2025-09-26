@@ -180,7 +180,7 @@ def render_spline(params: RenderSplineParameters) -> None:
         _ = renderer.render(
             camera=camera,
             samples_per_pixel=params.samples_per_pixel,
-            output_path=image_output_path,
+            save_path=image_output_path,
             output_type=mi.Struct.Type.Float32,
         )
 

@@ -104,7 +104,7 @@ class PLYSplineParameters(ReverseCli):
             raise ValueError("`optimization_iterations` must be a positive integer.")
         if not self.shape_path.exists():
             raise ValueError("`shape_path` does not exist.")
-        if not self.shape_path.suffix != ".ply":
+        if self.shape_path.suffix != ".ply":
             raise ValueError("`shape_path` is not a .ply file.")
         if not self.environment_map_path.exists():
             raise ValueError("`environment_map_path` does not exist.")
