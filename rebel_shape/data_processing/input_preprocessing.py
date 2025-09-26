@@ -3,8 +3,8 @@ from pathlib import Path
 
 import mitsuba as mi
 
+from rebel_shape.data_processing.image_scene_loader import ImageSceneLoader
 from rebel_shape.data_processing.masked_pose_image import MaskedPoseImage
-from rebel_shape.data_processing.thermoscenes_loader import ThermoScenesLoader
 from rebel_shape.plugin_wrappers.sampler import Sampler
 
 
@@ -26,7 +26,7 @@ def preprocess_rgb_images(
     Blends the environment map used in optimization with foreground object that is
     reconstructed from RGBA images.
 
-    Loads a scene from `scene_path` assuming it is compatible with `ThermoScenesLoader`.
+    Loads a scene from `scene_path` assuming it is compatible with `ImageSceneLoader`.
     Boolean `train` controls whether the images are taken from the training set (`True`)
     or evaluation set (`False`).
 
@@ -58,13 +58,9 @@ def preprocess_rgb_images(
     if environment_map_path is not None and not environment_map_path.exists():
         raise FileNotFoundError(f"Environment map not found at {environment_map_path}")
 
-    loader = ThermoScenesLoader(scene_path=scene_path, sensor_sampler=sampler)
+    loader = ImageSceneLoader(scene_path=scene_path, sensor_sampler=sampler)
 
-    cameras = loader.train_cameras if train else loader.eval_cameras
-    rgb_images = loader.train_images_rgb if train else loader.eval_images_rgb
-    foreground_masks = (
-        loader.train_foreground_masks if train else loader.eval_foreground_masks
-    )
+    data_split = loader.train_data if train else loader.eval_data
 
     environment_map = (
         {"type": "envmap", "filename": str(environment_map_path)}
@@ -92,9 +88,7 @@ def preprocess_rgb_images(
         output_dir.mkdir(exist_ok=True)
 
     # Process each image and camera
-    for idx, (camera, rgba_image, foreground_mask) in enumerate(
-        zip(cameras, rgb_images, foreground_masks)
-    ):
+    for idx, (_, camera, rgba_image, foreground_mask) in enumerate(data_split):
         sensor = mi.load_dict(camera.mitsuba_dict)
         background = mi.render(scene=scene, sensor=sensor, spp=spp)
 

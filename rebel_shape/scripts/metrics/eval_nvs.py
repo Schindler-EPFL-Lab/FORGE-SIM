@@ -29,11 +29,11 @@ sys.path.append("./")
 
 from dataclasses_reverse_cli.reverse_cli import ReverseCli
 
+from rebel_shape.data_processing.image_scene_loader import ImageSceneLoader
 from rebel_shape.data_processing.input_preprocessing import (
     MaskStrategy,
     preprocess_rgb_images,
 )
-from rebel_shape.data_processing.thermoscenes_loader import ThermoScenesLoader
 
 
 @dataclass(kw_only=True)
@@ -80,7 +80,7 @@ def eval_novel_view_synthesis(params: EvalNVSParameters) -> None:
     """
 
     mi.set_variant("llvm_ad_rgb")
-    loader = ThermoScenesLoader(scene_path=params.thermoscenes_scene_path)
+    loader = ImageSceneLoader(scene_path=params.thermoscenes_scene_path)
 
     device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
 

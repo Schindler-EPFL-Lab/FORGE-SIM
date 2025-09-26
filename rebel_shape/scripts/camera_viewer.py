@@ -18,7 +18,7 @@ sys.path.append("./")
 
 from dataclasses_reverse_cli.reverse_cli import ReverseCli
 
-from rebel_shape.data_processing.thermoscenes_loader import ThermoScenesLoader
+from rebel_shape.data_processing.image_scene_loader import ImageSceneLoader
 from rebel_shape.plugin_wrappers.sampler import Sampler
 from rebel_shape.utils.image_utils import show_rendered_views
 from rebel_shape.utils.sensor_utils import create_sensors_radial
@@ -101,7 +101,7 @@ def render_cameras(params: CameraViewerParams) -> None:
     """
     mi.set_variant("llvm_ad_rgb")
 
-    loader = ThermoScenesLoader(scene_path=params.thermoscenes_scene_path)
+    loader = ImageSceneLoader(scene_path=params.thermoscenes_scene_path)
 
     center_coords = mi.ScalarPoint3f(0.0, 0.0, 0.0)
     for camera in loader.train_cameras:

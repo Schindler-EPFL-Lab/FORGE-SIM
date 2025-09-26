@@ -136,7 +136,7 @@ class PatchManager(abc.ABC):
         """
         self._global_to_patches_map: dict[int, dict[int, int]] = {}
         """
-        Dictionary that keeps track of which global vertices appear in which patches 
+        Dictionary that keeps track of which global vertices appear in which patches
         and their local index.
         """
 
@@ -144,8 +144,8 @@ class PatchManager(abc.ABC):
 
         self._averaging_weights = self._build_averaging_weights()
         """
-        A (V, 1) tensor that contains the inverse number of patches that share each 
-        vertex in the global mesh. This is used to efficiently compute the average 
+        A (V, 1) tensor that contains the inverse number of patches that share each
+        vertex in the global mesh. This is used to efficiently compute the average
         vertex positions and normals when updating the global mesh.
         """
 

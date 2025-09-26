@@ -41,6 +41,7 @@
             ],
             "colmap_im_id": 12,
             "thermal_file_path": "thermal/frame_eval_00012.PNG",
+            "windows_mask_file_path": "windows_masks/frame_eval_00012.jpg",
             "uncertainty_file_path": "uncertainty/frame_eval_00012.png"
         },
         {
@@ -73,6 +74,7 @@
             ],
             "colmap_im_id": 33,
             "thermal_file_path": "thermal/frame_train_00021.PNG",
+            "windows_mask_file_path": "windows_masks/frame_train_00021.png",
             "uncertainty_file_path": "uncertainty/frame_train_00021.png"
         },
         {
@@ -105,6 +107,7 @@
             ],
             "colmap_im_id": 72,
             "thermal_file_path": "thermal/frame_train_00060.PNG",
+            "windows_mask_file_path": "windows_masks/frame_train_00060.JPG",
             "uncertainty_file_path": "uncertainty/frame_train_00060.png"
         }
     ],

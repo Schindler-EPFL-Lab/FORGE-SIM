@@ -19,7 +19,7 @@ sys.path.append("./")
 from dataclasses_reverse_cli.reverse_cli import ReverseCli
 
 from rebel_shape import logger
-from rebel_shape.data_processing.thermoscenes_loader import ThermoScenesLoader
+from rebel_shape.data_processing.pose_scene_loader import PoseSceneLoader
 from rebel_shape.meshing.tessellated_spline_surface import TessellatedSplineSurface
 from rebel_shape.plugin_wrappers.sampler import Sampler
 from rebel_shape.render.render import Render
@@ -157,7 +157,7 @@ def render_spline(params: RenderSplineParameters) -> None:
     sampler = Sampler(
         type=Sampler.Type.INDEPENDENT, sample_count=params.samples_per_pixel
     )
-    loader = ThermoScenesLoader(
+    loader = PoseSceneLoader(
         scene_path=params.thermoscenes_scene_path, sensor_sampler=sampler
     )
 
@@ -173,7 +173,7 @@ def render_spline(params: RenderSplineParameters) -> None:
     # render views and save them
     params.output_folder.mkdir(parents=True, exist_ok=True)
     rendered_images: list[mi.Bitmap] = []
-    for filename, camera in zip(loader.eval_filenames, loader.eval_cameras):
+    for filename, camera in loader.eval_data:
         eval_filename_exr = Path(filename).stem + ".exr"
         image_output_path = params.output_folder / eval_filename_exr
 

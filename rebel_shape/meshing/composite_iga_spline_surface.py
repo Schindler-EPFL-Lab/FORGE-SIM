@@ -35,7 +35,7 @@ class CompositeIGASplineSurface(CompositeSplineSurface):
     _global_field_values: "mi.TensorXf"
     """
     Global field values of the composite spline surface, which are a tensor of shape
-    (n_global_control_points, n_dofs_per_cp). Ensures continuity across patches. 
+    (n_global_control_points, n_dofs_per_cp). Ensures continuity across patches.
     """
 
     def __init__(
