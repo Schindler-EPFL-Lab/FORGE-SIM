@@ -326,22 +326,38 @@ class PatchManager(abc.ABC):
         views the `target` tensor as a flat array and expands the `indices` to
         account for flattened components.
 
+        `target` is a 2D tensor of shape (N, C) where N is the number of nodes
+        and C is the number of components per node (e.g., 3 for 3D positions).
+        `values` is a 2D tensor of shape (M, C) where M is the number of values to
+        scatter and `indices` is a 1D tensor of shape (M,) containing the
+        indices in `target` where each row of `values` should be added. They need not
+        be unique.
+
         The changes are applied in-place to the `target` tensor.
+
+        :raises ValueError: If the shapes of `target`, `values`, and `indices` are not
+            compatible based on the description above.
+        :raises IndexError: If any index in `indices` is out of bounds for `target`.
         """
         if len(target.shape) != 2 or len(values.shape) != 2 or len(indices.shape) != 1:
             raise ValueError(
                 "`target` and `values` must be 2D tensors, and `indices` must be a "
-                f"1D tensor, got {target.shape}, {values.shape}, and {indices.shape}."
+                + f"1D tensor, got {target.shape}, {values.shape}, and {indices.shape}."
             )
         if values.shape[0] != indices.shape[0]:
             raise ValueError(
                 "`target_tensor` and `values` must have the same number of rows."
-                f"got {values.shape[0]} and {target.shape[0]} for `target`."
+                + f"got {values.shape[0]} and {target.shape[0]} for `target`."
             )
         if values.shape[1] != target.shape[1]:
             raise ValueError(
                 "`target_tensor` and `values` must have the same number of columns, "
-                f"got {values.shape[1]} and {target.shape[1]} for `target`."
+                + f"got {values.shape[1]} and {target.shape[1]} for `target`."
+            )
+        if dr.any(indices >= target.shape[0]):
+            raise IndexError(
+                "Some indices are out of bounds for the target tensor. Ensure that all "
+                + "indices are valid."
             )
 
         num_components = target.shape[1]
@@ -349,10 +365,14 @@ class PatchManager(abc.ABC):
         indices_extended = dr.zeros(
             dtype=mi.TensorXu, shape=(indices.shape[0] * num_components,)
         )
-        for comp in range(num_components):
-            indices_extended[comp::num_components] = dr.ravel(
-                num_components * indices + comp
-            )
+
+        if num_components == 1:
+            indices_extended = dr.ravel(indices)
+        else:
+            for comp in range(num_components):
+                indices_extended[comp::num_components] = dr.ravel(
+                    num_components * indices + comp
+                )
 
         # Change mode to NoConflicts if at some point we mandate that the indices are
         # unique. The default Auto mode, does not work, at least in Mitsuba 3.6.4.

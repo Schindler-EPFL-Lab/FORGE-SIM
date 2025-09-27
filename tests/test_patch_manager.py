@@ -1,5 +1,5 @@
-import unittest
 import tempfile
+import unittest
 from pathlib import Path
 
 import drjit as dr
@@ -40,11 +40,12 @@ class TestPatchManager(unittest.TestCase):
         def name(self) -> str:
             return self._name
 
-    def setUp(self):
+    @classmethod
+    def setUpClass(cls):
         """Set up test patches and connections for the PatchManager."""
         mi.set_variant("llvm_ad_rgb")
 
-        self.patch1 = self.TestPatch(
+        cls.patch1 = cls.TestPatch(
             name="patch1",
             nodes=mi.TensorXf(
                 [
@@ -55,7 +56,7 @@ class TestPatchManager(unittest.TestCase):
                 ]
             ),
         )
-        self.patch2 = self.TestPatch(
+        cls.patch2 = cls.TestPatch(
             name="patch2",
             nodes=mi.TensorXf(
                 [
@@ -67,7 +68,7 @@ class TestPatchManager(unittest.TestCase):
             ),
         )
 
-        self.patch3 = self.TestPatch(
+        cls.patch3 = cls.TestPatch(
             name="patch3",
             nodes=mi.TensorXf(
                 [
@@ -89,22 +90,22 @@ class TestPatchManager(unittest.TestCase):
             bottom_mesh_index=1,
         )
 
-        self.patch_list = [self.patch1, self.patch2, self.patch3]
-        self.connection_list = [connections1, connections2, connections3]
+        cls.patch_list = [cls.patch1, cls.patch2, cls.patch3]
+        cls.connection_list = [connections1, connections2, connections3]
+
+        cls.default_manager = cls.TestPatchManager(
+            name="test_patch_manager",
+            patch_list=cls.patch_list,
+            connection_list=cls.connection_list,
+        )
 
     def test_init(self):
         """
-        Test successful initialization of PatchManager with valid patches and
-        connections.
+        Test whether the basic properties have been set correctly during initialization.
         """
-        patch_manager = self.TestPatchManager(
-            name="test_patch_manager",
-            patch_list=self.patch_list,
-            connection_list=self.connection_list,
-        )
-        self.assertEqual(len(patch_manager._patch_list), 3)
-        self.assertEqual(len(patch_manager._connection_list), 3)
-        self.assertEqual(patch_manager.name, "test_patch_manager")
+        self.assertEqual(len(self.default_manager._patch_list), 3)
+        self.assertEqual(len(self.default_manager._connection_list), 3)
+        self.assertEqual(self.default_manager.name, "test_patch_manager")
 
     def test_invalid_init(self):
         """Test invalid initialization scenarios for PatchManager."""
@@ -161,66 +162,40 @@ class TestPatchManager(unittest.TestCase):
         self.assertEqual(items, expected)
 
     def test_get_neighbor_side(self):
-        """Test _get_neighbor_side method for valid connections."""
-        patch_manager = self.TestPatchManager(
-            name="test_patch_manager",
-            patch_list=self.patch_list,
-            connection_list=self.connection_list,
-        )
-
-        side = patch_manager._get_neighbor_side(0, 1)
+        """Test _get_neighbor_side method for valid and invalid inputs."""
+        side = self.default_manager._get_neighbor_side(0, 1)
         self.assertEqual(side, Patch.Side.RIGHT)
-        side = patch_manager._get_neighbor_side(1, 0)
+        side = self.default_manager._get_neighbor_side(1, 0)
         self.assertEqual(side, Patch.Side.LEFT)
 
-        side = patch_manager._get_neighbor_side(1, 2)
+        side = self.default_manager._get_neighbor_side(1, 2)
         self.assertEqual(side, Patch.Side.TOP)
-        side = patch_manager._get_neighbor_side(2, 1)
+        side = self.default_manager._get_neighbor_side(2, 1)
         self.assertEqual(side, Patch.Side.BOTTOM)
+
+        with self.assertRaises(ValueError):
+            self.default_manager._get_neighbor_side(0, 2)
 
     def test_iterator_support(self):
         """Test __len__, __iter__, and __getitem__ methods of PatchManager."""
-
-        patch_manager = self.TestPatchManager(
-            name="test_patch_manager",
-            patch_list=self.patch_list,
-            connection_list=self.connection_list,
-        )
-
         # Length of the patch manager should match the number of patches
-        self.assertEqual(len(patch_manager), 3)
+        self.assertEqual(len(self.default_manager), 3)
 
         # Iterating through the patch manager should yield patches
-        patches = list(patch_manager)
+        patches = list(self.default_manager)
         self.assertEqual(patches, self.patch_list)
 
         # Test accessing patches by index
-        for i in range(len(patch_manager)):
-            self.assertEqual(patch_manager[i], self.patch_list[i])
+        for i in range(len(self.default_manager)):
+            self.assertEqual(self.default_manager[i], self.patch_list[i])
 
         with self.assertRaises(IndexError):
-            _ = patch_manager[3]
-
-    def test_get_neighbor_side_error(self):
-        """Test _get_neighbor_side method if the connection is not defined."""
-        patch_manager = self.TestPatchManager(
-            name="test_patch_manager",
-            patch_list=self.patch_list,
-            connection_list=[PatchManager.PatchConnections() for _ in range(3)],
-        )
-        with self.assertRaises(ValueError):
-            patch_manager._get_neighbor_side(0, 1)
+            _ = self.default_manager[3]
 
     def test_shared_edges(self):
         """Test whether shared edges are correctly identified."""
-        patch_manager = self.TestPatchManager(
-            name="test_patch_manager",
-            patch_list=self.patch_list,
-            connection_list=self.connection_list,
-        )
-
         # Check shared edges between patch1 and patch2
-        shared_edges = patch_manager.shared_edges
+        shared_edges = self.default_manager.shared_edges
         self.assertEqual(len(shared_edges), 2)
 
         self.assertEqual(
@@ -244,43 +219,37 @@ class TestPatchManager(unittest.TestCase):
         )
 
     def test_build_mappings(self):
-        # Test _build_mappings method
-        patch_manager = self.TestPatchManager(
-            name="test_patch_manager",
-            patch_list=self.patch_list,
-            connection_list=self.connection_list,
-        )
-
         # Mappings should already be built in the constructor
-
         # Check that patch_to_global_map has correct size
-        self.assertEqual(len(patch_manager._patch_to_global_map), 3)
-        for patch_idx, _ in enumerate(patch_manager._patch_to_global_map):
-            self.assertEqual(len(patch_manager._patch_to_global_map[patch_idx]), 4)
+        self.assertEqual(len(self.default_manager._patch_to_global_map), 3)
+        for patch_idx, _ in enumerate(self.default_manager._patch_to_global_map):
+            self.assertEqual(
+                len(self.default_manager._patch_to_global_map[patch_idx]), 4
+            )
 
         # Check shared vertices between patch1 and patch2
         self.assertEqual(
-            patch_manager._patch_to_global_map[0][1],
-            patch_manager._patch_to_global_map[1][0],
+            self.default_manager._patch_to_global_map[0][1],
+            self.default_manager._patch_to_global_map[1][0],
         )
         self.assertEqual(
-            patch_manager._patch_to_global_map[0][3],
-            patch_manager._patch_to_global_map[1][2],
+            self.default_manager._patch_to_global_map[0][3],
+            self.default_manager._patch_to_global_map[1][2],
         )
 
         # Check shared vertices between patch2 and patch3
         self.assertEqual(
-            patch_manager._patch_to_global_map[1][2],
-            patch_manager._patch_to_global_map[2][0],
+            self.default_manager._patch_to_global_map[1][2],
+            self.default_manager._patch_to_global_map[2][0],
         )
         self.assertEqual(
-            patch_manager._patch_to_global_map[1][3],
-            patch_manager._patch_to_global_map[2][1],
+            self.default_manager._patch_to_global_map[1][3],
+            self.default_manager._patch_to_global_map[2][1],
         )
 
         # Check global_to_patches_map contains entries for each global vertex
         # Should have 8 unique vertices in total (4 + 2 + 2)
-        self.assertEqual(len(patch_manager._global_to_patches_map), 8)
+        self.assertEqual(len(self.default_manager._global_to_patches_map), 8)
 
         expected_global_to_patches_map = {
             0: {0: 0},  # patch1 bottom left
@@ -294,44 +263,30 @@ class TestPatchManager(unittest.TestCase):
         }
 
         for vertex_idx, vertex_patches in expected_global_to_patches_map.items():
-            self.assertIn(vertex_idx, patch_manager._global_to_patches_map)
+            self.assertIn(vertex_idx, self.default_manager._global_to_patches_map)
             for patch_idx, local_idx in vertex_patches.items():
                 self.assertIn(
-                    patch_idx, patch_manager._global_to_patches_map[vertex_idx]
+                    patch_idx, self.default_manager._global_to_patches_map[vertex_idx]
                 )
                 self.assertEqual(
-                    patch_manager._global_to_patches_map[vertex_idx][patch_idx],
+                    self.default_manager._global_to_patches_map[vertex_idx][patch_idx],
                     local_idx,
                 )
 
     def test_build_averaging_weights(self):
-        # Test _build_averaging_weights method
-        patch_manager = self.TestPatchManager(
-            name="test_patch_manager",
-            patch_list=self.patch_list,
-            connection_list=self.connection_list,
-        )
-
         # Check that averaging weights are built correctly
-        patch_manager._build_averaging_weights()
+        self.default_manager._build_averaging_weights()
 
         # Each vertex should have a weight of 1.0 for itself and 0.5 for shared vertices
         expected_weights = [1.0, 0.5, 1.0, 1.0 / 3.0, 1.0, 0.5, 1.0, 1.0]
 
         np.testing.assert_array_almost_equal(
-            patch_manager._averaging_weights.numpy(),
+            self.default_manager._averaging_weights.numpy(),
             np.array(expected_weights, dtype=np.float32).reshape(-1, 1),
         )
 
     def test_match_files_to_patches_success(self):
         """Test successful matching of file paths to patches."""
-
-        patch_manager = self.TestPatchManager(
-            name="test_patch_manager",
-            patch_list=self.patch_list,
-            connection_list=self.connection_list,
-        )
-
         with tempfile.TemporaryDirectory() as temp_dir:
             temp_path = Path(temp_dir)
 
@@ -348,7 +303,9 @@ class TestPatchManager(unittest.TestCase):
             patch_paths = [file3, file2, file1]
 
             # Test matching
-            sorted_paths = patch_manager.match_files_to_patches(patch_paths)
+            sorted_paths = self.default_manager.match_files_to_patches(
+                patch_paths=patch_paths
+            )
 
             # Verify correct order matching patch list order
             self.assertEqual(len(sorted_paths), 3)
@@ -358,12 +315,6 @@ class TestPatchManager(unittest.TestCase):
 
     def test_match_files_to_patches_matching_errors(self):
         """Test patch name matching errors in match_files_to_patches method."""
-        patch_manager = self.TestPatchManager(
-            name="test_patch_manager",
-            patch_list=self.patch_list,
-            connection_list=self.connection_list,
-        )
-
         with tempfile.TemporaryDirectory() as temp_dir:
             temp_path = Path(temp_dir)
 
@@ -377,7 +328,9 @@ class TestPatchManager(unittest.TestCase):
             file3.touch()
 
             with self.assertRaises(ValueError):
-                patch_manager.match_files_to_patches([file1, file2, file3])
+                self.default_manager.match_files_to_patches(
+                    patch_paths=[file1, file2, file3]
+                )
 
             # Test duplicate patch name
             file1_dup = temp_path / "texture_patch1_data.txt"
@@ -389,16 +342,12 @@ class TestPatchManager(unittest.TestCase):
             file3_ok.touch()
 
             with self.assertRaises(ValueError):
-                patch_manager.match_files_to_patches([file1_dup, file2_dup, file3_ok])
+                self.default_manager.match_files_to_patches(
+                    patch_paths=[file1_dup, file2_dup, file3_ok]
+                )
 
     def test_match_files_to_patches_validation_errors(self):
         """Test various validation errors in match_files_to_patches method."""
-        patch_manager = self.TestPatchManager(
-            name="test_patch_manager",
-            patch_list=self.patch_list,
-            connection_list=self.connection_list,
-        )
-
         with tempfile.TemporaryDirectory() as temp_dir:
             temp_path = Path(temp_dir)
 
@@ -407,18 +356,102 @@ class TestPatchManager(unittest.TestCase):
             file1.touch()
 
             with self.assertRaises(ValueError):
-                patch_manager.match_files_to_patches([file1])
+                self.default_manager.match_files_to_patches(patch_paths=[file1])
 
             # Test nonexistent file
             nonexistent_file = Path("/nonexistent/path/patch1.txt")
-            with self.assertRaises(FileNotFoundError) :
-                patch_manager.match_files_to_patches(
-                    [nonexistent_file, nonexistent_file, nonexistent_file]
+            with self.assertRaises(FileNotFoundError):
+                self.default_manager.match_files_to_patches(
+                    patch_paths=[nonexistent_file, nonexistent_file, nonexistent_file]
                 )
 
             # Test directory instead of file
             dir_path = temp_path / "patch1_dir"
             dir_path.mkdir()
             with self.assertRaises(ValueError):
-                patch_manager.match_files_to_patches([dir_path, dir_path, dir_path])
+                self.default_manager.match_files_to_patches(
+                    patch_paths=[dir_path, dir_path, dir_path]
+                )
 
+    def test_scatter_values_single_component(self):
+        target = mi.TensorXf([[0.0], [0.0], [0.0], [0.0]])
+        values = mi.TensorXf([[1.0], [2.0]])
+        indices = mi.TensorXu([1, 3])
+
+        self.default_manager._scatter_values(
+            target=target, values=values, indices=indices
+        )
+        np.testing.assert_array_equal(
+            np.array(target), np.array([[0.0], [1.0], [0.0], [2.0]])
+        )
+
+    def test_scatter_values_multi_component(self):
+        target = mi.TensorXf(np.zeros((4, 2), dtype=np.float32))
+        values = mi.TensorXf([[1.0, 10.0], [2.0, 20.0]])
+        indices = mi.TensorXu([1, 3])
+
+        self.default_manager._scatter_values(
+            target=target, values=values, indices=indices
+        )
+        np.testing.assert_array_equal(
+            np.array(target),
+            np.array([[0.0, 0.0], [1.0, 10.0], [0.0, 0.0], [2.0, 20.0]]),
+        )
+
+    def test_scatter_values_accumulation(self):
+        target = mi.TensorXf([[0.0], [0.0], [0.0]])
+        values = mi.TensorXf([[1.0], [2.0], [3.0]])
+        indices = mi.TensorXu([1, 1, 2])
+
+        self.default_manager._scatter_values(
+            target=target, values=values, indices=indices
+        )
+        np.testing.assert_array_equal(np.array(target), np.array([[0.0], [3.0], [3.0]]))
+
+    def test_scatter_values_invalid(self):
+        """
+        Test invalid inputs for _scatter_values method,
+        including incorrect shapes and out-of-bounds indices.
+        """
+        # Wrong shape: target not 2D
+        with self.assertRaises(ValueError):
+            self.default_manager._scatter_values(
+                target=mi.TensorXf([0.0, 0.0]),
+                values=mi.TensorXf([[1.0]]),
+                indices=mi.TensorXu([0]),
+            )
+        # Wrong shape: values not 2D
+        with self.assertRaises(ValueError):
+            self.default_manager._scatter_values(
+                target=mi.TensorXf([[0.0], [0.0]]),
+                values=mi.TensorXf([1.0, 2.0]),
+                indices=mi.TensorXu([0, 1]),
+            )
+        # Wrong shape: indices not 1D
+        with self.assertRaises(ValueError):
+            self.default_manager._scatter_values(
+                target=mi.TensorXf([[0.0], [0.0]]),
+                values=mi.TensorXf([[1.0], [2.0]]),
+                indices=mi.TensorXu([[0, 1]]),
+            )
+        # Mismatched rows
+        with self.assertRaises(ValueError):
+            self.default_manager._scatter_values(
+                target=mi.TensorXf([[0.0], [0.0]]),
+                values=mi.TensorXf([[1.0]]),
+                indices=mi.TensorXu([0, 1]),
+            )
+        # Mismatched columns
+        with self.assertRaises(ValueError):
+            self.default_manager._scatter_values(
+                target=mi.TensorXf([[0.0, 0.0, 0.0], [0.0, 0.0, 0.0]]),
+                values=mi.TensorXf([[1.0, 2.0], [3.0, 4.0]]),
+                indices=mi.TensorXu([0, 1]),
+            )
+        # Out-of-bounds index
+        with self.assertRaises(IndexError):
+            self.default_manager._scatter_values(
+                target=mi.TensorXf([[0.0], [0.0]]),
+                values=mi.TensorXf([[1.0], [2.0]]),
+                indices=mi.TensorXu([0, 2]),
+            )
