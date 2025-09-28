@@ -197,7 +197,7 @@ def initialize_scene(
                 "type": "ply",
                 "filename": temp_dir + f"/{mesh.name}.ply",
                 "bsdf": DiffuseBSDF(
-                    reflectance=DiffuseBSDF.Albedo(albedo=0.05),
+                    reflectance=DiffuseBSDF.Albedo(albedo=0.0),
                 ).mitsuba_dict,
                 "emitter": {
                     "type": "area",
