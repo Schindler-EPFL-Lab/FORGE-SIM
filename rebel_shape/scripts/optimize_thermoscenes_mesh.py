@@ -21,7 +21,7 @@ sys.path.append("./")
 from dataclasses_reverse_cli.reverse_cli import ReverseCli
 
 from rebel_shape import logger
-from rebel_shape.data_processing.input_preprocessing import preprocess_rgb_images
+from rebel_shape.data_processing.image_scene_loader import ImageSceneLoader
 from rebel_shape.data_processing.masked_pose_image import MaskedPoseImage
 from rebel_shape.plugin_wrappers.diffuse_bsdf import DiffuseBSDF
 from rebel_shape.plugin_wrappers.prb_integrator import GuidingOptions, PRBIntegrator
@@ -139,24 +139,26 @@ def initialize_scene(
     initial_guess_mesh_path: Path,
     envmap_path: Path | None,
     texture_resolution: int,
+    mask_pixels_during_optimization: bool,
 ) -> tuple[
     "mi.Scene",
     list[MaskedPoseImage],
     list[MaskedPoseImage],
 ]:
     """
-    Creates and loads Mitsuba dictionary that represents the scene, as well as
-    providing the reference images and sensor views.
+    Creates and loads Mitsuba dictionary that represents the scene, as well as providing
+    the reference images and sensor views.
 
     `continuous_samples` is the number of samples used for optimizing continuous
-    derivatives (e.g. Texture), while `visibility_samples` is the number of samples
-    used for direct and indirect visibility changes.
+    derivatives (e.g. Texture), while `visibility_samples` is the number of samples used
+    for direct and indirect visibility changes.
 
-    `thermoscenes_scene_path` is a `Path` to a scene that can be loaded
-    with `ThermoScenesLoader`. `initial_guess_mesh_path` specifies a path to the mesh
-    file that should be used as an initial guess for optimization. `envmap_path` is the
-    path to the 360 image that is used for the background during optimization. Masks in
-    MaskedPoseImage contain are the object masks.
+    `thermoscenes_scene_path` is a `Path` to a scene that can be loaded with
+    `ThermoScenesLoader`. `initial_guess_mesh_path` specifies a path to the mesh file
+    that should be used as an initial guess for optimization. `envmap_path` is the path
+    to the 360 image that is used for the background during optimization.
+    MaskedPoseImage contain the foreground masks if `mask_pixels_during_optimization`
+    and no mask otherwise.
 
     :returns: A tuple containing:
 
@@ -166,8 +168,8 @@ def initialize_scene(
         - `evaluation_images`: List of reference images for evaluation.
 
     :raises ValueError: If `thermoscenes_scene_path` is not a valid path, if the
-        `environment_map_path` does not exist, or if the `initial_guess_mesh_path`
-        does not exist.
+        `environment_map_path` does not exist, or if the `initial_guess_mesh_path` does
+        not exist.
     """
     integrator = PRBIntegrator(
         max_bounces=4,
@@ -184,19 +186,16 @@ def initialize_scene(
 
     sampler = Sampler(type=Sampler.Type.MULTIJITTER, sample_count=continuous_samples)
 
-    ref_images, _ = preprocess_rgb_images(
+    loader = ImageSceneLoader(
         scene_path=thermoscenes_scene_path,
         environment_map_path=envmap_path,
         spp=4,
-        sampler=sampler,
+        sensor_sampler=sampler,
+        use_foreground_masks=mask_pixels_during_optimization,
     )
-    eval_images, _ = preprocess_rgb_images(
-        scene_path=thermoscenes_scene_path,
-        environment_map_path=envmap_path,
-        spp=4,
-        train=False,
-        sampler=sampler,
-    )
+
+    ref_images = loader.train_images
+    eval_images = loader.eval_images
 
     environment = (
         {"type": "envmap", "filename": str(envmap_path)}
@@ -285,6 +284,7 @@ def optimize_thermoscenes_scene(params: ThermoSceneOptimizationParameters) -> No
         initial_guess_mesh_path=params.initial_guess_mesh_path,
         envmap_path=params.environment_map_path,
         texture_resolution=params.texture_params.texture_resolution,
+        mask_pixels_during_optimization=params.mask_pixels_during_optimization,
     )
     if len(eval_images) < params.num_of_images_to_save:
         raise ValueError(

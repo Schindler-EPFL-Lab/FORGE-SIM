@@ -1,8 +1,8 @@
 from pathlib import Path
-from typing import Generator
 
 import mitsuba as mi
 
+from rebel_shape.data_processing.masked_pose_image import MaskedPoseImage
 from rebel_shape.data_processing.pose_scene_loader import PoseSceneLoader
 from rebel_shape.plugin_wrappers.perspective_camera import PerspectiveCamera
 from rebel_shape.plugin_wrappers.sampler import Sampler
@@ -48,8 +48,8 @@ class SingleChannelImageSceneLoader:
             align_cameras_xz=align_cameras_xz,
         )
 
-        self._train_images: list["mi.TensorXf"] = []
-        self._eval_images: list["mi.TensorXf"] = []
+        self._train_images: list[MaskedPoseImage] = []
+        self._eval_images: list[MaskedPoseImage] = []
 
         semantic_folder = self._pose_loader._scene_path / image_folder
         image_paths = self._pose_loader._load_image_paths_from_folder(semantic_folder)
@@ -78,18 +78,34 @@ class SingleChannelImageSceneLoader:
                     f"Image {image_filename} is not a single channel image."
                 )
 
-            # Separate into train and eval based on the filename
-            if rgb_image_filename in self._pose_loader._train_rgb_filenames:
-                self._train_images.append(mitsuba_image)
-
-            elif rgb_image_filename in self._pose_loader._eval_rgb_filenames:
-                self._eval_images.append(mitsuba_image)
-
+            is_train = False
+            if (
+                self._pose_loader.train_filenames[len(self._train_images)]
+                == rgb_image_filename
+            ):
+                is_train = True
+                camera = self._pose_loader.train_cameras[len(self._train_images)]
+            elif (
+                self._pose_loader.eval_filenames[len(self._eval_images)]
+                == rgb_image_filename
+            ):
+                camera = self._pose_loader.eval_cameras[len(self._eval_images)]
             else:
                 raise ValueError(
-                    f"Image {image_filename} does not specify whether "
+                    f"Image {rgb_image_filename} does not specify whether "
                     "it is a training ('train') or evaluation ('eval') image"
                 )
+
+            camera.pixel_format = PerspectiveCamera.PixelFormat.LUMINANCE
+
+            mitsuba_image_masked_pose = MaskedPoseImage(
+                image=mitsuba_image, camera=camera, mask=None
+            )
+            # Separate into train and eval based on the filename
+            if is_train:
+                self._train_images.append(mitsuba_image_masked_pose)
+            else:
+                self._eval_images.append(mitsuba_image_masked_pose)
 
         # During training we the cameras are luminant
         self._train_cameras = self._pose_loader.train_cameras.copy()
@@ -138,29 +154,11 @@ class SingleChannelImageSceneLoader:
         )
 
     @property
-    def train_data(
-        self,
-    ) -> Generator[tuple[str, PerspectiveCamera, "mi.TensorXf"], None, None]:
-        """
-        Yields tuples of (image filename, camera, image) for training data.
-        """
-        for filename, camera, image in zip(
-            self._pose_loader.train_filenames,
-            self._train_cameras,
-            self._train_images,
-        ):
-            yield filename, camera, image
+    def train_images(self) -> list[MaskedPoseImage]:
+        """List of images from the train data split"""
+        return self._train_images
 
     @property
-    def eval_data(
-        self,
-    ) -> Generator[tuple[str, PerspectiveCamera, "mi.TensorXf"], None, None]:
-        """
-        Yields tuples of (image filename, camera, image) for eval data.
-        """
-        for filename, camera, image in zip(
-            self._pose_loader.eval_filenames,
-            self._eval_cameras,
-            self._eval_images,
-        ):
-            yield filename, camera, image
+    def eval_images(self) -> list[MaskedPoseImage]:
+        """List of images from the eval data split"""
+        return self._eval_images

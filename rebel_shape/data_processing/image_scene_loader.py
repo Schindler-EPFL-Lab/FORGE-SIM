@@ -4,6 +4,7 @@ from typing import Generator
 import drjit as dr
 import mitsuba as mi
 
+from rebel_shape.data_processing.masked_pose_image import MaskedPoseImage
 from rebel_shape.data_processing.pose_scene_loader import PoseSceneLoader
 from rebel_shape.plugin_wrappers.perspective_camera import PerspectiveCamera
 from rebel_shape.plugin_wrappers.sampler import Sampler
@@ -11,9 +12,10 @@ from rebel_shape.plugin_wrappers.sampler import Sampler
 
 class ImageSceneLoader:
     """
-    Loads RGB and foreground masks along with their associated camera poses. They are
-    stored in separate lists and the order is guaranteed to match. Images are further
-    split into training and evaluation sets.
+    Loads RGB, object masks, foreground masks along with their associated camera poses.
+    They are stored in separate lists and the order is guaranteed to match. They are
+    further split into training and evaluation sets. Composites RGB images with the
+    rendered background using object masks.
 
     RGB images are assumed to be sRGB gamma corrected. Foreground masks are assumed to
     be 8-bit linear grayscale images.
@@ -27,15 +29,25 @@ class ImageSceneLoader:
         self,
         scene_path: Path,
         sensor_sampler: Sampler = Sampler(),
+        use_foreground_masks: bool = False,
         align_cameras_xz: bool = True,
-    ):
+        environment_map_path: Path | None = None,
+        output_dir: Path | None = None,
+        spp: int = 16,
+    ) -> None:
         """
         Loads the ThermoScenes images, foreground masks, and cameras poses from the
         directory `scene_path`. Optionally aligns camera poses so they lie on the
         xy-plane if `align_cameras_xz` if `True`. Each camera has `sensor_samples` for
-        rays sampling.
+        rays sampling. Composites RGB images with the background rendered from
+        `environment_map_path` using `spp` samples per pixel. Choosing a higher value
+        than the default (`16`) has limited benefit. If the path is not provided, a
+        solid white background is used. Optionally stores the composited images in
+        `output_dir` if provided.
 
         :raises FileNotFoundError: If the scene path does not exist.
+        :raises RuntimeError: If the presented images does not have object masks as
+            alpha channels.
         """
 
         self._pose_loader = PoseSceneLoader(
@@ -44,11 +56,8 @@ class ImageSceneLoader:
             align_cameras_xz=align_cameras_xz,
         )
 
-        self._train_images: list["mi.TensorXf"] = []
-        self._train_foreground_masks: list["mi.TensorXf"] = []
-
-        self._eval_images: list["mi.TensorXf"] = []
-        self._eval_foreground_masks: list["mi.TensorXf"] = []
+        self._train_images: list[MaskedPoseImage] = []
+        self._eval_images: list[MaskedPoseImage] = []
 
         rgb_folder = self._pose_loader._scene_path / "images"
         foreground_mask_folder = self._pose_loader._scene_path / "foreground_masks"
@@ -57,6 +66,8 @@ class ImageSceneLoader:
         foreground_mask_paths = self._pose_loader._load_image_paths_from_folder(
             foreground_mask_folder
         )
+
+        background_scene = self._create_background_scene(environment_map_path)
 
         # Iterate through frames from transform_data
         for frame in self._pose_loader._transform_data.get("frames", []):
@@ -83,14 +94,18 @@ class ImageSceneLoader:
                 )
 
             image_rgb_path = image_rgb_paths[rgb_image_filename]
-            mitsuba_image_rgb = mi.TensorXf(
+            mitsuba_image_rgba = mi.TensorXf(
                 mi.Bitmap(str(image_rgb_path)).convert(
                     component_format=mi.Struct.Type.Float32, srgb_gamma=True
                 )
             )
+            if mitsuba_image_rgba.shape[-1] != 4:
+                raise RuntimeError(
+                    f"Object mask image is not found in {image_rgb_path}"
+                )
 
             mitsuba_foreground_mask = mi.TensorXf(
-                dr.zeros_like(mitsuba_image_rgb[:, :, 0:1])
+                dr.zeros_like(mitsuba_image_rgba[:, :, 0:1])
             )
             if foreground_mask_filename is not None:
                 foreground_mask_path = foreground_mask_paths[foreground_mask_filename]
@@ -105,25 +120,101 @@ class ImageSceneLoader:
                     + "single channel grayscale image."
                 )
 
-            # Separate into train and eval based on the filename
-            if rgb_image_filename in self._pose_loader._train_rgb_filenames:
-                self._train_images.append(mitsuba_image_rgb)
-                self._train_foreground_masks.append(mitsuba_foreground_mask)
-
-            elif rgb_image_filename in self._pose_loader._eval_rgb_filenames:
-                self._eval_images.append(mitsuba_image_rgb)
-                self._eval_foreground_masks.append(mitsuba_foreground_mask)
-
+            is_train = False
+            if (
+                len(self._train_images) < len(self._pose_loader.train_filenames)
+                and self._pose_loader.train_filenames[len(self._train_images)]
+                == rgb_image_filename
+            ):
+                is_train = True
+                camera = self._pose_loader.train_cameras[len(self._train_images)]
+            elif (
+                len(self._eval_images) < len(self._pose_loader.eval_filenames)
+                and self._pose_loader.eval_filenames[len(self._eval_images)]
+                == rgb_image_filename
+            ):
+                camera = self._pose_loader.eval_cameras[len(self._eval_images)]
             else:
                 raise ValueError(
                     f"Image {rgb_image_filename} does not specify whether "
                     "it is a training ('train') or evaluation ('eval') image"
                 )
 
+            # render the background and apply it for the image
+            background = mi.render(
+                scene=background_scene, sensor=camera.mitsuba_sensor, spp=spp
+            )
+
+            image = mitsuba_image_rgba[:, :, 0:3]
+            object_mask = mitsuba_image_rgba[:, :, 3:4]
+            composited_image = image * object_mask + background * (1.0 - object_mask)
+
+            if output_dir is not None:
+                bitmap = mi.Bitmap(composited_image)
+                filename = f"composited_frame_{Path(rgb_image_filename).stem}.exr"
+                bitmap.write(str(output_dir / filename))
+
+            # optionally apply the foreground mask
+            if use_foreground_masks:
+                used_foreground_mask = 1.0 - mitsuba_foreground_mask
+            else:
+                used_foreground_mask = dr.ones_like(mitsuba_foreground_mask)
+            composited_image_masked_pose = MaskedPoseImage(
+                image=composited_image,
+                camera=camera,
+                mask=used_foreground_mask,
+            )
+
+            # Separate into train and eval based on the filename
+            if is_train:
+                self._train_images.append(composited_image_masked_pose)
+            else:
+                self._eval_images.append(composited_image_masked_pose)
+
+    @staticmethod
+    def _create_background_scene(
+        environment_map_path: Path | None,
+    ) -> "mi.Scene":
+        """
+        Builds a scene which consists of only the environment_map which is loaded from
+        `environment_map_path`. It is useful for background generation.
+
+        :raises FileNotFoundError if the environment map file cannot be found
+        """
+        if environment_map_path is not None and not environment_map_path.exists():
+            raise FileNotFoundError(
+                f"Environment map not found at {environment_map_path}"
+            )
+
+        environment_map = (
+            {"type": "envmap", "filename": str(environment_map_path)}
+            if environment_map_path is not None
+            else {
+                "type": "constant",
+                "radiance": {
+                    "type": "rgb",
+                    "value": 1.0,
+                },
+            }
+        )
+
+        # Create a simple scene with just the environment map
+        scene_dict = {
+            "type": "scene",
+            "integrator": {"type": "path"},
+            "environment": environment_map,
+        }
+        return mi.load_dict(scene_dict)
+
     @property
     def tf_cameras(self) -> "mi.ScalarTransform4f":
         """Return the transformation which were applied to camera poses"""
         return self._pose_loader.tf_cameras
+
+    @property
+    def train_images(self) -> list[MaskedPoseImage]:
+        """List of images for the training"""
+        return self._train_images
 
     @property
     def train_cameras(self) -> list[PerspectiveCamera]:
@@ -134,18 +225,17 @@ class ImageSceneLoader:
     def train_data(
         self,
     ) -> Generator[
-        tuple[str, PerspectiveCamera, "mi.TensorXf", "mi.TensorXf"], None, None
+        tuple[str, MaskedPoseImage],
+        None,
+        None,
     ]:
         """
-        Yields tuples of (image filename, camera, image, foreground_mask) for training
-        data.
+        Yields tuples of (image filename, image) for training data.
         """
-        for (filename, camera), image, foreground_mask in zip(
-            self._pose_loader.train_data,
-            self._train_images,
-            self._train_foreground_masks,
+        for (filename, _), image in zip(
+            self._pose_loader.train_data, self._train_images
         ):
-            yield filename, camera, image, foreground_mask
+            yield filename, image
 
     @property
     def eval_cameras(self) -> list[PerspectiveCamera]:
@@ -153,17 +243,20 @@ class ImageSceneLoader:
         return self._pose_loader.eval_cameras
 
     @property
+    def eval_images(self) -> list[MaskedPoseImage]:
+        """List of images for the training"""
+        return self._eval_images
+
+    @property
     def eval_data(
         self,
     ) -> Generator[
-        tuple[str, PerspectiveCamera, "mi.TensorXf", "mi.TensorXf"], None, None
+        tuple[str, MaskedPoseImage],
+        None,
+        None,
     ]:
         """
-        Yields tuples of (image filename, camera, image, foreground_mask) for eval data.
+        Yields tuples of (image filename, image) for eval data.
         """
-        for (filename, camera), image, foreground_mask in zip(
-            self._pose_loader.eval_data,
-            self._eval_images,
-            self._eval_foreground_masks,
-        ):
-            yield filename, camera, image, foreground_mask
+        for (filename, _), image in zip(self._pose_loader.eval_data, self._eval_images):
+            yield filename, image

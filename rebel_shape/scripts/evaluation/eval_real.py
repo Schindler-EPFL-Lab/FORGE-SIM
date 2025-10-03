@@ -1,9 +1,11 @@
 """
-This script calculates the metrics of novel view synthesis based on ground truth images
-and rendered images from bspline.
+This script calculates the metrics of novel view synthesis and shape reconstruction for
+on thermoscenes dataset.
 """
 
 import os
+
+import torchvision
 
 os.environ["OPENCV_IO_ENABLE_OPENEXR"] = "1"
 
@@ -12,13 +14,8 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
-import cv2
-import drjit as dr
 import mitsuba as mi
-import numpy as np
-import numpy.typing as npt
 import torch
-import torchmetrics
 import tyro
 
 # This is a hack so that the script work with azure sdkv2.
@@ -30,9 +27,9 @@ sys.path.append("./")
 from dataclasses_reverse_cli.reverse_cli import ReverseCli
 
 from rebel_shape.data_processing.image_scene_loader import ImageSceneLoader
-from rebel_shape.data_processing.input_preprocessing import (
-    MaskStrategy,
-    preprocess_rgb_images,
+from rebel_shape.metrics.novel_view_synthesis import (
+    calculate_metrics_novel_view_synthesis,
+    mitsuba_to_torch,
 )
 
 
@@ -80,68 +77,55 @@ def eval_novel_view_synthesis(params: EvalNVSParameters) -> None:
     """
 
     mi.set_variant("llvm_ad_rgb")
-    loader = ImageSceneLoader(scene_path=params.thermoscenes_scene_path)
 
     device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
 
-    # load ground truth images
-    eval_images, _ = preprocess_rgb_images(
+    loader = ImageSceneLoader(
         scene_path=params.thermoscenes_scene_path,
         environment_map_path=params.environment_map_path,
-        spp=params.samples_per_pixel,
-        train=False,
-        mask_strategy=MaskStrategy.FOREGROUND,
+        use_foreground_masks=True,
     )
 
-    # load rendered images
     rendered_images_paths = sorted(list(params.rendered_images_folder.glob("*")))
-    rendered_images: dict[str, npt.NDArray[np.float32]] = {
-        image_path.stem: cv2.imread(str(image_path), cv2.IMREAD_UNCHANGED)
-        for image_path in rendered_images_paths
+    rendered_images_paths = {
+        image_path.stem: image_path for image_path in rendered_images_paths
     }
 
-    metric_calculators: dict[str, torchmetrics.metric.Metric] = {
-        "psnr": torchmetrics.image.PeakSignalNoiseRatio((0.0, 1.0)).to(device),
-        "ssim": torchmetrics.image.StructuralSimilarityIndexMeasure().to(device),
-        "lpips": torchmetrics.image.lpip.LearnedPerceptualImagePatchSimilarity().to(
-            device
-        ),
-    }
-    metrics = {metric_name: [] for metric_name in metric_calculators}
+    eval_images_torch: list[torch.Tensor] = []
+    rendered_images_torch: list[torch.Tensor] = []
 
-    for real_image_name, real_image in zip(loader.eval_filenames, eval_images):
-        rendered_image = rendered_images[Path(real_image_name).stem]
-        rendered_image = torch.from_numpy(rendered_image).to(device)
+    for filename, eval_image in loader.eval_data:
+        eval_image_torch = mitsuba_to_torch(eval_image.image, device=device)
+        eval_images_torch.append(eval_image_torch)
 
-        real_image_rgb = dr.linear_to_srgb(real_image.original_image)
-        real_image_rgb = real_image_rgb.numpy().astype(np.float32)
-        real_image_rgb = torch.from_numpy(real_image_rgb).to(device)
-
-        inverse_foreground_mask = real_image.mask.numpy().astype(np.float32)
-        inverse_foreground_mask = torch.from_numpy(inverse_foreground_mask).to(device)
-
-        # mask out foreground on real and rendered images
-        real_image_rgb = real_image_rgb * inverse_foreground_mask
-        rendered_image = rendered_image * inverse_foreground_mask
-
-        for metric_name in metric_calculators:
-            metric_result = metric_calculators[metric_name](
-                rendered_image[None, :, :, :].permute(0, 3, 1, 2),
-                real_image_rgb[None, :, :, :].permute(0, 3, 1, 2),
+        rendered_image_path = rendered_images_paths[Path(filename).stem]
+        mitsuba_rendered_image = mi.TensorXf(
+            mi.Bitmap(str(rendered_image_path)).convert(
+                component_format=mi.Struct.Type.Float32, srgb_gamma=False
             )
-            metrics[metric_name].append(metric_result)
+        )
+        rendered_image = eval_image.apply_mask(mitsuba_rendered_image)
+        rendered_image_torch = mitsuba_to_torch(rendered_image, device=device)
+        rendered_images_torch.append(rendered_image_torch)
 
-    metrics_average: dict[str, float] = {}
-    for metric_name in metrics:
-        concated_metric_tensors = torch.stack(metrics[metric_name])
-        metrics_average[metric_name] = torch.mean(concated_metric_tensors).item()
+    torchvision.utils.save_image(
+        eval_images_torch, params.output_file_path.parent / "eval_images.png"
+    )
+    torchvision.utils.save_image(
+        rendered_images_torch, params.output_file_path.parent / "rendered_images.png"
+    )
+
+    metrics = calculate_metrics_novel_view_synthesis(
+        rendered_images=rendered_images_torch,
+        ground_truth_images=eval_images_torch,
+        device=device,
+    )
 
     params.output_file_path.parent.mkdir(parents=True, exist_ok=True)
     with open(params.output_file_path, "w") as f:
-        json.dump(metrics_average, f, indent=4)
+        json.dump(metrics, f, indent=4)
 
 
 if __name__ == "__main__":
     parameters = tyro.cli(EvalNVSParameters)
-
     eval_novel_view_synthesis(params=parameters)

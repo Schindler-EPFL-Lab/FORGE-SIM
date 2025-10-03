@@ -16,7 +16,6 @@ dependencies = [
     "jsonpickle>=4.0.2",
     "dataclasses-reverse-cli>=0.0.5",
     "tyro>=0.9.27",
-    "open3d>0.18.0",
 ]
 
 [tool.uv]
@@ -32,6 +31,12 @@ azure = [
 ]
 azure-local = ["azure-cli>=2.70.0", "azure-ml-utils>=0.0.1"]
 depth-estimation = ["moge"]
+evaluation = [
+    "open3d>0.18.0",
+    "torch>=2.7.1",
+    "torchmetrics>=1.8.2",
+    "torchvision>=0.22.1",
+]
 
 
 [tool.uv.sources]

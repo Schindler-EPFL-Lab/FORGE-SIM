@@ -39,7 +39,7 @@ class TestScenesDataloaders(unittest.TestCase):
 
     def test_number_of_loaded_eval_data_pose(self):
         """
-        Tests that the pose_loader loads exactly 1 and data entry.
+        Tests that the pose_loader loads exactly 1 data entry.
         """
         self.assertEqual(len(self.pose_loader.eval_cameras), 1)
         self.assertEqual(len(self.pose_loader.eval_filenames), 1)
@@ -53,33 +53,33 @@ class TestScenesDataloaders(unittest.TestCase):
 
     def test_number_of_loaded_eval_data_images(self):
         """
-        Tests that the image_loader loads exactly 1 and data entry.
+        Tests that the image_loader loads exactly 1 data entry.
         """
         self.assertEqual(len(list(self.image_loader.eval_data)), 1)
 
-    def test_number_of_loaded_training_data_thermal(self):
+    def test_number_of_loaded_training_images_thermal(self):
         """
         Tests that the thermal_loader loads exactly 2 data entries.
         """
-        self.assertEqual(len(list(self.thermal_loader.train_data)), 2)
+        self.assertEqual(len(list(self.thermal_loader.train_images)), 2)
 
-    def test_number_of_loaded_eval_data_thermal(self):
+    def test_number_of_loaded_eval_images_thermal(self):
         """
-        Tests that the thermal_loader loads exactly 1 and data entry.
+        Tests that the thermal_loader loads exactly 1 data entry.
         """
-        self.assertEqual(len(list(self.thermal_loader.eval_data)), 1)
+        self.assertEqual(len(list(self.thermal_loader.eval_images)), 1)
 
-    def test_number_of_loaded_training_data_windows_mask(self):
+    def test_number_of_loaded_training_images_windows_mask(self):
         """
         Tests that the windows mask loader loads exactly 2 and data entries.
         """
-        self.assertEqual(len(list(self.thermal_loader.train_data)), 2)
+        self.assertEqual(len(list(self.thermal_loader.train_images)), 2)
 
-    def test_number_of_loaded_eval_data_windows_mask(self):
+    def test_number_of_loaded_eval_images_windows_mask(self):
         """
         Tests that the windows mask loader loads exactly 1 data entry.
         """
-        self.assertEqual(len(list(self.thermal_loader.eval_data)), 1)
+        self.assertEqual(len(list(self.thermal_loader.eval_images)), 1)
 
     def test_camera_settings(self):
         """
@@ -96,9 +96,10 @@ class TestScenesDataloaders(unittest.TestCase):
         """
         Tests that the camera in thermal loader have correct settings
         """
-        for _, camera, _ in itertools.chain(
-            self.thermal_loader.train_data, self.thermal_loader.eval_data
+        for image in itertools.chain(
+            self.thermal_loader.train_images, self.thermal_loader.eval_images
         ):
+            camera = image.camera
             self.assertIsInstance(camera, PerspectiveCamera)
             self.assertIsInstance(camera, PerspectiveCamera)
             self.assertAlmostEqual(camera.mitsuba_dict["fov"], 67.60170686)

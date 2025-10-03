@@ -35,7 +35,7 @@ jobs:
       - name: Install LLVM
         run: |
           sudo apt-get update && \
-          sudo apt-get install -y llvm llvm-dev clang libclang-dev
+          sudo apt-get install -y llvm llvm-dev clang libclang-dev libgl1
 
       - name: Install the project
         run: |

@@ -237,20 +237,10 @@ def initialize_scene(
 
         scene_source: "mi.Scene" = mi.load_dict(scene_dict)
 
-    train_images = [
-        MaskedPoseImage(image=image, camera=camera, mask=None)
-        for _, camera, image in loader.train_data
-    ]
-
-    eval_images = [
-        MaskedPoseImage(image=image, camera=camera, mask=None)
-        for _, camera, image in loader.eval_data
-    ]
-
     return (
         scene_source,
-        train_images,
-        eval_images,
+        loader.train_images,
+        loader.eval_images,
         tessellated_iga_spline_surface,
     )
 

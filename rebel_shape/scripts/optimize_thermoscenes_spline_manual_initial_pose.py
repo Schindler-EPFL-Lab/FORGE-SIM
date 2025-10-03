@@ -22,9 +22,7 @@ sys.path.append("./")
 from dataclasses_reverse_cli.reverse_cli import ReverseCli
 
 from rebel_shape import logger
-from rebel_shape.data_processing.input_preprocessing import (
-    preprocess_rgb_images,
-)
+from rebel_shape.data_processing.image_scene_loader import ImageSceneLoader
 from rebel_shape.data_processing.manual_initialization import (
     load_bounding_bbox_transforms,
 )
@@ -152,6 +150,7 @@ def initialize_scene(
     spline_subdivisions: int,
     mesh_subdivisions: int,
     bbox_transforms_path: Path,
+    mask_pixels_during_optimization: bool,
 ) -> tuple[
     "mi.Scene",
     list[MaskedPoseImage],
@@ -170,8 +169,8 @@ def initialize_scene(
     `ThermoScenesLoader`. `initial_guess_mesh_path` specifies a path to the mesh file
     that should be used as an initial guess for optimization. `envmap_path` is the path
     to the 360 image that is used for the background during optimization. Masks in
-    MaskedPoseImage contain are the object masks
-
+    MaskedPoseImage contain the foreground masks if `mask_pixels_during_optimization`
+    and no mask otherwise.
 
     The initial mesh is a cubedsphere, which is created by tessellating a B-spline
     surface with `spline_degree` and `spline_subdivisions` knot spans. Each patch has 2
@@ -204,18 +203,12 @@ def initialize_scene(
 
     sampler = Sampler(type=Sampler.Type.ORTHOGONAL, sample_count=continuous_samples)
 
-    ref_images, tf_dataloader = preprocess_rgb_images(
+    loader = ImageSceneLoader(
         scene_path=thermoscenes_scene_path,
         environment_map_path=envmap_path,
-        spp=continuous_samples,
-        sampler=sampler,
-    )
-    eval_images, _ = preprocess_rgb_images(
-        scene_path=thermoscenes_scene_path,
-        environment_map_path=envmap_path,
-        spp=continuous_samples,
-        train=False,
-        sampler=sampler,
+        spp=4,
+        sensor_sampler=sampler,
+        use_foreground_masks=mask_pixels_during_optimization,
     )
 
     # Set the initial shape of the object - ico-sphere
@@ -238,7 +231,7 @@ def initialize_scene(
 
     if bbox_transforms_path is not None:
         tf_bbox = load_bounding_bbox_transforms(bbox_transforms_path)
-        tf_initial_pose = mi.Transform4f(tf_dataloader) @ tf_bbox
+        tf_initial_pose = mi.Transform4f(loader.tf_cameras) @ tf_bbox
         cubedsphere.transform_global_control_points(tf_initial_pose)
 
     environment = (
@@ -264,7 +257,7 @@ def initialize_scene(
 
     scene_source: "mi.Scene" = mi.load_dict(scene_dict)
 
-    return scene_source, ref_images, eval_images, cubedsphere
+    return scene_source, loader.train_images, loader.eval_images, cubedsphere
 
 
 def optimize_thermoscenes_scene(
@@ -325,16 +318,8 @@ def optimize_thermoscenes_scene(
         spline_subdivisions=params.shape_params.knot_spans,
         mesh_subdivisions=params.shape_params.tessellation_subdivisions,
         bbox_transforms_path=params.bbox_transforms_path,
+        mask_pixels_during_optimization=params.mask_pixels_during_optimization,
     )
-
-    ref_images_no_mask = [
-        MaskedPoseImage(image=image.original_image, camera=image.camera, mask=None)
-        for image in ref_images
-    ]
-    eval_images_no_mask = [
-        MaskedPoseImage(image=image.original_image, camera=image.camera, mask=None)
-        for image in eval_images
-    ]
 
     scene_params = mi.traverse(scene)
 
@@ -414,10 +399,6 @@ def optimize_thermoscenes_scene(
             ),
         )
         logger.info(f"Scheduling refinement by factor 2 for iteration {iteration}")
-
-    if not params.mask_pixels_during_optimization:
-        ref_images = ref_images_no_mask
-        eval_images = eval_images_no_mask
 
     optimizer.optimize(
         ref_images,

@@ -42,7 +42,7 @@ class Render:
         rendered_image = mi.util.convert_to_bitmap(rendered_image, uint8_srgb=False)
 
         rendered_image = rendered_image.convert(
-            mi.Bitmap.PixelFormat.RGB, output_type, True
+            mi.Bitmap.PixelFormat.RGB, output_type, srgb_gamma=False
         )
 
         if save_path is not None:

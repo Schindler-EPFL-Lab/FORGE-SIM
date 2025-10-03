@@ -172,7 +172,6 @@ def render_spline(params: RenderSplineParameters) -> None:
 
     # render views and save them
     params.output_folder.mkdir(parents=True, exist_ok=True)
-    rendered_images: list[mi.Bitmap] = []
     for filename, camera in loader.eval_data:
         eval_filename_exr = Path(filename).stem + ".exr"
         image_output_path = params.output_folder / eval_filename_exr
@@ -185,7 +184,7 @@ def render_spline(params: RenderSplineParameters) -> None:
         )
 
     logger.info(
-        f"Saved {len(rendered_images)} rendered images to {params.output_folder}"
+        f"Saved {len(loader.eval_cameras)} rendered images to {params.output_folder}"
     )
 
 
