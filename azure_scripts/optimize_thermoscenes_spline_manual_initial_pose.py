@@ -71,7 +71,7 @@ def main() -> None:
     parameters.script_params.thermoscenes_scene_path = Path("${{inputs.data}}")
 
     cmd = (
-        "python3.10 rebel_shape/scripts/"
+        "python3.12 rebel_shape/scripts/"
         "optimize_thermoscenes_spline_manual_initial_pose.py "
     )
     cmd += parameters.script_params.to_command_string("")

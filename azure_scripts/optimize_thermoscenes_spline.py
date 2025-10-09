@@ -63,7 +63,7 @@ def main() -> None:
     parameters.experiment_name = parameters.scene_name + "-training-job"
     parameters.script_params.thermoscenes_scene_path = Path("${{inputs.data}}")
 
-    cmd = "python3.10 rebel_shape/scripts/optimize_thermoscenes_spline.py "
+    cmd = "python3.12 rebel_shape/scripts/optimize_thermoscenes_spline.py "
     cmd += parameters.script_params.to_command_string("")
 
     if parameters.environment_version.isnumeric():

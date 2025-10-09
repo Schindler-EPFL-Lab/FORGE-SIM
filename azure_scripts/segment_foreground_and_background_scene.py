@@ -93,7 +93,7 @@ def main() -> None:
     parameters.script_params.output_scene_path = Path("${{inputs.output_scene}}")
 
     cmd = (
-        "python3.10 rebel_shape/scripts/segmentation/"
+        "python3.12 rebel_shape/scripts/segmentation/"
         + "segment_foreground_and_background_scene.py "
     )
     cmd += parameters.script_params.to_command_string("")

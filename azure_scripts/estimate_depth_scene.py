@@ -95,7 +95,7 @@ def main() -> None:
     parameters.script_params.input_scene_path = Path("${{inputs.input_scene}}")
     parameters.script_params.output_scene_path = Path("${{inputs.output_scene}}")
 
-    cmd = "python3.10 rebel_shape/scripts/depth_estimation/estimate_depth_scene.py "
+    cmd = "python3.12 rebel_shape/scripts/depth_estimation/estimate_depth_scene.py "
     cmd += parameters.script_params.to_command_string("")
 
     if parameters.environment_version.isnumeric():
