@@ -37,6 +37,7 @@ class CompositeSceneOptimizer(SceneOptimizer):
             `optimizer_id`, if any parameter key is associated with more than one
             optimizer, or if any optimizer has no associated parameter keys.
         """
+        # The defaults are satisfactory as they will not be used.
         super().__init__()
 
         optimizer_ids = [opt.optimizer_id for opt, _ in optimizer_config]

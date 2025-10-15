@@ -1,6 +1,5 @@
 import drjit as dr
 import mitsuba as mi
-import numpy as np
 
 from rebel_shape.data_processing.masked_pose_image import MaskedPoseImage
 from rebel_shape.scene_optimizers.scene_adam import SceneAdam
@@ -29,6 +28,7 @@ class SceneAdamSequential(SceneAdam):
         batch_size: int = 5,
         uniform: bool = False,
         randomize_image_order: bool = True,
+        image_order_seed: int = 42,
     ) -> None:
         """
         `learning_rate` determines the step size. It is overridden by the learning rate
@@ -40,9 +40,11 @@ class SceneAdamSequential(SceneAdam):
         useful when optimizing discontinuous objective functions (e.g. vertex
         positions).
 
-        `randomize_image_order` controls whether the order of images is randomized
-        during the optimization step. This can make the optimization process more robust
-        by preventing the optimizer from getting stuck in local minima.
+        `randomize_image_order` controls whether the order of images is shuffled
+        before each optimization step. This can help improve convergence by reducing
+        correlations between images. The shuffling is done using a fixed seed
+        (`image_order_seed`) to ensure reproducibility. As it is possible for batches
+        to have different sizes, the order of batches is also shuffled.
 
         :raises ValueError: If `learning_rate` is not positive or if `batch_size` is
             less than 1.
@@ -52,6 +54,7 @@ class SceneAdamSequential(SceneAdam):
             batch_size=batch_size,
             uniform=uniform,
             randomize_image_order=randomize_image_order,
+            image_order_seed=image_order_seed,
         )
 
     def run_optimization_step(
@@ -89,15 +92,7 @@ class SceneAdamSequential(SceneAdam):
         total_reg_loss = mi.TensorXf(0.0)
 
         for param_config in param_optimization_configs:
-            ordered_indices = (
-                np.arange(sensor_count)
-                if not self._randomize_image_order
-                else np.random.permutation(sensor_count)
-            )
-
-            for start_idx in range(0, sensor_count, self._batch_size):
-                end_idx = min(start_idx + self._batch_size, sensor_count)
-                batch_indices = ordered_indices[start_idx:end_idx]
+            for batch_indices in self.iteration_batch_indices(sensor_count):
 
                 batch_image_loss, batch_reg_loss = self._objective_function(
                     scene=scene,

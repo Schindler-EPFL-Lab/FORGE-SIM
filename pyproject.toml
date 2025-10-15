@@ -16,6 +16,7 @@ dependencies = [
     "jsonpickle>=4.0.2",
     "dataclasses-reverse-cli>=0.0.5",
     "tyro>=0.9.27",
+    "mlflow>=3.5.0rc0",
 ]
 
 [tool.uv]

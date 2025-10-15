@@ -1,6 +1,5 @@
 import drjit as dr
 import mitsuba as mi
-import numpy as np
 
 from rebel_shape import logger
 from rebel_shape.data_processing.masked_pose_image import MaskedPoseImage
@@ -79,6 +78,7 @@ class SceneLBFGS(SceneOptimizer):
         line_search_iterations: int = 15,
         batch_size: int | None = None,
         randomize_image_order: bool = True,
+        image_order_seed: int = 42,
     ) -> None:
         """
         Initialize the L-BFGS optimizer with the specified parameters.
@@ -110,26 +110,23 @@ class SceneLBFGS(SceneOptimizer):
         reduce AD graph memory usage and speed up the optimization process,
         especially for scenes with many sensors.
 
-        `randomize_image_order` controls whether the order of images is randomized
-        during the optimization step. This can make the optimization process more robust
-        by preventing the optimizer from getting stuck in local minima.
+        `randomize_image_order` controls whether the order of images is shuffled
+        before each optimization step. This can help improve convergence by reducing
+        correlations between images. The shuffling is done using a fixed seed
+        (`image_order_seed`) to ensure reproducibility. As it is possible for batches
+        to have different sizes, the order of batches is also shuffled.
 
         :raises ValueError: If `learning_rate` is not positive or if `batch_size` is
             specified and is less than 1.
         """
-        super().__init__()
+        super().__init__(
+            max_batch_size=batch_size,
+            randomize_image_order=randomize_image_order,
+            image_order_seed=image_order_seed,
+        )
 
         if learning_rate <= 0.0:
             raise ValueError("`learning_rate` has to be a positive real number")
-
-        if batch_size is not None and batch_size < 1:
-            raise ValueError(
-                "`batch_size` has to be a positive integer or `None` "
-                "for full batch optimization."
-            )
-
-        self._batch_size = batch_size
-        self._randomize_image_order = randomize_image_order
 
         self._lbfgs = LBFGS(
             learning_rate=learning_rate,
@@ -167,10 +164,7 @@ class SceneLBFGS(SceneOptimizer):
         appear in the list. This either results in a single optimization step
         (full batch) or multiple optimization steps (batched) for each parameter.
 
-        Batch indices are not permuted, unlike the typical behavior of Adam optimizers.
-        This was done to make the optimization process more 'deterministic' and
-        hopefully more stable, as the L-BFGS optimizer is not designed to handle
-        stochastic updates.
+
 
         :returns: A tuple of tensors of shape (1,) that contain the total loss and the
             regularization loss of the optimization step.
@@ -180,19 +174,8 @@ class SceneLBFGS(SceneOptimizer):
         total_loss = mi.TensorXf(0.0)
         total_reg_loss = mi.TensorXf(0.0)
 
-        batch_size = self._batch_size if self._batch_size else sensor_count
-
-        ordered_indices = (
-            np.arange(sensor_count)
-            if not self._randomize_image_order
-            else np.random.permutation(sensor_count)
-        )
-
         for param_config in param_optimization_configs:
-            for start_idx in range(0, sensor_count, batch_size):
-                end_idx = min(start_idx + batch_size, sensor_count)
-                batch_indices = ordered_indices[start_idx:end_idx]
-
+            for batch_indices in self.iteration_batch_indices(sensor_count):
                 batch_image_loss, batch_reg_loss = self._objective_function(
                     scene=scene,
                     scene_params=scene_params,
