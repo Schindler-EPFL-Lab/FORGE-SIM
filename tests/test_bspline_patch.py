@@ -4,6 +4,7 @@ import drjit as dr
 import jsonpickle
 import mitsuba as mi
 import numpy as np
+from OCP.Geom import Geom_BSplineSurface
 
 from rebel_shape.splines.bspline import BSpline
 from rebel_shape.splines.bspline_patch import BSplinePatch
@@ -1024,3 +1025,42 @@ class TestBSplinePatch(unittest.TestCase):
             with self.subTest(side=side):
                 with self.assertRaises(ValueError):
                     self.bezier_1_surface.side_parametric_coords(side, invalid_coords)
+
+    def test_brep_export(self):
+        """
+        Tests whether the B-Rep export functionality produces valid OCP B-Spline
+        surfaces.
+        """
+        # Test with bezier_1_surface
+        brep_surface = self.bezier_1_surface.to_brep()
+
+        # Check that the B-Rep surface is valid
+        self.assertIsInstance(brep_surface, Geom_BSplineSurface)
+
+        # Check that the degrees match
+        self.assertEqual(
+            brep_surface.UDegree(), self.bezier_1_surface._spline.u_spline.degree
+        )
+        self.assertEqual(
+            brep_surface.VDegree(), self.bezier_1_surface._spline.v_spline.degree
+        )
+
+        # Check number of control points
+        self.assertEqual(brep_surface.NbUPoles(), self.bezier_1_surface._num_cps_u)
+        self.assertEqual(brep_surface.NbVPoles(), self.bezier_1_surface._num_cps_v)
+
+        # Test with more complex surface
+        brep_surface_2 = self.bezier_2_surface.to_brep()
+        self.assertIsInstance(brep_surface_2, Geom_BSplineSurface)
+        self.assertEqual(brep_surface_2.UDegree(), 2)
+        self.assertEqual(brep_surface_2.VDegree(), 1)
+        self.assertEqual(brep_surface_2.NbUPoles(), 3)
+        self.assertEqual(brep_surface_2.NbVPoles(), 2)
+
+        # Test with cubic surface
+        brep_surface_3 = self.bezier_3_surface.to_brep()
+        self.assertIsInstance(brep_surface_3, Geom_BSplineSurface)
+        self.assertEqual(brep_surface_3.UDegree(), 2)
+        self.assertEqual(brep_surface_3.VDegree(), 2)
+        self.assertEqual(brep_surface_3.NbUPoles(), 3)
+        self.assertEqual(brep_surface_3.NbVPoles(), 3)

@@ -5,6 +5,8 @@ import drjit as dr
 import mitsuba as mi
 import numpy as np
 import numpy.typing as npt
+from OCP.BRepBuilderAPI import BRepBuilderAPI_MakeFace, BRepBuilderAPI_Sewing
+from OCP.TopoDS import TopoDS_Shape
 
 from rebel_shape.meshing.composite_mesh import CompositeMesh
 from rebel_shape.meshing.patch_manager import PatchManager
@@ -325,3 +327,45 @@ class CompositeSplineSurface(PatchManager):
         )
 
         return composite_mesh
+
+    def to_brep(self, tolerance: float = 1e-6) -> TopoDS_Shape:
+        """
+        Export the composite spline surface as a stitched B-Rep quad model.
+
+        This method creates individual OCP B-Spline surfaces from each patch using
+        the `to_brep` method, converts them to faces, and then stitches them
+        together using OCP's sewing algorithm. The result is a single TopoDS_Shape
+        that represents the entire composite surface as a B-Rep model.
+
+        The stitching process attempts to merge edges that are within the specified
+        `tolerance` distance of each other, creating a watertight B-Rep model if
+        the patches are properly connected. Due to the global control point
+        synchronization enforced by the class, this parameter is a CAD formality.
+        Smallest OCCT absolute accuracy is 1e-7 (the library does not have relative
+        accuracies).
+
+        :returns: A TopoDS_Shape representing the stitched B-Rep model of the
+                 composite spline surface.
+
+        :raises ValueError: If the stitching process fails for any patch.
+        """
+        sewing = BRepBuilderAPI_Sewing(tolerance)
+
+        # Convert each patch to a B-Rep face and add to the sewing operation
+        for patch in self._patch_list:
+            bspline_surface = patch.to_brep()
+
+            # The face is created over the full parametric domain of the surface
+            face_maker = BRepBuilderAPI_MakeFace(bspline_surface, tolerance)
+
+            if not face_maker.IsDone():
+                raise RuntimeError(
+                    f"Failed to create B-Rep face from patch {patch.name}"
+                )
+
+            face = face_maker.Face()
+            sewing.Add(face)
+
+        sewing.Perform()
+
+        return sewing.SewedShape()

@@ -3,6 +3,7 @@ from typing import Any
 
 import drjit as dr
 import mitsuba as mi
+from OCP.OCP.Geom import Geom_Surface
 
 from rebel_shape.meshing.patch import Patch
 from rebel_shape.meshing.rectangular_mesh import RectangularMesh
@@ -159,6 +160,28 @@ class SplinePatch(CoordinateSpline, Patch, Manifold, abc.ABC):
         raise NotImplementedError(
             "Classes inheriting from `SplinePatch` need to implement the "
             + "`h_refinement` method."
+        )
+
+    @abc.abstractmethod
+    def to_brep(self) -> Geom_Surface:
+        """
+        Convert the spline patch to a B-Rep representation.
+
+        This method should be implemented by subclasses to convert the spline
+        patch into a boundary representation (B-Rep) format compatible with
+        CAD software or libraries.
+
+        At the time of writing, OCCT supports Bezier, NURBS, and B-Spline surfaces
+        (special case of NURBS with uniform weights) so the output type should be
+        `Geom_BSplineSurface` or `Geom_BezierSurface`, but as both of them
+        inherit from `Geom_Surface`, that is the return type specified here.
+
+        :returns: A B-Rep representation of the spline patch.
+        :raises NotImplementedError: If a child class does not implement this method.
+        """
+        raise NotImplementedError(
+            "Classes inheriting from `SplinePatch` need to implement the "
+            + "`to_brep` method."
         )
 
     @property

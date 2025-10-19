@@ -5,6 +5,10 @@ import matplotlib.pyplot as plt
 import mitsuba as mi
 import numpy as np
 import numpy.typing as npt
+from OCP.Geom import Geom_BSplineSurface
+from OCP.TColgp import TColgp_Array2OfPnt
+from OCP.TColStd import TColStd_Array1OfReal, TColStd_Array1OfInteger
+from OCP.gp import gp_Pnt
 
 from rebel_shape.meshing.patch import Patch
 from rebel_shape.splines.bivariate_bspline import BivariateBSpline
@@ -499,6 +503,63 @@ class BSplinePatch(SplinePatch):
             factor=factor, values_list=[self._control_points]
         )[0]
         self._quads = self._build_quads()
+
+    def to_brep(self) -> Geom_BSplineSurface:
+        """
+        Export the B-Spline patch as an OCP (OpenCascade) B-Spline surface.
+
+        This method creates a `Geom_BSplineSurface` object from the B-Spline patch's
+        control points, knot vectors, and degrees. The resulting B-Rep surface can
+        be used for CAD operations, export to standard CAD formats, such as STEP/IGES
+        files, or stitching together multiple surfaces.
+
+        :returns: An OCP Geom_BSplineSurface representing this B-Spline patch.
+        """
+        cp_grid = self.control_points_grid.numpy()
+
+        # Create OCP control points array (1-indexed in both dimensions)
+        ocp_control_points = TColgp_Array2OfPnt(1, self._num_cps_u, 1, self._num_cps_v)
+
+        # Fill the control points array (note: OCP uses 1-based indexing)
+        for j in range(self._num_cps_v):
+            for i in range(self._num_cps_u):
+                point = gp_Pnt(
+                    float(cp_grid[j, i, 0]),
+                    float(cp_grid[j, i, 1]),
+                    float(cp_grid[j, i, 2]),
+                )
+                ocp_control_points.SetValue(i + 1, j + 1, point)
+
+        # Get unique knots and their multiplicities
+        u_unique_knots = self._spline.u_spline._unique_knots
+        v_unique_knots = self._spline.v_spline._unique_knots
+        u_multiplicities = self._spline.u_spline._knot_multiplicities
+        v_multiplicities = self._spline.v_spline._knot_multiplicities
+
+        # Create OCP arrays for knots and multiplicities (1-indexed)
+        ocp_u_knots = TColStd_Array1OfReal(1, len(u_unique_knots))
+        ocp_v_knots = TColStd_Array1OfReal(1, len(v_unique_knots))
+        ocp_u_mults = TColStd_Array1OfInteger(1, len(u_unique_knots))
+        ocp_v_mults = TColStd_Array1OfInteger(1, len(v_unique_knots))
+
+        # Fill the knot and multiplicity arrays
+        for i, (knot, mult) in enumerate(zip(u_unique_knots, u_multiplicities)):
+            ocp_u_knots.SetValue(i + 1, float(knot))
+            ocp_u_mults.SetValue(i + 1, int(mult))
+
+        for j, (knot, mult) in enumerate(zip(v_unique_knots, v_multiplicities)):
+            ocp_v_knots.SetValue(j + 1, float(knot))
+            ocp_v_mults.SetValue(j + 1, int(mult))
+
+        return Geom_BSplineSurface(
+            Poles=ocp_control_points,
+            UKnots=ocp_u_knots,
+            VKnots=ocp_v_knots,
+            UMults=ocp_u_mults,
+            VMults=ocp_v_mults,
+            UDegree=self._spline.u_spline.degree,
+            VDegree=self._spline.v_spline.degree,
+        )
 
     @property
     def _num_cps_u(self):

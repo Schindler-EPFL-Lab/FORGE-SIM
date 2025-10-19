@@ -43,6 +43,8 @@ class SplineTextureOptimizer(PropertyOptimizer):
         texture_projection_steepness: float = 1.0,
         texture_save_interval: int = 5,
         flip_along_y: bool = True,
+        mesh_save_interval: int | None = 10,
+        brep_save_interval: int | None = 10,
     ) -> None:
         """
         The `scene` is a loaded Mitsuba scene object, while `scene_params` are a
@@ -77,6 +79,11 @@ class SplineTextureOptimizer(PropertyOptimizer):
         easier use in Blender and other tools that have the `u = 0`, `v = 0` in the
         bottom left corner. The default is `u = 0`, `v = 0` in the top left corner.
 
+        `mesh_save_interval` and `brep_save_interval` determine how often the
+        tessellated mesh and B-Rep representations of the spline surface are saved
+        during the optimization process. If set to `None`, the respective
+        representations will not be saved.
+
         :raises ValueError: If all meshes in `tessellated_spline` are not present
             in `scene_params` or if `smoothing_strength` is a negative number.
         """
@@ -97,6 +104,8 @@ class SplineTextureOptimizer(PropertyOptimizer):
             shape_loss=shape_loss,
             regularization=shape_regularization,
             smoothing_strength=parametrization_smoothing,
+            mesh_save_interval=mesh_save_interval,
+            brep_save_interval=brep_save_interval,
         )
 
         self._texture_optimizer = BitmapTextureOptimizer(

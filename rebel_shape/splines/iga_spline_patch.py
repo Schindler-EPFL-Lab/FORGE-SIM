@@ -3,6 +3,7 @@ from typing import Any
 import drjit as dr
 import matplotlib.pyplot as plt
 import mitsuba as mi
+from OCP.OCP.Geom import Geom_Surface
 
 from rebel_shape.meshing.patch import Patch
 from rebel_shape.splines.bspline_patch import BSplinePatch
@@ -362,6 +363,21 @@ class IGASplinePatch(SplinePatch):
         )
         self._spline_patch._control_points = new_values[0]
         self._field_values = new_values[1]
+
+    def to_brep(self) -> Geom_Surface:
+        """
+        Converts the spline patch to a B-rep representation compatible with OCCT.
+
+        `Geom_Surface` is the base class for all surface types in OCCT. Two concrete
+        implementations that can represent the surfaces in this context are
+        `Geom_BSplineSurface` and `Geom_BezierSurface`.
+
+        At the time of writing, only B-spline surfaces are supported, so the
+        returned instance will be of type `Geom_BSplineSurface`.
+
+        :returns: A B-rep representation of the spline patch.
+        """
+        return self._spline_patch.to_brep()
 
     @property
     def field_values(self) -> "mi.TensorXf":

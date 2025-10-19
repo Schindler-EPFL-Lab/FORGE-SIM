@@ -3,6 +3,12 @@ import unittest
 import jsonpickle
 import mitsuba as mi
 import numpy as np
+from OCP.BRep import BRep_Tool
+from OCP.GeomAdaptor import GeomAdaptor_Surface
+from OCP.OCP.GeomAbs import GeomAbs_BSplineSurface
+from OCP.TopAbs import TopAbs_FACE
+from OCP.TopExp import TopExp_Explorer
+from OCP.TopoDS import TopoDS, TopoDS_Shape
 
 from rebel_shape.meshing.composite_mesh import CompositeMesh
 from rebel_shape.meshing.composite_spline_surface import CompositeSplineSurface
@@ -258,3 +264,79 @@ class TestCompositeSplineSurface(unittest.TestCase):
             self.surface._averaging_weights.shape[0],
             self.surface.global_control_points.shape[0],
         )
+
+    def test_to_brep(self):
+        """Test conversion to BRep format using OCP TopoDS_Shape"""
+        brep_shape = self.surface.to_brep(tolerance=1e-6)
+
+        # Check that the result is a valid TopoDS_Shape
+        self.assertIsInstance(brep_shape, TopoDS_Shape)
+        self.assertFalse(brep_shape.IsNull())
+
+        # Explore the faces in the B-Rep shape
+        face_explorer = TopExp_Explorer(brep_shape, TopAbs_FACE)
+        face_count = 0
+        faces = []
+
+        while face_explorer.More():
+            face = TopoDS.Face_s(face_explorer.Current())
+            faces.append(face)
+            face_count += 1
+            face_explorer.Next()
+
+        # The composite surface has 3 patches, so we should have 3 faces
+        self.assertEqual(
+            face_count,
+            len(self.surface),
+            "Number of faces should match number of patches",
+        )
+
+        # Verify that each face corresponds to a valid B-Spline surface
+        for i, face in enumerate(faces):
+            # Get the underlying surface from the face
+            surface_handle = BRep_Tool.Surface_s(face)
+            self.assertIsNotNone(
+                surface_handle, f"Face {i} should have a valid surface"
+            )
+
+            # Create a GeomAdaptor to check surface properties
+            adaptor = GeomAdaptor_Surface(surface_handle)
+
+            self.assertEqual(
+                adaptor.GetType(),
+                GeomAbs_BSplineSurface,
+                f"Face {i} should be a B-Spline surface",
+            )
+
+        # Verify that the B-Rep can evaluate points correctly by comparing
+        # with direct patch evaluation
+        for patch_idx in range(len(self.surface)):
+            patch = self.surface[patch_idx]
+            face = faces[patch_idx]
+
+            surface_handle = BRep_Tool.Surface_s(face)
+
+            n_test_points = 7
+            u_samples = np.linspace(0.0, 1.0, n_test_points)
+            v_samples = np.linspace(0.0, 1.0, n_test_points)
+            uv = np.meshgrid(u_samples, v_samples)
+
+            uv_points = np.vstack([uv[0].ravel(), uv[1].ravel()]).T
+
+            for u, v in uv_points:
+                # Evaluate using the patch
+                patch_point = patch.evaluate_coordinates(
+                    parametric_coords=mi.TensorXf([[u, v]])
+                ).numpy()[0]
+
+                # Evaluate using the OCP surface
+                ocp_point = surface_handle.Value(u, v)
+                brep_point = np.array([ocp_point.X(), ocp_point.Y(), ocp_point.Z()])
+
+                # Compare the results
+                np.testing.assert_array_almost_equal(
+                    patch_point,
+                    brep_point,
+                    decimal=5,
+                    err_msg=f"Patch {patch_idx} point mismatch at (u={u}, v={v})",
+                )

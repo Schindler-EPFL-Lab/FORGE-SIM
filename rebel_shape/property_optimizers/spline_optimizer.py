@@ -5,6 +5,7 @@ from typing import Any
 import drjit as dr
 import jsonpickle
 import mitsuba as mi
+from OCP.OCP.STEPControl import STEPControl_AsIs, STEPControl_Writer
 
 from rebel_shape.loss_evaluators.image_loss import ImageLoss
 from rebel_shape.loss_evaluators.image_loss_l2 import ImageLossL2
@@ -52,6 +53,7 @@ class SplineOptimizer(PropertyOptimizer):
         regularization: Regularization | None = None,
         smoothing_strength: float = 4.0,
         mesh_save_interval: int | None = 10,
+        brep_save_interval: int | None = 10,
     ) -> None:
         """
         The `scene` is a loaded Mitsuba scene object, while `scene_params` are a
@@ -77,6 +79,11 @@ class SplineOptimizer(PropertyOptimizer):
         representing the spline surface are saved during optimization. If it is set to
         `None`, the meshes are not saved during optimization. If it is set to a positive
         integer, the meshes are saved every `mesh_save_interval` iterations.
+
+        `brep_save_interval` is an integer that specifies how often the boundary
+        representation (B-rep) of the spline surface is saved during optimization in
+        the STEP format. If it is set to `None`, the BREP is not saved during
+        optimization.
 
         :raises ValueError: If all meshes in `tessellated_spline` are not present
             in `scene_params` or if `smoothing_strength` is a negative number.
@@ -108,6 +115,10 @@ class SplineOptimizer(PropertyOptimizer):
         if mesh_save_interval is not None and mesh_save_interval < 1:
             raise ValueError("`mesh_save_interval` must be a positive integer.")
         self._mesh_save_interval = mesh_save_interval
+
+        if brep_save_interval is not None and brep_save_interval < 1:
+            raise ValueError("`brep_save_interval` must be a positive integer.")
+        self._brep_save_interval = brep_save_interval
 
         self._initialize_parametrization()
 
@@ -244,11 +255,21 @@ class SplineOptimizer(PropertyOptimizer):
         with open(output_directory / save_name, "w") as spline_file:
             spline_file.write(encoded_spline)
 
-        if self._mesh_save_interval is None:
-            return
+        if self._mesh_save_interval is not None:
+            if (iteration + 1) % self._mesh_save_interval == 0:
+                for mesh in self._tessellated_spline:
+                    mesh_name = f"{mesh.name}_{timestamp}_iteration-{iteration:03}"
 
-        if (iteration + 1) % self._mesh_save_interval == 0:
-            for mesh in self._tessellated_spline:
-                mesh_name = f"{mesh.name}_{timestamp}_iteration-{iteration:03}"
+                    mesh.save_to_ply(output_dir=output_directory, save_name=mesh_name)
 
-                mesh.save_to_ply(output_dir=output_directory, save_name=mesh_name)
+        if self._brep_save_interval is not None:
+            if (iteration + 1) % self._brep_save_interval == 0:
+                brep_name = (
+                    f"{self._tessellated_spline.spline_name}_"
+                    f"{timestamp}_iteration-{iteration:03}.step"
+                )
+                brep_spline = self._tessellated_spline.composite_spline.to_brep()
+
+                step_writer = STEPControl_Writer()
+                step_writer.Transfer(brep_spline, STEPControl_AsIs)
+                step_writer.Write(str(output_directory / brep_name))
