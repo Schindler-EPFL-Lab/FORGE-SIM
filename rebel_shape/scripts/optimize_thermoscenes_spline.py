@@ -21,7 +21,7 @@ sys.path.append("./")
 from dataclasses_reverse_cli.reverse_cli import ReverseCli
 
 from rebel_shape import logger
-from rebel_shape.data_processing.input_preprocessing import preprocess_rgb_images
+from rebel_shape.data_processing.image_scene_loader import ImageSceneLoader
 from rebel_shape.data_processing.masked_pose_image import MaskedPoseImage
 from rebel_shape.meshing.tessellated_spline_surface import TessellatedSplineSurface
 from rebel_shape.plugin_wrappers.diffuse_bsdf import DiffuseBSDF
@@ -67,7 +67,7 @@ class ThermoSceneSplineOptimizationParameters(ReverseCli):
     """number of samples per pixel used for continuous derivatives"""
     visibility_samples: int = 9
     """number of samples per pixel used for direct and indirect visibility"""
-    optimization_iterations: int = 180
+    optimization_iterations: int = 250
     """Adam iterations executed on the initial mesh"""
 
     pose_params: PoseOptimizationConfig = field(
@@ -95,7 +95,7 @@ class ThermoSceneSplineOptimizationParameters(ReverseCli):
             uniform_adam=True,
             batch_size=None,
             lbfgs_history_size=15,
-            h_refinement_iterations=[15, 30, 50, 80, 120],
+            h_refinement_iterations=[20, 50, 80, 120, 180],
             degree=3,
             knot_spans=2,
             tessellation_subdivisions=256,
@@ -205,18 +205,11 @@ def initialize_scene(
 
     sampler = Sampler(type=Sampler.Type.ORTHOGONAL, sample_count=continuous_samples)
 
-    ref_images, _ = preprocess_rgb_images(
+    loader = ImageSceneLoader(
         scene_path=thermoscenes_scene_path,
         environment_map_path=envmap_path,
         spp=continuous_samples,
-        sampler=sampler,
-    )
-    eval_images, _ = preprocess_rgb_images(
-        scene_path=thermoscenes_scene_path,
-        environment_map_path=envmap_path,
-        spp=continuous_samples,
-        train=False,
-        sampler=sampler,
+        sensor_sampler=sampler,
     )
 
     # Set the initial shape of the object - ico-sphere
@@ -259,7 +252,7 @@ def initialize_scene(
 
     scene_source: "mi.Scene" = mi.load_dict(scene_dict)
 
-    return scene_source, ref_images, eval_images, cubedsphere
+    return scene_source, loader.train_images, loader.eval_images, cubedsphere
 
 
 def optimize_thermoscenes_scene(

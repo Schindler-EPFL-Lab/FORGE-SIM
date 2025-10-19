@@ -53,17 +53,17 @@ from rebel_shape.utils.sensor_utils import create_cameras_fibonacci
 class SuzanneSplineTextureParameters(ReverseCli):
     """Parameters used for simultaneous spline and texture optimization of Suzanne"""
 
-    sensor_count: int = 12
+    sensor_count: int = 19
     """Number of camera views used in optimization"""
-    reference_samples: int = 961
+    reference_samples: int = 4096
     """Number of samples per pixel used for the reference/target images"""
-    continuous_samples: int = 49
+    continuous_samples: int = 64
     """Number of samples per pixel used for continuous derivatives"""
-    visibility_samples: int = 9
+    visibility_samples: int = 16
     """number of samples per pixel used for direct and indirect visibility gradients"""
-    image_resolution: int = 480
+    image_resolution: int = 512
     """Resolution of the rendered images along height and width"""
-    optimization_iterations: int = 200
+    optimization_iterations: int = 250
     """Adam learning rate in the first pass"""
 
     shape_params: SplineShapeOptimizationConfig = field(
@@ -75,8 +75,8 @@ class SuzanneSplineTextureParameters(ReverseCli):
             use_lbfgs=True,
             uniform_adam=True,
             batch_size=None,
-            lbfgs_history_size=15,
-            h_refinement_iterations=[20, 40, 70, 100],
+            lbfgs_history_size=10,
+            h_refinement_iterations=[25, 50, 80, 140],
             degree=3,
             knot_spans=2,
             tessellation_subdivisions=256,

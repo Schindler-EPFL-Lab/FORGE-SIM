@@ -43,23 +43,23 @@ from rebel_shape.utils.sensor_utils import create_cameras_fibonacci
 class PLYSplineParameters(ReverseCli):
     """Parameters used for spline optimization of an arbitrary shape"""
 
-    shape_path: Path = Path("./data/test_scenes/meshes/suzanne.ply")
+    shape_path: Path = Path("./data/test_scenes/meshes/armadillo.ply")
     """Path to the .ply shape"""
     environment_map_path: Path = Path("./data/test_scenes/textures/envmap2.exr")
     """
     Path to the envionment map that is used as background in optimization
     """
-    sensor_count: int = 12
+    sensor_count: int = 19
     """Number of camera views used in optimization"""
-    reference_samples: int = 961
+    reference_samples: int = 4096
     """Number of samples per pixel used for the reference/target images"""
-    continuous_samples: int = 49
+    continuous_samples: int = 64
     """Number of samples per pixel used for continuous derivatives"""
-    visibility_samples: int = 9
+    visibility_samples: int = 16
     """Number of samples per pixel used for direct and indirect visibility gradients"""
-    resolution: int = 480
+    resolution: int = 512
     """Number of pixels along width and height of the images"""
-    optimization_iterations: int = 150
+    optimization_iterations: int = 250
     """Number of optimization iterations with `SceneAdamBatch`"""
 
     shape_params: SplineShapeOptimizationConfig = field(
@@ -72,7 +72,7 @@ class PLYSplineParameters(ReverseCli):
             uniform_adam=True,
             batch_size=None,
             lbfgs_history_size=15,
-            h_refinement_iterations=[15, 30, 50, 75],
+            h_refinement_iterations=[25, 50, 80, 140], # Add 250 for armadillo
             degree=3,
             knot_spans=2,
             tessellation_subdivisions=256,
@@ -185,7 +185,7 @@ def initialize_scene(
         sensor_count=sensor_count,
         target_coords=(0.0, 0.0, 0.0),
         sensor_resolution=(resolution, resolution),
-        sampler=Sampler(type=Sampler.Type.ORTHOGONAL, sample_count=continuous_samples),
+        sampler=Sampler(type=Sampler.Type.MULTIJITTER, sample_count=continuous_samples),
     )
 
     start_time = time.time()

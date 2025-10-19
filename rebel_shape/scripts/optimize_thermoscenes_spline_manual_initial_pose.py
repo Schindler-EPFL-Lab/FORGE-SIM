@@ -71,7 +71,7 @@ class ThermoSceneSplineOptimizationParameters(ReverseCli):
     """number of samples per pixel used for continuous derivatives"""
     visibility_samples: int = 9
     """number of samples per pixel used for direct and indirect visibility"""
-    optimization_iterations: int = 180
+    optimization_iterations: int = 250
     """Adam iterations executed on the initial mesh"""
 
     shape_params: SplineShapeOptimizationConfig = field(
@@ -84,7 +84,7 @@ class ThermoSceneSplineOptimizationParameters(ReverseCli):
             uniform_adam=True,
             batch_size=None,
             lbfgs_history_size=15,
-            h_refinement_iterations=[15, 30, 50, 80, 120],
+            h_refinement_iterations=[20, 50, 80, 120, 180],
             degree=3,
             knot_spans=2,
             tessellation_subdivisions=256,
