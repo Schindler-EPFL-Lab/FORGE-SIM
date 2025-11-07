@@ -16,6 +16,9 @@ dependencies = [
     "jsonpickle>=4.0.2",
     "dataclasses-reverse-cli>=0.0.5",
     "tyro>=0.9.27",
+    "mlflow>=3.5.0rc0",
+    "cadquery-ocp>=7.8.1.1.post1",
+    "ocp-stubs",
 ]
 
 [tool.uv]
@@ -44,6 +47,7 @@ azure-ml-utils = { path = "../azure-ml-utils", editable = true }
 groundingdino = { git = "https://github.com/IDEA-Research/GroundingDINO", rev = "5a890bd867ab0eacb851046c7f5a55cab0e77925" }
 segment-anything = { git = "https://github.com/facebookresearch/segment-anything", rev = "dca509fe793f601edb92606367a655c15ac00fdf" }
 moge = { git = "https://github.com/microsoft/MoGe", rev = "0286b495230a074aadf1c76cc5c679e943e5d1c6" }
+ocp-stubs = { git = "https://github.com/CadQuery/OCP-stubs", rev="e838ff400d5ee2f4a0579d2a713b19311855288f" }
 
 [[tool.uv.dependency-metadata]]
 name = "groundingdino"
