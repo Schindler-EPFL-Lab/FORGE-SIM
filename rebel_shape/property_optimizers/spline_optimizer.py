@@ -5,7 +5,7 @@ from typing import Any
 import drjit as dr
 import jsonpickle
 import mitsuba as mi
-from OCP.OCP.STEPControl import STEPControl_AsIs, STEPControl_Writer
+from OCP.STEPControl import STEPControl_AsIs, STEPControl_Writer
 
 from rebel_shape.loss_evaluators.image_loss import ImageLoss
 from rebel_shape.loss_evaluators.image_loss_l2 import ImageLossL2

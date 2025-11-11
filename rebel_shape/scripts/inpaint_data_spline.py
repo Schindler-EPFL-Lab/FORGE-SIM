@@ -69,11 +69,6 @@ class SplineInpaintingParameters(ReverseCli):
     """The initial object color for inpainting"""
     spline_path: Path
     """
-    Path to the folder with images scene that is optimized. The single channel image
-    foreground does not have to be extracted.
-    """
-    spline_path: Path
-    """
     Path to the reconstructed spline surface mesh that will receive
     data.
     """

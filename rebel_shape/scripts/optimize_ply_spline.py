@@ -11,6 +11,7 @@ from pathlib import Path
 import mitsuba as mi
 import mlflow
 import tyro
+from dataclasses_reverse_cli.reverse_cli import ReverseCli
 
 # This is a hack so that the script work with azure sdkv2.
 # The root folder is _not_ added to the python path as it was in sdkv1
@@ -18,7 +19,6 @@ import tyro
 # Remove when https://github.com/Azure/azure-sdk-for-python/issues/29724 is fixed
 sys.path.append("./")
 
-from dataclasses_reverse_cli.reverse_cli import ReverseCli
 
 from rebel_shape import logger
 from rebel_shape.data_processing.masked_pose_image import MaskedPoseImage
