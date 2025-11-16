@@ -17,8 +17,6 @@ from rebel_shape.scripts.optimize_thermoscenes_spline_manual_initial_pose import
 class TrainingParametersAzure:
     script_params: ThermoSceneSplineOptimizationParameters
     """Parameters for the training script"""
-    scene_name: str = "extracted-buildingA-spring"
-    """Name of the scene that is to be optimized"""
     experiment_name: str = (
         "Spline optimization of diffuse "
         "ThermoScenes mesh spline and manual initialization"
@@ -47,11 +45,12 @@ def main() -> None:
 
     ml_client = get_client()
     dataset = ml_client.data.get(
-        name=parameters.scene_name, version=parameters.scene_version
+        name=str(parameters.script_params.thermoscenes_scene_path),
+        version=parameters.scene_version,
     )
 
     job_inputs = dict(
-        scene_name=parameters.scene_name,
+        scene_name=str(parameters.script_params.thermoscenes_scene_path),
         data=Input(
             type=AssetTypes.URI_FOLDER,  # type: ignore
             path=dataset.id,
@@ -60,14 +59,16 @@ def main() -> None:
     )
 
     job_name = (
-        parameters.scene_name
+        str(parameters.script_params.thermoscenes_scene_path)
         + "-"
         + model_type
         + "-"
         + datetime.now().strftime("%d-%m-%Y-%H%M%S")
     )
 
-    parameters.experiment_name = parameters.scene_name + "-training-job"
+    parameters.experiment_name = (
+        str(parameters.script_params.thermoscenes_scene_path) + "-training-job"
+    )
     parameters.script_params.thermoscenes_scene_path = Path("${{inputs.data}}")
 
     cmd = (

@@ -17,8 +17,6 @@ from rebel_shape.scripts.inpaint_data_spline import (
 class TrainingParametersAzure:
     script_params: SplineInpaintingParameters
     """Parameters for the inpainting scalar data onto mesh vertices"""
-    scene_name: str = "extracted-buildingA-spring"
-    """Name of the scene/object"""
     experiment_name: str = "Inpainting_of_thermoscenes_spline"
     scene_version: str = "1"
     """Version of the scene"""
@@ -40,11 +38,12 @@ def main() -> None:
 
     ml_client = get_client()
     dataset = ml_client.data.get(
-        name=parameters.scene_name, version=parameters.scene_version
+        name=str(parameters.script_params.thermoscenes_scene_path),
+        version=parameters.scene_version,
     )
 
     job_inputs = dict(
-        scene_name=parameters.scene_name,
+        scene_name=str(parameters.script_params.thermoscenes_scene_path),
         data=Input(
             type=AssetTypes.URI_FOLDER,  # type: ignore
             path=dataset.id,
@@ -53,14 +52,16 @@ def main() -> None:
     )
 
     job_name = (
-        parameters.scene_name
+        str(parameters.script_params.thermoscenes_scene_path)
         + "-"
         + model_type
         + "-"
         + datetime.now().strftime("%d-%m-%Y-%H%M%S")
     )
 
-    parameters.experiment_name = parameters.scene_name + "-inpainting"
+    parameters.experiment_name = (
+        str(parameters.script_params.thermoscenes_scene_path) + "-inpainting"
+    )
     parameters.script_params.thermoscenes_scene_path = Path("${{inputs.data}}")
 
     cmd = "python3.12 rebel_shape/scripts/inpaint_data_spline.py "

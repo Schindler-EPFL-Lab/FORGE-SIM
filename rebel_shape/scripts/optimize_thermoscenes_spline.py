@@ -436,6 +436,8 @@ def optimize_thermoscenes_scene(
 
 if __name__ == "__main__":
     parameters = tyro.cli(ThermoSceneSplineOptimizationParameters)
-    mlflow.log_params(parameters.to_loggable_dict())
+    mlflow.log_params(
+        parameters.to_loggable_dict(ignore=set(["thermoscenes_scene_path"]))
+    )
 
     optimize_thermoscenes_scene(params=parameters)

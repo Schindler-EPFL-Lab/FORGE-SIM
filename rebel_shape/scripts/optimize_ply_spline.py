@@ -72,7 +72,7 @@ class PLYSplineParameters(ReverseCli):
             uniform_adam=True,
             batch_size=None,
             lbfgs_history_size=15,
-            h_refinement_iterations=[25, 50, 80, 140], # Add 250 for armadillo
+            h_refinement_iterations=[25, 50, 80, 140],  # Add 250 for armadillo
             degree=3,
             knot_spans=2,
             tessellation_subdivisions=256,
