@@ -39,6 +39,8 @@ class BuildNetConversionParams(ReverseCli):
     Number of images to keep from the original dataset (out of a total of 200 images).
     The default is keeping the entire dataset.
     """
+    windows_value: int = 2
+    """What value of semantic masks correspond to windows."""
     train_fraction: float = 0.9
     """
     Fraction of frames to assign to the training split (0.0 < train_fraction < 1.0).
@@ -157,9 +159,11 @@ def convert_buildnet3d_to_thermoscenes(params: BuildNetConversionParams) -> None
     # --- 4) Prepare output directories ---
     imgs_out = params.thermoscenes_output_path / "images"
     thermal_out = params.thermoscenes_output_path / "thermal"
+    windows_masks_out = params.thermoscenes_output_path / "windows_masks"
 
     imgs_out.mkdir(parents=True, exist_ok=True)
     thermal_out.mkdir(parents=True, exist_ok=True)
+    windows_masks_out.mkdir(parents=True, exist_ok=True)
 
     # --- 5) Initialize transforms structure ---
     transforms = {
@@ -224,12 +228,17 @@ def convert_buildnet3d_to_thermoscenes(params: BuildNetConversionParams) -> None
         img_mask = Image.open(semantic_src).convert("L")
         img_mask.save(thermal_out / filename)
 
+        # Create a window mask
+        windows_mask = mask.point(lambda p: 255 if p == params.windows_value else 0)
+        windows_mask.save(windows_masks_out / filename)
+
         # Add frame to transforms
         transforms["frames"].append(
             {
                 "file_path": f"images/{filename}",
                 "transform_matrix": frame["camtoworld"],
                 "thermal_file_path": f"thermal/{filename}",
+                "windows_mask_file_path": f"windows_masks/{filename}",
             }
         )
 
