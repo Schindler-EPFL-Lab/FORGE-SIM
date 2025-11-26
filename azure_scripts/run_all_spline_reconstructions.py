@@ -54,7 +54,7 @@ def main() -> None:
             "--script-params.bbox-transforms-path",
             json_file,
             "--script-params.environment-map-path",
-            "data/test_scenes/textures/overcast_soil_2_2k.exr",
+            "data/textures/overcast_soil_2_2k.exr",
         ]
         process = subprocess.run(command, check=True)
         # Check the return code to ensure it completed successfully

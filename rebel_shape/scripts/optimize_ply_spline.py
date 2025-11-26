@@ -43,9 +43,9 @@ from rebel_shape.utils.sensor_utils import create_cameras_fibonacci
 class PLYSplineParameters(ReverseCli):
     """Parameters used for spline optimization of an arbitrary shape"""
 
-    shape_path: Path = Path("./data/test_scenes/meshes/armadillo.ply")
+    shape_path: Path = Path("./data/meshes/armadillo.ply")
     """Path to the .ply shape"""
-    environment_map_path: Path = Path("./data/test_scenes/textures/envmap2.exr")
+    environment_map_path: Path = Path("./data/textures/envmap2.exr")
     """
     Path to the envionment map that is used as background in optimization
     """
