@@ -293,3 +293,55 @@ class TestMesh(unittest.TestCase):
 
         # Check that it indeed is a Mitsuba mesh
         self.assertTrue(isinstance(mesh.mitsuba_dict, mi.Mesh))
+
+    def test_transform_vertices_identity(self) -> None:
+        """Tests that transform_vertices works properly on identity function"""
+        mesh = Mesh(
+            mesh_name="test_mesh",
+            vertices=self.vertices,
+            faces=self.faces,
+            texture_coordinates=self.texcoords,
+            vertex_normals=self.normals,
+        )
+        mesh.transform_vertices(mi.Transform4f())
+        self.assertTrue(dr.allclose(self.vertices, mesh.vertices))
+        self.assertTrue(dr.allclose(self.normals, mesh.vertex_normals))
+
+    def test_transform_vertices(self) -> None:
+        """Tests that transform_vertices works properly on a random transformation"""
+        transform = mi.Transform4f(
+            [
+                [0.37454012, 0.95071431, 0.73199394, 0.59865848],
+                [0.15601864, 0.15599452, 0.05808361, 0.86617615],
+                [0.60111501, 0.70807258, 0.02058449, 0.96990985],
+                [0.0, 0.0, 0.0, 1.0],
+            ]
+        )
+
+        mesh = Mesh(
+            mesh_name="test_mesh",
+            vertices=self.vertices,
+            faces=self.faces,
+            texture_coordinates=self.texcoords,
+            vertex_normals=self.normals,
+        )
+        mesh.transform_vertices(transform=transform)
+        expected_vertices = np.array(
+            [
+                [0.5986585, 0.8661761, 0.96990985],
+                [0.97319865, 1.0221947, 1.5710249],
+                [1.5493728, 1.0221707, 1.6779824],
+            ]
+        )
+        expected_vertex_normals = np.array(
+            [
+                [0.05225116, 0.95820856, -0.28125817],
+                [0.05225116, 0.95820856, -0.28125817],
+                [0.05225116, 0.95820856, -0.28125817],
+            ]
+        )
+
+        self.assertTrue(np.allclose(expected_vertices, mesh.vertices.numpy()))
+        self.assertTrue(
+            np.allclose(expected_vertex_normals, mesh.vertex_normals.numpy())
+        )

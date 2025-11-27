@@ -388,6 +388,55 @@ class Mesh(MitsubaPlugin):
 
         self._mesh_params["vertex_normals"] = dr.ravel(normals)
 
+    def transform_vertices(self, transform: "mi.Transform4f") -> None:
+        """
+        Applies a 4x4 transformation matrix `transform` to vertices and normals of the
+        mesh. To transform the normals one should use the formula from the wikipedia:
+        https://en.wikipedia.org/wiki/Normal_(geometry)#Transforming_normals
+        """
+        original_normals = self.vertex_normals
+        original_normals_points = dr.unravel(
+            dtype=mi.Point3f,
+            array=original_normals.array,
+        )
+
+        original_vertices = self.vertices
+        original_vertices_points = dr.unravel(
+            dtype=mi.Point3f,
+            array=original_vertices.array,
+        )
+
+        # transform vertices
+        new_vertices = transform @ original_vertices_points
+        new_vertices = dr.ravel(new_vertices)
+        new_vertices = dr.reshape(
+            dtype=mi.TensorXf,
+            value=new_vertices,
+            shape=original_vertices.shape,
+        )
+        self.vertices = new_vertices
+
+        # transform normals
+        tf_no_translation = mi.TensorXf(transform.matrix)
+        tf_no_translation[3, 0, 0] = 0.0
+        tf_no_translation[3, 1, 0] = 0.0
+        tf_no_translation[3, 2, 0] = 0.0
+
+        normal_transform = mi.Transform4f(tf_no_translation).inverse_transpose
+        normal_transform = mi.Transform4f(normal_transform)
+
+        new_normals = normal_transform @ original_normals_points
+        new_normals = dr.ravel(new_normals)
+        new_normals = dr.reshape(
+            dtype=mi.TensorXf,
+            value=new_normals,
+            shape=original_normals.shape,
+        )
+
+        new_normals_norms = dr.safe_sqrt(dr.sum(new_normals * new_normals, axis=1))
+        new_normals /= dr.maximum(new_normals_norms[:, None], 1e-12)
+        self.vertex_normals = new_normals
+
     def set_vertex_normals_at(
         self, indices: "mi.ArrayXu", normals: "mi.TensorXf"
     ) -> None:
