@@ -75,7 +75,7 @@ class SceneLBFGS(SceneOptimizer):
         learning_rate: float = 1.0,
         history_size: int = 10,
         use_wolfe_conditions: bool = False,
-        line_search_iterations: int = 15,
+        line_search_iterations: int = 30,
         batch_size: int | None = None,
         randomize_image_order: bool = True,
         image_order_seed: int = 42,
@@ -99,8 +99,8 @@ class SceneLBFGS(SceneOptimizer):
 
         `line_search_iterations` is the number of iterations of backtracking line search
         to run. It determines how many times the step size is halved until the
-        conditions are satisfied. Values higher than 20 are typically not needed -
-        taking a very small step (`learning_rate` / 2^20) in a wrong direction is
+        conditions are satisfied. Values higher than 30 are typically not needed -
+        taking a very small step (`learning_rate` / 2^30) in a wrong direction is
         unlikely to significantly destabilize the optimization process.
 
         `batch_size` is the number of sensors to use in each optimization step. If

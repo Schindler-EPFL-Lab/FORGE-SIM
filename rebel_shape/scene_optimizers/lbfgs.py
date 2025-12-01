@@ -46,7 +46,7 @@ class LBFGS(mi.ad.Optimizer):
 
     CURVATURE_EPSILON_REL: float = 1e-12
     """Minimum relative curvature threshold for accepting updates """
-    CURVATURE_EPSILON_ABS: float = 1e-18
+    CURVATURE_EPSILON_ABS: float = 1e-16
     """Minimum absolute curvature threshold for accepting updates """
 
     def __init__(
