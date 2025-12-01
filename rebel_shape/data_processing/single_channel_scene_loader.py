@@ -54,6 +54,10 @@ class SingleChannelImageSceneLoader:
         semantic_folder = self._pose_loader._scene_path / image_folder
         image_paths = self._pose_loader._load_image_paths_from_folder(semantic_folder)
 
+        # Explicit indices into pose loader splits
+        train_idx = 0
+        eval_idx = 0
+
         # Iterate through frames from transform_data
         for frame in self._pose_loader._transform_data.get("frames", []):
             rgb_image_filename = Path(frame["file_path"]).name
@@ -79,21 +83,26 @@ class SingleChannelImageSceneLoader:
                 )
 
             is_train = False
+
             if (
-                self._pose_loader.train_filenames[len(self._train_images)]
-                == rgb_image_filename
+                train_idx < len(self._pose_loader.train_filenames)
+                and self._pose_loader.train_filenames[train_idx] == rgb_image_filename
             ):
                 is_train = True
-                camera = self._pose_loader.train_cameras[len(self._train_images)]
+                camera = self._pose_loader.train_cameras[train_idx]
+                train_idx += 1
             elif (
-                self._pose_loader.eval_filenames[len(self._eval_images)]
-                == rgb_image_filename
+                eval_idx < len(self._pose_loader.eval_filenames)
+                and self._pose_loader.eval_filenames[eval_idx] == rgb_image_filename
             ):
-                camera = self._pose_loader.eval_cameras[len(self._eval_images)]
+                camera = self._pose_loader.eval_cameras[eval_idx]
+                eval_idx += 1
             else:
                 raise ValueError(
                     f"Image {rgb_image_filename} does not specify whether "
-                    "it is a training ('train') or evaluation ('eval') image"
+                    + "it is a training (`train`) or evaluation (`eval`) image, "
+                    + "or the ordering between `transforms.json` and the split "
+                    + "filenames is inconsistent."
                 )
 
             camera.pixel_format = PerspectiveCamera.PixelFormat.LUMINANCE
