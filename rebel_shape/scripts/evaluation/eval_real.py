@@ -50,7 +50,7 @@ class EvalNVSParameters(ReverseCli):
     """
     samples_per_pixel: int = 169
     """Number of samples per pixel used for rendering"""
-    output_file_path: Path = Path("./outputs/eval_nvs.json")
+    output_folder: Path = Path("./outputs/")
     """Where to save the metrics (created if does not exist)"""
 
     def __post_init__(self) -> None:
@@ -109,10 +109,10 @@ def eval_novel_view_synthesis(params: EvalNVSParameters) -> None:
         rendered_images_torch.append(rendered_image_torch)
 
     torchvision.utils.save_image(
-        eval_images_torch, params.output_file_path.parent / "eval_images.png"
+        eval_images_torch, params.output_folder / "eval_images.png"
     )
     torchvision.utils.save_image(
-        rendered_images_torch, params.output_file_path.parent / "rendered_images.png"
+        rendered_images_torch, params.output_folder / "rendered_images.png"
     )
 
     metrics = calculate_metrics_novel_view_synthesis(
@@ -121,8 +121,8 @@ def eval_novel_view_synthesis(params: EvalNVSParameters) -> None:
         device=device,
     )
 
-    params.output_file_path.parent.mkdir(parents=True, exist_ok=True)
-    with open(params.output_file_path, "w") as f:
+    params.output_folder.mkdir(parents=True, exist_ok=True)
+    with open(params.output_folder / "eval_nvs.json", "w") as f:
         json.dump(metrics, f, indent=4)
 
 
