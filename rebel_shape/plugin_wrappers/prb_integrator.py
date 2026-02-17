@@ -50,7 +50,7 @@ class PRBIntegrator(MitsubaPlugin):
         Since Mitsuba uses Monte Carlo simulation to estimate gradients instead of
         pure AD, one can tune how many samples are used to estimate the 3 components
         of the integral that defines the gradient. `spp_continuous` determines how
-        mant samples are dedicated continuous properties such as textures, while
+        many samples are dedicated continuous properties such as textures, while
         `spp_projective` samples dedicated to primary visibility changes (e.g. vertex
         positions change and something is no longer visible) and `spp_indirect`
         indirect visibility changes (e.g. changing the vertex position leads to the
