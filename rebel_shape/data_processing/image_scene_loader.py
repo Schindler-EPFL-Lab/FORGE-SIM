@@ -59,41 +59,30 @@ class ImageSceneLoader:
         self._train_images: list[MaskedPoseImage] = []
         self._eval_images: list[MaskedPoseImage] = []
 
-        rgb_folder = self._pose_loader._scene_path / "images"
-        foreground_mask_folder = self._pose_loader._scene_path / "foreground_masks"
-
-        image_rgb_paths = self._pose_loader._load_image_paths_from_folder(rgb_folder)
-        foreground_mask_paths = self._pose_loader._load_image_paths_from_folder(
-            foreground_mask_folder
-        )
-
         background_scene = self._create_background_scene(environment_map_path)
 
         # Iterate through frames from transform_data
         for frame in self._pose_loader._transform_data.get("frames", []):
-            rgb_image_filename = Path(frame["file_path"]).name
-            foreground_mask_filename = (
-                Path(frame["foreground_mask_file_path"]).name
-                if foreground_mask_folder.exists()
-                else None
-            )
+            rgb_image_filename = Path(frame["file_path"])
+            image_rgb_path = self._pose_loader._scene_path / rgb_image_filename
 
-            if rgb_image_filename not in image_rgb_paths:
+            foreground_mask_path: Path | None = None
+            if "foreground_mask_file_path" in frame:
+                foreground_mask_path = self._pose_loader._scene_path / Path(
+                    frame["foreground_mask_file_path"]
+                )
+            if not image_rgb_path.exists():
                 raise RuntimeError(
-                    f"Image {rgb_image_filename} referenced in transform.json "
-                    + "is missing in dataset."
+                    f"Image {image_rgb_path} referenced in transform.json "
+                    + "does not exist."
                 )
 
-            if (
-                foreground_mask_filename is not None
-                and foreground_mask_filename not in foreground_mask_paths
-            ):
+            if foreground_mask_path is not None and not foreground_mask_path.exists():
                 raise RuntimeError(
-                    f"Foreground mask {foreground_mask_filename} referenced in "
+                    f"Foreground mask {foreground_mask_path} referenced in "
                     + "transform.json is missing in dataset."
                 )
 
-            image_rgb_path = image_rgb_paths[rgb_image_filename]
             mitsuba_image_rgba = mi.TensorXf(
                 mi.Bitmap(str(image_rgb_path)).convert(
                     component_format=mi.Struct.Type.Float32, srgb_gamma=True
@@ -107,8 +96,7 @@ class ImageSceneLoader:
             mitsuba_foreground_mask = mi.TensorXf(
                 dr.zeros_like(mitsuba_image_rgba[:, :, 0:1])
             )
-            if foreground_mask_filename is not None:
-                foreground_mask_path = foreground_mask_paths[foreground_mask_filename]
+            if foreground_mask_path is not None:
                 mitsuba_foreground_mask = mi.TensorXf(
                     mi.Bitmap(str(foreground_mask_path)).convert(
                         component_format=mi.Struct.Type.Float32, srgb_gamma=False
@@ -116,7 +104,7 @@ class ImageSceneLoader:
                 )
             if mitsuba_foreground_mask.shape[-1] != 1:
                 raise RuntimeError(
-                    f"Foreground mask image {foreground_mask_filename} is not a "
+                    f"Foreground mask image {foreground_mask_path} is not a "
                     + "single channel grayscale image."
                 )
 
@@ -124,19 +112,19 @@ class ImageSceneLoader:
             if (
                 len(self._train_images) < len(self._pose_loader.train_filenames)
                 and self._pose_loader.train_filenames[len(self._train_images)]
-                == rgb_image_filename
+                == rgb_image_filename.name
             ):
                 is_train = True
                 camera = self._pose_loader.train_cameras[len(self._train_images)]
             elif (
                 len(self._eval_images) < len(self._pose_loader.eval_filenames)
                 and self._pose_loader.eval_filenames[len(self._eval_images)]
-                == rgb_image_filename
+                == rgb_image_filename.name
             ):
                 camera = self._pose_loader.eval_cameras[len(self._eval_images)]
             else:
                 raise ValueError(
-                    f"Image {rgb_image_filename} does not specify whether "
+                    f"Image {rgb_image_filename.name} does not specify whether "
                     "it is a training ('train') or evaluation ('eval') image"
                 )
 

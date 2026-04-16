@@ -99,9 +99,12 @@ class TessellatedSplineSurface:
             raise ValueError(f"Path {composite_spline_surface_path} is not a file.")
 
         with open(composite_spline_surface_path, "r") as tessellated_spline_file:
-            tessellated_spline: TessellatedSplineSurface = jsonpickle.decode(
-                tessellated_spline_file.read()
-            )
+            tessellated_spline = jsonpickle.decode(tessellated_spline_file.read())
+            if not isinstance(tessellated_spline, TessellatedSplineSurface):
+                raise RuntimeError(
+                    "File does not contain valid JSON to build a",
+                    "TessellatedSplineSurface",
+                )
         return tessellated_spline
 
     @classmethod

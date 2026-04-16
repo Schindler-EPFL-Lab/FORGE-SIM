@@ -45,7 +45,7 @@ jobs:
 
       - name: Install the project
         run: |
-          uv sync --frozen --extra evaluation
+          uv sync --frozen --extra evaluation --extra foreground-background
 
       - name: Run tests
         run: uv run --frozen python -m unittest discover tests

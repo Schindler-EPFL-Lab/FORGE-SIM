@@ -33,9 +33,6 @@ class TestSam3ThermoScenes(unittest.TestCase):
 
         self.img_dir = self.test_dir / "images"
         self.img_dir.mkdir(parents=True, exist_ok=True)
-
-        self.out_dir = Path("temp_output_scene")
-
         self.dummy_img_path = self.img_dir / "frame_001.jpg"
 
         if TORCH_AVAILABLE:
@@ -62,7 +59,7 @@ class TestSam3ThermoScenes(unittest.TestCase):
 
     def tearDown(self) -> None:
         """Cleans up the temporary directories created during tests."""
-        for d in [self.test_dir, self.out_dir]:
+        for d in [self.test_dir]:
             if d.exists():
                 shutil.rmtree(d)
 
@@ -75,7 +72,6 @@ class TestSam3ThermoScenes(unittest.TestCase):
         params = Sam3ThermoScenesParams(
             scene_dir=self.test_dir,
             sam3_checkpoint_dir=Path("."),
-            output_scene_dir=self.out_dir,
             mask_mode="best",
             text_prompt="test",
             bpe_path=Path("."),
@@ -95,7 +91,6 @@ class TestSam3ThermoScenes(unittest.TestCase):
         params = Sam3ThermoScenesParams(
             scene_dir=self.test_dir,
             sam3_checkpoint_dir=Path("."),
-            output_scene_dir=self.out_dir,
             mask_mode="union",
             confidence_threshold=0.5,
             text_prompt="test",
@@ -133,18 +128,21 @@ class TestSam3ThermoScenes(unittest.TestCase):
         params = Sam3ThermoScenesParams(
             scene_dir=self.test_dir,
             sam3_checkpoint_dir=Path("fake_ckpt"),
-            output_scene_dir=self.out_dir,
             text_prompt="test",
             bpe_path=Path("."),
         )
 
         run(params)
 
-        out_img = self.out_dir / "images" / "frame_001.png"
+        out_img = self.test_dir / "images_sam3" / "frame_001.png"
         self.assertTrue(out_img.exists(), "Output image should be saved as .png")
 
-        with (self.out_dir / "transforms.json").open() as f:
+        with (self.test_dir / "transforms.json").open() as f:
             updated_json = json.load(f)
             self.assertEqual(
-                updated_json["frames"][0]["file_path"], "images/frame_001.png"
+                updated_json["frames"][0]["file_path"], "images_sam3/frame_001.png"
             )
+
+
+if __name__ == "__main__":
+    unittest.main()

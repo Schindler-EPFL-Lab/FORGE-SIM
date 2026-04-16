@@ -51,7 +51,7 @@ The project is structured as follows:
 rebel_shape/
 ├── rebel_shape/            # Main package
 │   ├── plugin_wrappers/        # Wrappers around select Mitsuba plugins that are used in rebel_shape
-│   ├── scene_optimizers/       # Optimizers 
+│   ├── scene_optimizers/       # Optimizers
 │   ├── loss_evaluators/        # Image loss functions that are the primary optimization targets
 │   ├── regularization/         # Regularization penalty terms
 │   ├── schedulers/             # Learning rate schedulers
@@ -70,7 +70,7 @@ rebel_shape/
 ### Plugin Wrappers
 
 [Mitsuba 3](https://mitsuba.readthedocs.io/en/stable/) is a modular differentiable renderer and as such it is based on dictionaries to specify the scene.
-Dictionaries make the code and all the available options more difficult to understand, so a basic interface that represents a `MitsubaPlugin` is defined.  
+Dictionaries make the code and all the available options more difficult to understand, so a basic interface that represents a `MitsubaPlugin` is defined.
 
 The interface prescribes a single method that has to be implemented:  `mitsuba_dict`.
 It returns the dictionary representation that can be directly inputted into a Mitsuba scene, which is also specified by a dictionary.

@@ -1,6 +1,5 @@
 import tempfile
 import unittest
-from json import JSONDecodeError
 from pathlib import Path
 
 import drjit as dr
@@ -302,7 +301,7 @@ class TestTessellatedSplineSurface(unittest.TestCase):
             with open(invalid_file, "w") as f:
                 f.write("invalid json content")
 
-            with self.assertRaises(JSONDecodeError):
+            with self.assertRaises(RuntimeError):
                 TessellatedSplineSurface.from_file_with_textures(
                     composite_spline_surface_path=invalid_file,
                     texture_paths=[texture_file, texture_file, texture_file],
@@ -425,3 +424,7 @@ class TestTessellatedSplineSurface(unittest.TestCase):
         self.assertTrue(
             dr.allclose(control_points_expected, control_points_transformed)
         )
+
+
+if __name__ == "__main__":
+    unittest.main()

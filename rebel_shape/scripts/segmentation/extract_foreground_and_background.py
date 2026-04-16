@@ -6,8 +6,8 @@ from skimage.restoration import inpaint
 
 
 def _not_masked_in_convex_hull(
-    binary_mask: npt.NDArray[np.bool],
-) -> npt.NDArray[np.bool]:
+    binary_mask: npt.NDArray[np.bool_],
+) -> npt.NDArray[np.bool_]:
     """
     Returns the pixels within the convex hull of an `binary_mask` that are not part of
     the `binary_mask`.
@@ -33,7 +33,7 @@ def _not_masked_in_convex_hull(
 
 def extract_foreground_and_background(
     image: npt.NDArray[np.uint8], depth: npt.NDArray[np.float32], dilation: int = 7
-) -> tuple[npt.NDArray[np.bool], npt.NDArray[np.bool]]:
+) -> tuple[npt.NDArray[np.bool_], npt.NDArray[np.bool_]]:
     """
     Extracts foreground and background masks from an RGBA image and its corresponding
     depth map. Given an input `image` (with an alpha channel as the fourth channel) and

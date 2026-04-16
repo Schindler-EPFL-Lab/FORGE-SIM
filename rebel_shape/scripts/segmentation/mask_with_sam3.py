@@ -14,6 +14,7 @@ Main Features:
 
 import json
 import logging
+import shutil
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
@@ -42,8 +43,6 @@ class Sam3ThermoScenesParams(ReverseCli):
     """Input scene folder (must contain transforms.json and images/)"""
     sam3_checkpoint_dir: Path
     """Folder containing sam3.pt (e.g. mounted AzureML data asset)"""
-    output_scene_dir: Path
-    """Output scene folder (will be created)"""
     text_prompt: Prompts | str
     """Prompt for SAM3 open-vocabulary segmentation"""
     confidence_threshold: float = 0.5
@@ -53,16 +52,17 @@ class Sam3ThermoScenesParams(ReverseCli):
     best  -> use the highest-score mask only
     union -> union all masks with score >= confidence_threshold
     """
-    overwrite: bool = True
-    """If True, overwrite output_scene_dir"""
-    bpe_path: Path
+    bpe_path: Path | None = None
     """
-    Path to bpe_simple_vocab_16e6.txt.gz.
+    Path to bpe_simple_vocab_16e6.txt.gz. If None it is set to the same value as 
+    `self.sam3_checkpoint_dir`
     """
 
     def __post_init__(self) -> None:
         if isinstance(self.text_prompt, Prompts):
             self.text_prompt: str = self.text_prompt.value
+        if self.bpe_path is None:
+            self.bpe_path: Path = self.sam3_checkpoint_dir
 
     @property
     def bpe_file(self) -> Path:
@@ -178,9 +178,7 @@ def run(params: Sam3ThermoScenesParams) -> None:
     logger = logging.getLogger("sam3-thermoscenes")
     logger.setLevel(logging.INFO)
 
-    params.output_scene_dir.mkdir(parents=True)
-
-    out_images_dir = params.output_scene_dir / "images"
+    out_images_dir = params.scene_dir / "images_sam3"
     out_images_dir.mkdir(parents=True, exist_ok=True)
 
     transforms = load_transforms(params.scene_dir)
@@ -218,20 +216,21 @@ def run(params: Sam3ThermoScenesParams) -> None:
         rgba = pil_to_rgba_with_alpha(rgb, alpha01)
 
         stem = Path(relative_path).stem
-        out_rel = f"images/{stem}.png"
-        out_path = params.output_scene_dir / out_rel
+        out_path = out_images_dir / f"{stem}.png"
         rgba.save(out_path)
 
-        frame["file_path"] = out_rel
+        frame["file_path"] = str(Path(out_path.parent.name, out_path.name))
         n_ok += 1
 
         if i % 25 == 0 or i == len(frames):
             logger.info(
                 "Processed %d/%d (ok=%d, fail=%d)", i, len(frames), n_ok, n_fail
             )
-
-    save_transforms(transforms, params.output_scene_dir / "transforms.json")
-    logger.info("Done. ok=%d fail=%d output=%s", n_ok, n_fail, params.output_scene_dir)
+    shutil.copyfile(
+        params.scene_dir / "transforms.json", params.scene_dir / "transforms_old.json"
+    )
+    save_transforms(transforms, params.scene_dir / "transforms.json")
+    logger.info("Done. ok=%d fail=%d", n_ok, n_fail)
 
 
 if __name__ == "__main__":

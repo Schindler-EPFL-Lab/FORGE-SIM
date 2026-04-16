@@ -3,11 +3,16 @@ from itertools import product
 
 import numpy as np
 
-from rebel_shape.scripts.segmentation.extract_foreground_and_background import (  # noqa: E501
-    extract_foreground_and_background,
-)
+SCIKIT_IMAGE = True
+try:
+    from rebel_shape.scripts.segmentation.extract_foreground_and_background import (  # noqa: E501
+        extract_foreground_and_background,
+    )
+except ImportError:
+    SCIKIT_IMAGE = False
 
 
+@unittest.skipUnless(SCIKIT_IMAGE, "Skimage and moge required for full run of tests.")
 class TestExtractForegroundAndBackground(unittest.TestCase):
     """Unit tests for extract_foreground_and_background"""
 
@@ -96,10 +101,10 @@ class TestExtractForegroundAndBackground(unittest.TestCase):
         depth[100:400, 100:600] = 8.0
         depth[200:300, 200:500] = 4.0
 
-        expected_foreground = np.zeros((480, 640), dtype=np.bool)
+        expected_foreground = np.zeros((480, 640), dtype=np.bool_)
         expected_foreground[200:300, 200:500] = True
 
-        expected_background = np.ones((480, 640), dtype=np.bool)
+        expected_background = np.ones((480, 640), dtype=np.bool_)
         expected_background[100:400, 100:600] = False
 
         foreground, background = extract_foreground_and_background(
@@ -142,10 +147,10 @@ class TestExtractForegroundAndBackground(unittest.TestCase):
         depth[200:300, 200:300] = 4.0  # foreground
         depth[200:300, 400:500] = 12.0  # background
 
-        expected_foreground = np.zeros((480, 640), dtype=np.bool)
+        expected_foreground = np.zeros((480, 640), dtype=np.bool_)
         expected_foreground[200:300, 200:300] = True
 
-        expected_background = np.ones((480, 640), dtype=np.bool)
+        expected_background = np.ones((480, 640), dtype=np.bool_)
         expected_background[100:400, 100:600] = False
         expected_background[200:300, 400:500] = True
 
@@ -155,3 +160,7 @@ class TestExtractForegroundAndBackground(unittest.TestCase):
 
         self.assertTrue(np.all(foreground == expected_foreground))
         self.assertTrue(np.all(background == expected_background))
+
+
+if __name__ == "__main__":
+    unittest.main()
