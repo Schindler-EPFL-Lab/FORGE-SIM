@@ -54,9 +54,16 @@ class Sam3ThermoScenesParams(ReverseCli):
     """
     bpe_path: Path | None = None
     """
-    Path to bpe_simple_vocab_16e6.txt.gz. If None it is set to the same value as 
+    Path to bpe_simple_vocab_16e6.txt.gz. If None it is set to the same value as
     `self.sam3_checkpoint_dir`
     """
+    output_folder: str = "images_sam3"
+    """Output folder for the segmented images"""
+    is_mask: bool = False
+    """If True, the images saved on binary masks"""
+    output_frame_name: str = "file_path"
+    """In the transform.json, the new field will be saved under this name.
+    Can overwrite an existing field."""
 
     def __post_init__(self) -> None:
         if isinstance(self.text_prompt, Prompts):
@@ -178,7 +185,7 @@ def run(params: Sam3ThermoScenesParams) -> None:
     logger = logging.getLogger("sam3-thermoscenes")
     logger.setLevel(logging.INFO)
 
-    out_images_dir = params.scene_dir / "images_sam3"
+    out_images_dir = params.scene_dir / params.output_folder
     out_images_dir.mkdir(parents=True, exist_ok=True)
 
     transforms = load_transforms(params.scene_dir)
@@ -195,7 +202,13 @@ def run(params: Sam3ThermoScenesParams) -> None:
         relative_path: str = frame.get("file_path", None)
         image_path = params.scene_dir / relative_path
 
-        rgb = Image.open(image_path).convert("RGB")
+        rgba_image = Image.open(image_path).convert("RGBA")
+        rgba_array = np.array(rgba_image)
+        rgb_array = rgba_array[:, :, :3]
+        alpha = rgba_array[:, :, 3]
+        rgb_array[alpha == 0] = [255, 255, 255]
+        rgb = Image.fromarray(rgb_array, "RGB")
+
         image_state = processor.set_image(rgb)
 
         state = processor.set_text_prompt(prompt=params.text_prompt, state=image_state)
@@ -214,12 +227,22 @@ def run(params: Sam3ThermoScenesParams) -> None:
             continue
 
         rgba = pil_to_rgba_with_alpha(rgb, alpha01)
-
         stem = Path(relative_path).stem
         out_path = out_images_dir / f"{stem}.png"
         rgba.save(out_path)
 
-        frame["file_path"] = str(Path(out_path.parent.name, out_path.name))
+        if params.is_mask:
+            rgba_image_masked = Image.open(out_path).convert("RGBA")
+            rgba_array_masked = np.array(rgba_image_masked)
+            rgb_array_masked = rgba_array_masked[:, :, :3]
+            alpha_masked = rgba_array_masked[:, :, 3]
+            rgb_array_masked[alpha_masked == 0] = [0, 0, 0]
+            rgb_array_masked[alpha_masked != 0] = [255, 255, 255]
+            rgb_masked = Image.fromarray(rgb_array_masked, "RGB")
+            out_path = out_images_dir / f"{stem}.png"
+            rgb_masked.save(out_path)
+
+        frame[params.output_frame_name] = str(Path(out_path.parent.name, out_path.name))
         n_ok += 1
 
         if i % 25 == 0 or i == len(frames):
