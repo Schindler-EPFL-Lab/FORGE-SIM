@@ -260,9 +260,18 @@ At the time of writing, this part is expected to be done locally and there is no
 
 In the case of the BuildNet3D dataset, the semantic masks are used to directly obtain perfectly segmented images, sidestepping the aforementioned segmentation procedure.
 
-### Shape and Texture Optimization
+### Pose Optimization
 
-The quality of the final representation depends heavily on the initial pose and radius of the shape. Therefore, before running any optimization script, it is necessary to determine these parameters by following the [Manual Initialization Guide](./docs/manual_initialization/README.md).
+The quality of the final representation depends heavily on the initial pose and radius of the shape, so pose is determined before any shape/texture optimization runs.
+There are two ways to produce the `data/bbox_transforms/<name>.json` file consumed by the downstream scripts:
+
+1. The manual Blender workflow described in the [Manual Initialization Guide](./docs/manual_initialization/README.md) — recommended when the cameras are sparse or the object occupies only a small fraction of the frame, where automatic silhouette fitting can be unreliable.
+2. The automated [`optimize_thermoscenes_pose.py`](./rebel_shape/scripts/optimize_thermoscenes_pose.py) script, which fits a cubed-sphere B-spline proxy (diffuse albedo configurable via `--object-albedo`, default black) against the reference silhouettes on a constant-white background and writes the resulting TRS transform to `{bbox_transforms_dir}/{name}.json`.
+   Uses L-BFGS by default; lower the learning rate or raise `object_albedo` if gradients are too strong for a given scene.
+
+The produced JSON file is the only artifact of this stage and is schema-compatible between both paths, so the downstream `_manual_initial_pose` scripts do not care which method produced it.
+
+### Shape and Texture Optimization
 
 There are 2 classes of optimization scripts:
 

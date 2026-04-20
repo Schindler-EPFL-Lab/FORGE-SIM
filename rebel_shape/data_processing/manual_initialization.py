@@ -5,7 +5,6 @@ import mitsuba as mi
 import numpy as np
 from scipy.spatial.transform import Rotation
 
-
 def load_bounding_bbox_transforms(bbox_transforms_path: Path) -> "mi.Transform4f":
     """
     Creates a 4x4 transformation matrix based on scale, translation and rotation
@@ -18,11 +17,11 @@ def load_bounding_bbox_transforms(bbox_transforms_path: Path) -> "mi.Transform4f
         RuntimeError: If any of the required keys ("scale", "translation", "rotation")
         are missing in the file.
     """
+    required_keys = {"scale", "translation", "rotation"}
 
     with open(bbox_transforms_path, "r") as f:
         bbox_transforms = json.load(f)
 
-    required_keys = {"scale", "translation", "rotation"}
     if not required_keys.issubset(bbox_transforms):
         raise RuntimeError(
             f"Missing required keys in bbox_transforms: "
@@ -39,3 +38,105 @@ def load_bounding_bbox_transforms(bbox_transforms_path: Path) -> "mi.Transform4f
     )
     tf[:3, 3] = bbox_transforms["translation"]
     return mi.Transform4f(tf)
+
+
+def save_bounding_bbox_transforms(
+    bbox_transforms_path: Path,
+    translation: tuple[float, float, float],
+    rotation: tuple[float, float, float],
+    scale: tuple[float, float, float],
+) -> None:
+    """
+    Writes a bounding-box transform to JSON at `bbox_transforms_path`, using the
+    same schema consumed by `load_bounding_bbox_transforms`.
+
+    `translation` is an (x, y, z) offset, `rotation` is Euler XYZ degrees
+    (extrinsic), and `scale` is per-axis. The parent directory is created if
+    needed.
+    """
+    bbox_transforms_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(bbox_transforms_path, "w") as f:
+        json.dump(
+            {
+                "translation": list(translation),
+                "rotation": list(rotation),
+                "scale": list(scale),
+            },
+            f,
+            indent=4,
+        )
+
+
+def pose_params_to_bbox_transforms(
+    flat_params: "mi.Float",
+    tf_cameras: "mi.ScalarTransform4f",
+    initial_sphere_radius: float,
+    scale_epsilon: float = 1e-3,
+) -> tuple[
+    tuple[float, float, float],
+    tuple[float, float, float],
+    tuple[float, float, float],
+]:
+    """
+    Converts the 9-float state produced by `PoseOptimizer` into
+    (translation, rotation, scale) vectors expressed in the raw input
+    (pre-alignment) camera frame, matching the schema of
+    `load_bounding_bbox_transforms`.
+
+    `flat_params` is the flattened (tx, ty, tz, sx, sy, sz, rx, ry, rz) state read
+    back from the scene optimizer. Scale entries are clipped to
+    [`scale_epsilon`, 1/`scale_epsilon`] and rotation entries (in radians) to
+    [-π, π], mirroring `PoseOptimizer._shape_update_callback`.
+
+    `tf_cameras` is the camera-alignment transform applied during loading
+    (`ImageSceneLoader.tf_cameras`); `initial_sphere_radius` is the radius that was
+    baked into the initial spline surface. The returned transform satisfies
+
+        tf_cameras @ bbox_transforms @ unit_sphere_vertex
+        == tf_new_pose @ (initial_sphere_radius * unit_sphere_vertex)
+
+    so the produced values are drop-in replacements for hand-authored files in
+    `data/bbox_transforms/`.
+
+    :returns: `(translation, rotation_euler_xyz_deg, scale)`, each a 3-tuple.
+    """
+    params = np.asarray(flat_params).reshape(9)
+    tx, ty, tz = params[0:3]
+    sx, sy, sz = np.clip(params[3:6], scale_epsilon, 1.0 / scale_epsilon)
+    rx_deg, ry_deg, rz_deg = np.clip(params[6:9], -np.pi, np.pi) * (180.0 / np.pi)
+
+    tf_new_pose = (
+        mi.Transform4f()
+        .translate(mi.Point3f(float(tx), float(ty), float(tz)))
+        .rotate(axis=mi.Point3f(1, 0, 0), angle=float(rx_deg))
+        .rotate(axis=mi.Point3f(0, 1, 0), angle=float(ry_deg))
+        .rotate(axis=mi.Point3f(0, 0, 1), angle=float(rz_deg))
+        .scale(mi.Point3f(float(sx), float(sy), float(sz)))
+    )
+    tf_radius = mi.Transform4f().scale(
+        mi.Point3f(initial_sphere_radius, initial_sphere_radius, initial_sphere_radius)
+    )
+    tf_bbox = mi.Transform4f(tf_cameras).inverse() @ tf_new_pose @ tf_radius
+
+    # mi.Transform4f().matrix gives a 4x4xN drjit matrix; squeeze the trailing axis
+    tf_bbox_np = np.asarray(tf_bbox.matrix).reshape(4, 4, -1)[:, :, 0]
+
+    rs = tf_bbox_np[:3, :3]
+    scale_out = np.linalg.norm(rs, axis=0)
+    rotation_matrix = rs / scale_out[np.newaxis, :]
+
+    # Fold any reflection introduced by tf_cameras into a negative scale component
+    # so `rotation_matrix` stays a proper rotation for Euler extraction.
+    if np.linalg.det(rotation_matrix) < 0.0:
+        rotation_matrix[:, 2] *= -1.0
+        scale_out[2] *= -1.0
+
+    rotation_euler_xyz = Rotation.from_matrix(rotation_matrix).as_euler(
+        "xyz", degrees=True
+    )
+
+    return (
+        tuple(tf_bbox_np[:3, 3].tolist()),
+        tuple(rotation_euler_xyz.tolist()),
+        tuple(scale_out.tolist()),
+    )

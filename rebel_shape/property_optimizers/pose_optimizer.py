@@ -109,13 +109,17 @@ class PoseOptimizer(PropertyOptimizer):
             (180.0 / dr.pi) * dr.clip(params[6:9], -dr.pi, dr.pi)
         )
 
+        # Standard TRS (matrix = Tr @ R @ S). Mitsuba chains on the right, so the
+        # first call is the leftmost factor. Scale-last keeps the translation
+        # independent of scale/rotation, which is what downstream consumers
+        # (e.g. `bbox_transforms` JSON) assume.
         tf_new_pose = (
             mi.Transform4f()
-            .scale(scaling)
             .translate(translation)
             .rotate(axis=mi.Point3f(1, 0, 0), angle=rotation_angles.x)
             .rotate(axis=mi.Point3f(0, 1, 0), angle=rotation_angles.y)
             .rotate(axis=mi.Point3f(0, 0, 1), angle=rotation_angles.z)
+            .scale(scaling)
         )
 
         self._update_positions(tf_new_pose=tf_new_pose)
