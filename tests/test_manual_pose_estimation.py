@@ -76,12 +76,12 @@ class TestManualPoseEstimation(unittest.TestCase):
         rhs = (
             self._tf_new_pose(flat_params)
             @ mi.Transform4f().scale(
-                mi.Point3f(
-                    initial_sphere_radius,
-                    initial_sphere_radius,
-                    initial_sphere_radius,
-                )
-            )
+            mi.Point3f(
+                initial_sphere_radius,
+                initial_sphere_radius,
+                initial_sphere_radius,
+            ),
+        )
         ).matrix
 
         self.assertTrue(
@@ -113,7 +113,7 @@ class TestManualPoseEstimation(unittest.TestCase):
                     5.261859893798828,
                 ),
                 (0.0, 0.0, 0.0, 1.0),
-            ]
+            ],
         )
 
         self.assertTrue(dr.allclose(tf_loaded.matrix, tf_expected.matrix))
@@ -150,12 +150,12 @@ class TestManualPoseEstimation(unittest.TestCase):
         )
         expected[:3, 3] = translation
         self.assertTrue(
-            dr.allclose(tf_loaded.matrix, mi.Transform4f(expected).matrix)
+            dr.allclose(tf_loaded.matrix, mi.Transform4f(expected).matrix),
         )
 
     def test_converter_identity_pose_and_cameras(self) -> None:
         flat_params = np.array(
-            [0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 0.0, 0.0, 0.0], dtype=np.float32
+            [0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 0.0, 0.0, 0.0], dtype=np.float32,
         )
         self._assert_converter_round_trips(
             flat_params=flat_params,
@@ -165,7 +165,7 @@ class TestManualPoseEstimation(unittest.TestCase):
 
     def test_converter_nontrivial_pose_and_camera_rotation(self) -> None:
         flat_params = np.array(
-            [0.7, -1.1, 2.3, 1.2, 0.9, 1.4, 0.3, -0.5, 0.9], dtype=np.float32
+            [0.7, -1.1, 2.3, 1.2, 0.9, 1.4, 0.3, -0.5, 0.9], dtype=np.float32,
         )
         tf_cameras = (
             mi.ScalarTransform4f()
@@ -180,10 +180,10 @@ class TestManualPoseEstimation(unittest.TestCase):
 
     def test_converter_rigid_camera_alignment_with_translation(self) -> None:
         flat_params = np.array(
-            [-0.25, 0.8, -1.4, 1.05, 0.95, 1.0, 0.1, 0.2, -0.15], dtype=np.float32
+            [-0.25, 0.8, -1.4, 1.05, 0.95, 1.0, 0.1, 0.2, -0.15], dtype=np.float32,
         )
         tf_cameras = mi.ScalarTransform4f().translate(
-            mi.ScalarPoint3f(0.4, -0.2, 0.6)
+            mi.ScalarPoint3f(0.4, -0.2, 0.6),
         ) @ mi.ScalarTransform4f().rotate(axis=mi.ScalarPoint3f(0, 0, 1), angle=25.0)
         self._assert_converter_round_trips(
             flat_params=flat_params,
@@ -200,10 +200,10 @@ class TestManualPoseEstimation(unittest.TestCase):
         """
         scale_epsilon = 1e-3
         flat_params = np.array(
-            [0.1, 0.2, 0.3, 5e-4, 2e3, -1.0, 5.0, -5.0, 0.0], dtype=np.float32
+            [0.1, 0.2, 0.3, 5e-4, 2e3, -1.0, 5.0, -5.0, 0.0], dtype=np.float32,
         )
         clipped_scale = np.clip(
-            flat_params[3:6], scale_epsilon, 1.0 / scale_epsilon
+            flat_params[3:6], scale_epsilon, 1.0 / scale_epsilon,
         )
 
         _, _, scale = pose_params_to_bbox_transforms(
@@ -216,7 +216,3 @@ class TestManualPoseEstimation(unittest.TestCase):
         # For identity tf_cameras and radius 1, the clipped scale flows straight
         # through to the output without being mixed with rotation.
         np.testing.assert_allclose(scale, clipped_scale, atol=1e-5)
-
-
-if __name__ == "__main__":
-    unittest.main()
