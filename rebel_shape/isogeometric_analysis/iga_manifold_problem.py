@@ -305,8 +305,10 @@ class IGAManifoldProblem(IGAProblem):
     def _concatenate_patch_local_matrices(
         composite_iga_spline: CompositeIGASplineSurface,
         local_indices_list: list["mi.TensorXu"],
-        local_matrices_list: list["mi.TensorXf"],
-    ) -> tuple["mi.TensorXu", "mi.TensorXf"]:
+        local_matrices_list: "list[mi.TensorXf] | list[mi.TensorXd]",
+        dofs_per_cp: int = 1,
+        double_precision: bool = False,
+    ) -> "tuple[mi.TensorXu, mi.TensorXf] | tuple[mi.TensorXu, mi.TensorXd]":
         """
         Concatenates the local matrix tensors and local index tensors from all patches
         of a `composite_iga_spline` surface into unified tensors.
@@ -320,6 +322,16 @@ class IGAManifoldProblem(IGAProblem):
         The concatenation preserves the order of patches as they appear in the composite
         spline surface. All local matrices must have the same shape in their last two
         dimensions (number of degrees of freedom per knot span).
+
+        `dofs_per_cp` is used to determine the number of degrees of freedom associated
+         with each control point, which is necessary for correctly remapping local
+         indices to global indices.
+
+        When ``double_precision`` is ``True``, the concatenated matrix tensor is
+        allocated as ``mi.TensorXd`` (float64) instead of ``mi.TensorXf`` (float32).
+        This is useful for problems where the local matrix entries span many orders of
+        magnitude (e.g. thin-shell stiffness matrices with both membrane and bending
+        contributions) and float32 accumulation would lose significant digits.
 
         :returns: A tuple containing:
 
@@ -360,12 +372,16 @@ class IGAManifoldProblem(IGAProblem):
                     f"but indices {i} has shape {indices.shape}."
                 )
 
+        if dofs_per_cp <= 0:
+            raise ValueError("`dofs_per_cp` must be a positive integer.")
+
         offsets: list[int] = [0]
         for local_indices in local_indices_list:
             offsets.append(offsets[-1] + local_indices.shape[0])
 
+        matrix_dtype = mi.TensorXd if double_precision else mi.TensorXf
         all_local_matrices = dr.zeros(
-            dtype=mi.TensorXf,
+            dtype=matrix_dtype,
             shape=(
                 offsets[-1],
                 local_matrices_list[0].shape[1],
@@ -380,12 +396,16 @@ class IGAManifoldProblem(IGAProblem):
         for i, (local_indices, local_matrices, mapping) in enumerate(
             zip(local_indices_list, local_matrices_list, mappings)
         ):
+            extended_mapping = np.repeat(
+                mapping, repeats=dofs_per_cp
+            ) * dofs_per_cp + np.tile(np.arange(dofs_per_cp), len(mapping))
+
             start = offsets[i]
             end = offsets[i + 1]
 
             all_local_matrices[start:end, :, :] = dr.ravel(local_matrices)
             all_local_indices[start:end, :] = dr.ravel(
-                mi.TensorXu(mapping[local_indices])
+                mi.TensorXu(extended_mapping[local_indices])
             )
 
         return all_local_indices, all_local_matrices
@@ -477,9 +497,9 @@ class IGAManifoldProblem(IGAProblem):
 
     @staticmethod
     def _transform_basis_derivative(
-        basis_derivative: "mi.TensorXf",
-        inv_metric: "mi.TensorXf",
-    ) -> "mi.TensorXf":
+        basis_derivative: "mi.TensorXf | mi.TensorXd",
+        inv_metric: "mi.TensorXf | mi.TensorXd",
+    ) -> "mi.TensorXf | mi.TensorXd":
         """
         Performs matrix-matrix multiplication to transform basis function derivatives
         from parametric coordinates to almost physical coordinates on the manifold.
@@ -491,6 +511,10 @@ class IGAManifoldProblem(IGAProblem):
         required for stiffness matrix assembly in the current context. Thus, it applies
         only a transformation G^{-1} grad_param phi, where grad_param phi is given
         by `basis_derivative`.
+
+        Both single-precision (``mi.TensorXf``) and double-precision
+        (``mi.TensorXd``) inputs are accepted. The output tensor matches the
+        precision of `basis_derivative`.
 
         :returns: Transformed basis function derivatives with shape
             (n_knot_spans, n_dofs, 2)
@@ -504,8 +528,9 @@ class IGAManifoldProblem(IGAProblem):
                 f"got {inv_metric.shape}."
             )
 
+        output_dtype = type(basis_derivative)
         transformed_basis_function_derivative = dr.empty(
-            dtype=mi.TensorXf, shape=basis_derivative.shape
+            dtype=output_dtype, shape=basis_derivative.shape
         )
         transformed_basis_function_derivative[:, :, 0] = dr.ravel(
             inv_metric[:, 0, 0][:, None] * basis_derivative[:, :, 0]
@@ -566,8 +591,8 @@ class IGAManifoldProblem(IGAProblem):
 
     @staticmethod
     def _scatter_values_to_local_matrices(
-        local_matrices: "mi.TensorXf",
-        values: "mi.TensorXf",
+        local_matrices: "mi.TensorXf | mi.TensorXd",
+        values: "mi.TensorXf | mi.TensorXd",
         num_knot_spans: int,
         num_dofs: int,
         row: int,
@@ -585,6 +610,11 @@ class IGAManifoldProblem(IGAProblem):
         This is typically used during the assembly of local element matrices in
         isogeometric analysis, where contributions from different quadrature points
         or basis functions are accumulated into the local stiffness or mass matrices.
+
+        Both ``local_matrices`` and ``values`` may be either single-precision
+        (``mi.TensorXf``) or double-precision (``mi.TensorXd``). The element type
+        of ``values`` must match the element type of ``local_matrices`` so that
+        ``dr.scatter_add`` operates on a consistent numeric type.
 
         :raises ValueError: If the input shapes are incompatible or if the row index
             is out of bounds.

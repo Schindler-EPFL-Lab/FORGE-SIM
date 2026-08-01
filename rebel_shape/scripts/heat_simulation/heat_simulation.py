@@ -8,6 +8,7 @@ import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 
+import drjit as dr
 import mitsuba as mi
 import mlflow
 import tyro
@@ -44,11 +45,18 @@ class HeatSimulationParameters(ReverseCli):
     """Path to the reconstructed IGA spline surface mesh with inpainted thermal data."""
     output_folder: Path = Path("./outputs/")
     """Where to save the model and outputs (created if it does not exist)"""
-    num_time_steps: int = 360
+    num_time_steps: int = 500
     """Number of time steps for the simulation."""
-    time_step_size: float = 240.0
-    """Size of each time step in seconds."""
-    save_interval: int = 30
+    dt_over_t_relax: float = 1e-5
+    """
+    Time step normalized by the natural relaxation time T_relax of the
+    discretized system. The physical dt is `dt_over_t_relax * T_relax`,
+    where T_relax = 1 / lambda_1 and lambda_1 is the smallest non-zero
+    generalized eigenvalue of the assembled (K, M). Crank-Nicolson temporal
+    error scales as O((dt_over_t_relax)^2); 0.01 is the canonical choice
+    for high-accuracy runs, 0.05 trades modest accuracy for speed.
+    """
+    save_interval: int = 50
     """Interval at which to save the simulation state."""
 
     camera_config: CameraRingConfig = field(
@@ -74,6 +82,23 @@ class HeatSimulationParameters(ReverseCli):
     )
     """Thermal material configuration for concrete."""
 
+    target_delta_temp: float | None = None
+    """
+    Target temperature rise (K) over the simulation duration. When set,
+    a uniform heat source is applied and its strength is computed after
+    matrix assembly:  Q = target_delta_temp * rho * c * h / t_sim.
+    This is the rise an *insulated* element would achieve.
+    """
+
+    heat_source: float = 0.0
+    """Uniform heat source in W/m^2. Ignored when target_delta_temp is set."""
+
+    target_length_scale: float | None = 4.0
+    """
+    If provided, uniformly rescales geometry so that the longest bbox axis equals
+    this value.
+    """
+
     use_gpu: bool = True
     """
     Whether to use GPU for rendering or not. Note that the compute instance
@@ -86,12 +111,16 @@ class HeatSimulationParameters(ReverseCli):
 
         if self.num_time_steps < 1:
             raise ValueError("`num_time_steps` must be a positive integer!")
-        if self.time_step_size <= 0:
-            raise ValueError("`time_step_size` must be a positive real number!")
+        if self.dt_over_t_relax <= 0:
+            raise ValueError("`dt_over_t_relax` must be a positive real number!")
         if self.save_interval < 1:
             raise ValueError("`save_interval` must be a positive integer!")
         if self.texture_resolution < 1:
             raise ValueError("`texture_resolution` must be a positive integer!")
+        if self.target_length_scale is not None and self.target_length_scale <= 0.0:
+            raise ValueError("`target_length_scale` must be positive if provided.")
+        if self.target_delta_temp is not None and self.target_delta_temp <= 0.0:
+            raise ValueError("`target_delta_temp` must be positive if provided.")
 
 
 def simulate_heat_cn(params: HeatSimulationParameters) -> None:
@@ -120,7 +149,27 @@ def simulate_heat_cn(params: HeatSimulationParameters) -> None:
         composite_spline_surface_path=params.spline_path
     )
 
-    # A single material is used - the properties are directly from the concrete config
+    if params.target_length_scale is not None:
+        bbox_min = dr.min(tessellated_iga_spline.global_control_points, axis=0)
+        bbox_max = dr.max(tessellated_iga_spline.global_control_points, axis=0)
+        bbox_extent = bbox_max - bbox_min
+        longest_extent = dr.max(bbox_extent)
+        longest_extent_value = float(longest_extent.numpy())
+
+        if longest_extent_value <= 0.0:
+            raise ValueError(
+                "Cannot apply `target_length_scale`: longest bbox extent is "
+                "non-positive."
+            )
+
+        length_scale_factor = params.target_length_scale / longest_extent_value
+        tessellated_iga_spline.global_control_points *= length_scale_factor
+
+        logger.info(
+            "Applied target length scaling to longest bbox axis: "
+            f"{params.target_length_scale} (factor={length_scale_factor:.6g})."
+        )
+
     heat_simulation_runner = HeatSimulationRunner(
         tessellated_iga_spline=tessellated_iga_spline,
         material_config=params.concrete_config,
@@ -128,11 +177,26 @@ def simulate_heat_cn(params: HeatSimulationParameters) -> None:
         texture_resolution=params.texture_resolution,
     )
 
-    # Run the heat simulation
-    heat_simulation_runner.run_heat_simulation(
+    if params.target_delta_temp is not None or params.heat_source != 0.0:
+        source_value = (
+            1.0 if params.target_delta_temp is not None else params.heat_source
+        )
+        ones = dr.ones(
+            dtype=mi.TensorXf,
+            shape=(tessellated_iga_spline.global_field_values.shape[0], 1),
+        )
+        heat_simulation_runner.source = source_value * ones
+
+    heat_simulation_runner.run_heat_simulation_with_xdmf(
         num_time_steps=params.num_time_steps,
-        time_step_size=params.time_step_size,
+        dt_over_t_relax=params.dt_over_t_relax,
         output_folder=params.output_folder,
+        xdmf_path=params.output_folder / "heat_simulation.xdmf",
+        target_delta_temp=params.target_delta_temp,
+        heat_source_material=params.concrete_config
+        if params.target_delta_temp is not None
+        else None,
+        xdmf_save_interval=params.save_interval,
     )
 
 

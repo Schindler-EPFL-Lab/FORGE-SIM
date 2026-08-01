@@ -76,7 +76,8 @@ class TessellatedIGASplineSurface(TessellatedSplineSurface):
         :returns: A decoded `TessellatedSplineSurface` instance with default textures
 
         :raises FileNotFoundError: If the surface file does not exist.
-            JSONDecodeError: If the surface file contains invalid JSON.
+            RuntimeError: If the file is not valid JSON, or decodes to
+                something other than a `TessellatedSplineSurface`.
         """
         tessellated_iga_spline_surface = super().from_file(
             composite_spline_surface_path=composite_spline_surface_path

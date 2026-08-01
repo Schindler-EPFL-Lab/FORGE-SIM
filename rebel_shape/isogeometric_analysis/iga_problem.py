@@ -122,18 +122,19 @@ class IGAProblem:
     This could be circumvented by using pytorch for matrix construction and wrapping it
     into a drjit compatible layer. The details of this are left to future work.
 
-    A point has to be made about singe vs double precision: almost all mathematical
+    A point has to be made about single vs double precision: almost all mathematical
     codes use double precision, mostly because solvers require well conditioned systems
     compared to the smallest relative error, and this requirement does not hold true
     for large systems that originate from FEM and IGA analysis - the condition number
     can easily exceed 10^5, comparable to ~10^7 "resolution" of float32 numbers.
 
-    However, since the optimization loop and computer graphics are typically done in
-    float32, this is kept for constructing local matrices and vectors, while the
-    global matrix and vector are assembled from local matrices and vectors in float64.
-    The accuracy of the obtained solution will still be bound by the precision of
-    float32, but the solvers will be able to use float64 precision to avoid numerical
-    issues.
+    Since the spline basis functions are evaluated using the Mitsuba/Dr.Jit JIT
+    backend (which operates in float32), the evaluations are performed in single
+    precision and the results are immediately promoted to float64 before any
+    arithmetic for matrix assembly. This avoids truncation errors that accumulate
+    during the inner products and quadrature-weight scaling, while keeping the
+    spline evaluation code unchanged. The global matrix and vector are assembled
+    in float64.
 
     When assembling local and global matrices and vectors, one typically has to
     evaluate an integral that cannot be computed analytically, so numerical quadrature
@@ -150,7 +151,8 @@ class IGAProblem:
 
     @staticmethod
     def assemble_global_matrix(
-        local_indices: npt.NDArray[np.uint32], local_matrices: "mi.TensorXf"
+        local_indices: npt.NDArray[np.uint32],
+        local_matrices: "mi.TensorXf | mi.TensorXd",
     ) -> sps.csr_matrix:
         """
         Assembles the global matrix for the IGA problem for the provided local matrices.
@@ -163,8 +165,9 @@ class IGAProblem:
         need not be a Mitsuba tensor to preserve
 
         `local_matrices` are a Mitsuba tensor of shape (n_elements, n_dofs_per_element,
-        n_dofs_per_element). The same remarks from above hold for this argument as
-        well.
+        n_dofs_per_element). Both single-precision (``mi.TensorXf``) and
+        double-precision (``mi.TensorXd``) tensors are accepted; the assembled
+        global matrix is always returned in float64.
 
         :returns: A sparse matrix in the CSR format representing the global matrix.
         :raises ValueError: If the input tensors do not have the expected shapes.

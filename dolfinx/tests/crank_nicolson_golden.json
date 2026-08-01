@@ -1,0 +1,18 @@
+{
+  "dt": 4709.298270101772,
+  "final_temperature_l2_norm": 3511.8113097988153,
+  "final_temperature_max": 343.04885674900333,
+  "final_temperature_mean": 308.66695183668025,
+  "final_temperature_min": 282.31172002272865,
+  "heat_generation_rate": 247.86334981423008,
+  "num_cells": 254,
+  "num_dofs": 129,
+  "relaxation_time": 235464.91350508857,
+  "total_heat": [
+    843369231.5397072,
+    846871018.873213,
+    850372806.206717,
+    853874593.5402234,
+    857376380.8737277
+  ]
+}

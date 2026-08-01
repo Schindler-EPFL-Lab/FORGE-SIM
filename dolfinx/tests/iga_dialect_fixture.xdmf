@@ -1,0 +1,53 @@
+<?xml version="1.0"?>
+<!DOCTYPE Xdmf SYSTEM "Xdmf.dtd" []>
+<Xdmf Version="3.0" xmlns:xi="http://www.w3.org/2001/XInclude">
+  <Domain>
+    <Grid Name="TimeSeries" GridType="Collection" CollectionType="Temporal">
+      <Grid Name="mesh" GridType="Uniform">
+        <Time Value="0.0"/>
+        <Topology TopologyType="Triangle" NumberOfElements="48">
+          <DataItem Dimensions="48 3" NumberType="Int" Format="HDF">iga_dialect_fixture.h5:/Mesh/Topology</DataItem>
+        </Topology>
+        <Geometry GeometryType="XYZ">
+          <DataItem Dimensions="50 3" NumberType="Float" Precision="8" Format="HDF">iga_dialect_fixture.h5:/Mesh/Vertices</DataItem>
+        </Geometry>
+        <Attribute Name="Normals" AttributeType="Vector" Center="Node">
+          <DataItem Dimensions="50 3" NumberType="Float" Precision="8" Format="HDF">iga_dialect_fixture.h5:/Mesh/Normals</DataItem>
+        </Attribute>
+        <Attribute Name="Temperature" AttributeType="Scalar" Center="Node">
+          <DataItem Dimensions="50" NumberType="Float" Precision="8" Format="HDF">iga_dialect_fixture.h5:/Function/Step_0</DataItem>
+        </Attribute>
+      </Grid>
+      <Grid Name="mesh" GridType="Uniform">
+        <Time Value="48.99474351565758"/>
+        <Topology TopologyType="Triangle" NumberOfElements="48">
+          <DataItem Dimensions="48 3" NumberType="Int" Format="HDF">iga_dialect_fixture.h5:/Mesh/Topology</DataItem>
+        </Topology>
+        <Geometry GeometryType="XYZ">
+          <DataItem Dimensions="50 3" NumberType="Float" Precision="8" Format="HDF">iga_dialect_fixture.h5:/Mesh/Vertices</DataItem>
+        </Geometry>
+        <Attribute Name="Normals" AttributeType="Vector" Center="Node">
+          <DataItem Dimensions="50 3" NumberType="Float" Precision="8" Format="HDF">iga_dialect_fixture.h5:/Mesh/Normals</DataItem>
+        </Attribute>
+        <Attribute Name="Temperature" AttributeType="Scalar" Center="Node">
+          <DataItem Dimensions="50" NumberType="Float" Precision="8" Format="HDF">iga_dialect_fixture.h5:/Function/Step_1</DataItem>
+        </Attribute>
+      </Grid>
+      <Grid Name="mesh" GridType="Uniform">
+        <Time Value="97.98948703131516"/>
+        <Topology TopologyType="Triangle" NumberOfElements="48">
+          <DataItem Dimensions="48 3" NumberType="Int" Format="HDF">iga_dialect_fixture.h5:/Mesh/Topology</DataItem>
+        </Topology>
+        <Geometry GeometryType="XYZ">
+          <DataItem Dimensions="50 3" NumberType="Float" Precision="8" Format="HDF">iga_dialect_fixture.h5:/Mesh/Vertices</DataItem>
+        </Geometry>
+        <Attribute Name="Normals" AttributeType="Vector" Center="Node">
+          <DataItem Dimensions="50 3" NumberType="Float" Precision="8" Format="HDF">iga_dialect_fixture.h5:/Mesh/Normals</DataItem>
+        </Attribute>
+        <Attribute Name="Temperature" AttributeType="Scalar" Center="Node">
+          <DataItem Dimensions="50" NumberType="Float" Precision="8" Format="HDF">iga_dialect_fixture.h5:/Function/Step_2</DataItem>
+        </Attribute>
+      </Grid>
+    </Grid>
+  </Domain>
+</Xdmf>

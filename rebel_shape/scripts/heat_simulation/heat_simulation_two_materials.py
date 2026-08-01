@@ -54,11 +54,18 @@ class HeatSimulationParametersTwoMaterials(ReverseCli):
     output_folder: Path = Path("./outputs/")
     """Where to save the model and outputs (created if it does not exist)"""
 
-    num_time_steps: int = 360
+    num_time_steps: int = 500
     """Number of time steps for the simulation."""
-    time_step_size: float = 240.0
-    """Size of each time step in seconds."""
-    save_interval: int = 30
+    dt_over_t_relax: float = 1e-5
+    """
+    Time step normalized by the natural relaxation time T_relax of the
+    discretized system. The physical dt is `dt_over_t_relax * T_relax`,
+    where T_relax = 1 / lambda_1 and lambda_1 is the smallest non-zero
+    generalized eigenvalue of the assembled (K, M). Crank-Nicolson temporal
+    error scales as O((dt_over_t_relax)^2); 0.01 is the canonical choice
+    for high-accuracy runs, 0.05 trades modest accuracy for speed.
+    """
+    save_interval: int = 50
     """Interval at which to save the simulation state."""
     facade_mask_threshold: float = 0.5
     """Threshold to distinguish between concrete and glass in the facade mask."""
@@ -77,12 +84,16 @@ class HeatSimulationParametersTwoMaterials(ReverseCli):
     """Resolution of the texture used for the thermal data"""
 
     concrete_config: ThermalMaterialConfig = field(
+        # default_factory=lambda: ThermalMaterialConfig(
+        #     conductivity=2.0, density=2250.0, specific_heat=900.0, thickness=0.2
+        # )
         default_factory=lambda: ThermalMaterialConfig(
-            conductivity=2.0,
-            density=2250.0,
-            specific_heat=900.0,
-            thickness=0.2,
+            conductivity=0.15, density=600.0, specific_heat=2400.0, thickness=0.02
         )
+        # Values for steel on a car.
+        # default_factory=lambda: ThermalMaterialConfig(
+        #     conductivity=50.0, density=7850.0, specific_heat=500.0, thickness=0.002
+        # )
     )
     """Thermal material configuration for concrete."""
 
@@ -93,8 +104,33 @@ class HeatSimulationParametersTwoMaterials(ReverseCli):
             specific_heat=840.0,
             thickness=0.01,
         )
+        # default_factory=lambda: ThermalMaterialConfig(
+        #     conductivity=0.9,
+        #     density=2500.0,
+        #     specific_heat=840.0,
+        #     thickness=0.001,
+        # )
     )
     """Thermal material configuration for glass."""
+    facade_heat_source: float = 0.1
+    """Heat source applied to the glass regions of the facade in W/m^2.
+    Ignored when `target_delta_temp` is set."""
+
+    target_delta_temp: float | None = 0.5
+    """
+    Target temperature rise (K) for glass regions over the simulation
+    duration.  When set, overrides `facade_heat_source`.  The required
+    heat source Q (W/m²) is computed after matrix assembly:
+        Q = target_delta_temp * rho_glass * c_glass * h_glass / t_sim
+    This is the temperature rise an *insulated* glass element would
+    achieve — actual rise will be lower due to conduction losses.
+    """
+
+    target_length_scale: float | None = 2.5
+    """
+    If provided, uniformly rescales geometry so that the longest bbox axis equals
+    this value.
+    """
 
     use_gpu: bool = True
     """
@@ -112,12 +148,16 @@ class HeatSimulationParametersTwoMaterials(ReverseCli):
 
         if self.num_time_steps < 1:
             raise ValueError("`num_time_steps` must be a positive integer.")
-        if self.time_step_size <= 0:
-            raise ValueError("`time_step_size` must be a positive real number.")
+        if self.dt_over_t_relax <= 0:
+            raise ValueError("`dt_over_t_relax` must be a positive real number.")
         if self.save_interval < 1:
             raise ValueError("`save_interval` must be a positive integer.")
         if self.texture_resolution < 1:
             raise ValueError("`texture_resolution` must be a positive integer.")
+        if self.target_length_scale is not None and self.target_length_scale <= 0.0:
+            raise ValueError("`target_length_scale` must be positive if provided.")
+        if self.target_delta_temp is not None and self.target_delta_temp <= 0.0:
+            raise ValueError("`target_delta_temp` must be positive if provided.")
 
 
 def simulate_heat_cn_two_materials(
@@ -152,6 +192,33 @@ def simulate_heat_cn_two_materials(
         composite_spline_surface_path=params.spline_path
     )
 
+    # Material properties are set based on the facade mask
+    facade_spline = TessellatedIGASplineSurface.from_file(
+        composite_spline_surface_path=params.facade_mask_path
+    )
+
+    if params.target_length_scale is not None:
+        bbox_min = dr.min(tessellated_iga_spline.global_control_points, axis=0)
+        bbox_max = dr.max(tessellated_iga_spline.global_control_points, axis=0)
+        bbox_extent = bbox_max - bbox_min
+        longest_extent = dr.max(bbox_extent)
+        longest_extent_value = float(longest_extent.numpy())
+
+        if longest_extent_value <= 0.0:
+            raise ValueError(
+                "Cannot apply `target_length_scale`: longest bbox extent is "
+                "non-positive."
+            )
+
+        length_scale_factor = params.target_length_scale / longest_extent_value
+        tessellated_iga_spline.global_control_points *= length_scale_factor
+        facade_spline.global_control_points *= length_scale_factor
+
+        logger.info(
+            "Applied target length scaling to longest bbox axis: "
+            f"{params.target_length_scale} (factor={length_scale_factor:.6g})."
+        )
+
     heat_simulation_runner = HeatSimulationRunner(
         tessellated_iga_spline=tessellated_iga_spline,
         material_config=params.concrete_config,
@@ -159,10 +226,6 @@ def simulate_heat_cn_two_materials(
         texture_resolution=params.texture_resolution,
     )
 
-    # Material properties are set based on the facade mask
-    facade_spline = TessellatedIGASplineSurface.from_file(
-        composite_spline_surface_path=params.facade_mask_path
-    )
     thresholded_facade = (
         facade_spline.global_field_values > params.facade_mask_threshold
     )
@@ -193,14 +256,23 @@ def simulate_heat_cn_two_materials(
         params.glass_config.thickness * ones,
         params.concrete_config.thickness * ones,
     )
+    source_value = (
+        1.0 if params.target_delta_temp is not None else params.facade_heat_source
+    )
     heat_simulation_runner.source = dr.select(
-        thresholded_facade, 10.0 * ones, 0.0 * ones
+        thresholded_facade, source_value * ones, 0.0 * ones
     )
 
-    heat_simulation_runner.run_heat_simulation(
+    heat_simulation_runner.run_heat_simulation_with_xdmf(
         num_time_steps=params.num_time_steps,
-        time_step_size=params.time_step_size,
+        dt_over_t_relax=params.dt_over_t_relax,
         output_folder=params.output_folder,
+        xdmf_path=params.output_folder / "heat_simulation_two_materials.xdmf",
+        target_delta_temp=params.target_delta_temp,
+        heat_source_material=params.glass_config
+        if params.target_delta_temp is not None
+        else None,
+        xdmf_save_interval=params.save_interval,
     )
 
 

@@ -1,0 +1,53 @@
+# Conda environment for DOLFINx-based FEM heat simulations.
+#
+# This environment provides DOLFINx and related packages for solving PDEs using
+# the finite element method, along with core rebel-shape dependencies required
+# for loading and processing B-spline surfaces. Observe that the novtk version
+# of cadquery is used here to avoid conflicts with VTK dependencies of DOLFINx.
+#
+# To create the environment run:
+#   conda env create -f environment.yml
+
+name: dolfinx-rebel-shape
+
+channels:
+  - conda-forge
+  - defaults
+
+dependencies:
+  # Python version
+  - python==3.12
+
+  # DOLFINx and FEM dependencies
+  - fenics-dolfinx=0.9.0
+  - petsc4py
+  - mpi4py
+  # SLEPc backs the relaxation-time eigensolve (normalized dt_over_t_relax) and
+  # the shell modal analysis. PETSc should be built with MUMPS (default) for the
+  # shift-invert direct factorization.
+  - slepc4py
+
+  # Mesh I/O
+  - gmsh
+  - meshio>=5.0
+  - vtk
+
+  # Visualization
+  - pyvista>=0.43
+  - matplotlib>=3.10
+
+  # Scientific computing
+  - numpy
+  - scipy
+  - h5py
+
+  # pip-only packages
+  - pip
+  - pip:
+      # Core rebel-shape dependencies
+      - mitsuba>=3.7.0
+      - tyro>=0.9.27
+      - dataclasses-reverse-cli>=0.0.5
+      - jsonpickle>=4.0.2
+      - mlflow>=3.5.0rc0
+      - cadquery-ocp-novtk

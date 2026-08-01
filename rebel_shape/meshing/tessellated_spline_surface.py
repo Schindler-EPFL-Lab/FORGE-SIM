@@ -1,4 +1,5 @@
 from collections.abc import Iterator, Sequence
+from json import JSONDecodeError
 from pathlib import Path
 from typing import Any
 
@@ -89,7 +90,8 @@ class TessellatedSplineSurface:
         :returns: A decoded `TessellatedSplineSurface` instance with default textures
 
         :raises FileNotFoundError: If the surface file does not exist.
-            JSONDecodeError: If the surface file contains invalid JSON.
+            RuntimeError: If the file is not valid JSON, or decodes to
+                something other than a `TessellatedSplineSurface`.
         """
         if not composite_spline_surface_path.exists():
             raise FileNotFoundError(
@@ -99,11 +101,23 @@ class TessellatedSplineSurface:
             raise ValueError(f"Path {composite_spline_surface_path} is not a file.")
 
         with open(composite_spline_surface_path, "r") as tessellated_spline_file:
-            tessellated_spline = jsonpickle.decode(tessellated_spline_file.read())
+            # A file can fail to yield a surface two ways: it is not valid JSON at
+            # all, or it decodes into some other object. Both mean the same thing to
+            # a caller -- this path is not a saved surface -- so both raise the same
+            # error rather than leaking `JSONDecodeError` from the decoder for one
+            # of them and not the other.
+            try:
+                tessellated_spline = jsonpickle.decode(tessellated_spline_file.read())
+            except JSONDecodeError as error:
+                raise RuntimeError(
+                    f"File {composite_spline_surface_path} is not valid JSON, so it "
+                    "cannot contain a TessellatedSplineSurface."
+                ) from error
             if not isinstance(tessellated_spline, TessellatedSplineSurface):
                 raise RuntimeError(
-                    "File does not contain valid JSON to build a",
-                    "TessellatedSplineSurface",
+                    f"File {composite_spline_surface_path} decoded to "
+                    f"{type(tessellated_spline).__name__}, not a "
+                    "TessellatedSplineSurface."
                 )
         return tessellated_spline
 
@@ -132,7 +146,8 @@ class TessellatedSplineSurface:
             exist.
             ValueError: If the number of texture files doesn't match the number of
                 patches, or if patch names cannot be uniquely matched to texture files.
-            JSONDecodeError: If the surface file contains invalid JSON.
+            RuntimeError: If the file is not valid JSON, or decodes to
+                something other than a `TessellatedSplineSurface`.
 
         Note:
             The texture files will be reordered internally to match the patch order

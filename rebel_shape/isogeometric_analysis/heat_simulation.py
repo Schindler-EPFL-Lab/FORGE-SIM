@@ -169,7 +169,7 @@ class HeatSimulation(IGAManifoldProblem):
                 )
 
         if integration_order is None:
-            integration_order = composite_iga_spline.degree + 1
+            integration_order = 2 * composite_iga_spline.degree + 1
 
         self._composite_iga_spline = composite_iga_spline
 
@@ -181,7 +181,7 @@ class HeatSimulation(IGAManifoldProblem):
 
         self._integration_order = integration_order
 
-    def assemble_local_stiffness_matrices(self) -> tuple["mi.TensorXu", "mi.TensorXf"]:
+    def assemble_local_stiffness_matrices(self) -> "tuple[mi.TensorXu, mi.TensorXd]":
         """
         Assembles the local stiffness matrices for the Heat simulation problem on the
         spline surface defined by multiple patches.
@@ -201,6 +201,11 @@ class HeatSimulation(IGAManifoldProblem):
         metric tensor at the quadrature point, k(xi_q) is the conductivity at the
         quadrature point, and d(xi_q) is the thickness at the quadrature point.
         This is done for each patch.
+
+        Basis function evaluations and geometric quantities are computed in
+        float32 by the spline methods and immediately promoted to
+        ``mi.TensorXd``. All subsequent arithmetic operates in double
+        precision to avoid truncation errors during accumulation.
 
         When the matrices of each span are assembled, they are concatenated into a
         single tensor that contains all the local stiffness matrices for the entire
@@ -223,13 +228,14 @@ class HeatSimulation(IGAManifoldProblem):
 
             - dofs_per_span: A tensor of shape (sum_p n_knot_spans_p, n_dofs) that
               contains the indices of the degrees of freedom for each knot span.
-            - local_matrices: A tensor of shape (sum_p n_knot_spans_p, n_dofs, n_dofs)
-              that contains the local mass matrices for each knot span,
+            - local_matrices: A double-precision tensor of shape
+              (sum_p n_knot_spans_p, n_dofs, n_dofs) that contains the local
+              stiffness matrices for each knot span,
 
             where p is the patch index and sum_p n_knot_spans_p is the total number of
             knot spans across all patches.
         """
-        patch_local_matrices: list[mi.TensorXf] = []
+        patch_local_matrices: list[mi.TensorXd] = []
         patch_local_indices: list[mi.TensorXu] = []
 
         for patch, mapping in self._composite_iga_spline.patches_with_mapping:
@@ -241,7 +247,7 @@ class HeatSimulation(IGAManifoldProblem):
             num_dofs = interp_spline.basis_functions_per_span
 
             local_matrices = dr.zeros(
-                dtype=mi.TensorXf,
+                dtype=mi.TensorXd,
                 shape=(knot_span_handler.num_knot_spans, num_dofs, num_dofs),
             )
 
@@ -252,26 +258,36 @@ class HeatSimulation(IGAManifoldProblem):
                 param_coords,
                 scaled_weight,
             ) in knot_span_handler.gl_coords_and_weights():
-                basis_function_ders = (
+                # Evaluate in float32, then promote to float64
+                basis_function_ders = mi.TensorXd(
                     interp_spline.evaluate_basis_functions_first_derivative(
                         parametric_coords=param_coords
                     )
                 )
 
-                conductivity = interp_spline.interpolate(
-                    values=patch_conductivity, parametric_coords=param_coords
+                conductivity = mi.TensorXd(
+                    interp_spline.interpolate(
+                        values=patch_conductivity, parametric_coords=param_coords
+                    )
                 )
-                thickness = interp_spline.interpolate(
-                    values=patch_thickness, parametric_coords=param_coords
+                thickness = mi.TensorXd(
+                    interp_spline.interpolate(
+                        values=patch_thickness, parametric_coords=param_coords
+                    )
                 )
 
-                jacobian = patch.evaluate_jacobian(param_coords)
-                metric = patch.metric_tensor(jacobian)
-                inv_metric, det_metric = patch.inv_metric_tensor(metric)
+                jacobian_f = patch.evaluate_jacobian(param_coords)
+                metric_f = patch.metric_tensor(jacobian_f)
+                inv_metric_f, det_metric_f = patch.inv_metric_tensor(metric_f)
+
+                inv_metric = mi.TensorXd(inv_metric_f)
+                det_metric = mi.TensorXd(det_metric_f)
 
                 transformed_basis_function_ders = self._transform_basis_derivative(
                     basis_derivative=basis_function_ders, inv_metric=inv_metric
                 )
+
+                area_weight = dr.sqrt(det_metric) * mi.TensorXd(scaled_weight)
 
                 for i in range(num_dofs):
                     dot_product = dr.sum(
@@ -281,9 +297,9 @@ class HeatSimulation(IGAManifoldProblem):
                         ),
                         axis=2,
                     )
-                    values = (dot_product * conductivity * thickness) * (
-                        dr.sqrt(det_metric) * scaled_weight
-                    )[:, None]
+                    values = (dot_product * conductivity * thickness) * area_weight[
+                        :, None
+                    ]
 
                     self._scatter_values_to_local_matrices(
                         local_matrices=local_matrices,
@@ -304,9 +320,12 @@ class HeatSimulation(IGAManifoldProblem):
             composite_iga_spline=self._composite_iga_spline,
             local_indices_list=patch_local_indices,
             local_matrices_list=patch_local_matrices,
+            double_precision=True,
         )
 
-    def assemble_local_mass_matrices(self) -> tuple["mi.TensorXu", "mi.TensorXf"]:
+    def assemble_local_mass_matrices(
+        self,
+    ) -> "tuple[mi.TensorXu, mi.TensorXd]":
         """
         Assembles the local mass matrices for the Heat simulation problem on the
         spline surface defined by multiple patches.
@@ -327,6 +346,11 @@ class HeatSimulation(IGAManifoldProblem):
         quadrature point, c(xi_q) is the specific heat at the quadrature point, and
         d(xi_q) is the thickness at the quadrature point. This is done for each
         patch.
+
+        Basis function evaluations and geometric quantities are computed in
+        float32 by the spline methods and immediately promoted to
+        ``mi.TensorXd``. All subsequent arithmetic operates in double
+        precision to avoid truncation errors during accumulation.
 
         When the matrices of each span are assembled, they are concatenated into a
         single tensor that contains all the local mass matrices for the entire
@@ -349,14 +373,15 @@ class HeatSimulation(IGAManifoldProblem):
 
             - dofs_per_span: A tensor of shape (sum_p n_knot_spans_p, n_dofs) that
               contains the indices of the degrees of freedom for each knot span.
-            - local_matrices: A tensor of shape (sum_p n_knot_spans_p, n_dofs, n_dofs)
-              that contains the local mass matrices for each knot span,
+            - local_matrices: A double-precision tensor of shape
+              (sum_p n_knot_spans_p, n_dofs, n_dofs) that contains the local
+              mass matrices for each knot span,
 
             where p is the patch index and sum_p n_knot_spans_p is the total number of
             knot spans across all patches.
         """
         patch_local_indices: list[mi.TensorXu] = []
-        patch_local_matrices: list[mi.TensorXf] = []
+        patch_local_matrices: list[mi.TensorXd] = []
 
         for patch, mapping in self._composite_iga_spline.patches_with_mapping:
             interp_spline = patch.interpolating_spline
@@ -367,7 +392,7 @@ class HeatSimulation(IGAManifoldProblem):
             num_dofs = interp_spline.basis_functions_per_span
 
             local_matrices = dr.zeros(
-                dtype=mi.TensorXf,
+                dtype=mi.TensorXd,
                 shape=(knot_span_handler.num_knot_spans, num_dofs, num_dofs),
             )
 
@@ -376,23 +401,35 @@ class HeatSimulation(IGAManifoldProblem):
             patch_thickness = self._thickness[dr.ravel(mi.TensorXu(mapping))]
 
             for param_coords, weight in knot_span_handler.gl_coords_and_weights():
-                basis_functions = interp_spline.evaluate_basis_functions(
-                    parametric_coords=param_coords
+                # Evaluate in float32, then promote to float64
+                basis_functions = mi.TensorXd(
+                    interp_spline.evaluate_basis_functions(
+                        parametric_coords=param_coords
+                    )
                 )
 
-                density = interp_spline.interpolate(
-                    values=patch_density, parametric_coords=param_coords
+                density = mi.TensorXd(
+                    interp_spline.interpolate(
+                        values=patch_density, parametric_coords=param_coords
+                    )
                 )
-                heat_capacity = interp_spline.interpolate(
-                    values=patch_specific_heat, parametric_coords=param_coords
+                heat_capacity = mi.TensorXd(
+                    interp_spline.interpolate(
+                        values=patch_specific_heat, parametric_coords=param_coords
+                    )
                 )
-                thickness = interp_spline.interpolate(
-                    values=patch_thickness, parametric_coords=param_coords
+                thickness = mi.TensorXd(
+                    interp_spline.interpolate(
+                        values=patch_thickness, parametric_coords=param_coords
+                    )
                 )
 
-                jacobian = patch.evaluate_jacobian(param_coords)
-                metric = patch.metric_tensor(jacobian)
-                _, det_metric = patch.inv_metric_tensor(metric)
+                jacobian_f = patch.evaluate_jacobian(param_coords)
+                metric_f = patch.metric_tensor(jacobian_f)
+                _, det_metric_f = patch.inv_metric_tensor(metric_f)
+
+                det_metric = mi.TensorXd(det_metric_f)
+                area_weight = dr.sqrt(det_metric) * mi.TensorXd(weight)
 
                 for i in range(num_dofs):
                     values = (
@@ -401,7 +438,7 @@ class HeatSimulation(IGAManifoldProblem):
                         * density
                         * heat_capacity
                         * thickness
-                        * (dr.sqrt(det_metric) * weight)[:, None]
+                        * area_weight[:, None]
                     )
 
                     self._scatter_values_to_local_matrices(
@@ -423,6 +460,7 @@ class HeatSimulation(IGAManifoldProblem):
             composite_iga_spline=self._composite_iga_spline,
             local_indices_list=patch_local_indices,
             local_matrices_list=patch_local_matrices,
+            double_precision=True,
         )
 
     def assemble_local_vectors(
@@ -707,3 +745,21 @@ class HeatSimulation(IGAManifoldProblem):
             match the shape of the current global field values.
         """
         self._composite_iga_spline.global_field_values = value
+
+    @property
+    def source_term(self) -> "mi.TensorXf":
+        """
+        Returns the source term field per unit area, shaped as (n_global_dofs, 1).
+        """
+        return self._source_term
+
+    @source_term.setter
+    def source_term(self, value: "mi.TensorXf") -> None:
+        """
+        Sets the source term field per unit area.
+
+        Assembled load vectors are linear in this field but are not recomputed here,
+        so a caller that rescales the source must rescale any already-assembled vector
+        to match -- see `CrankNicolsonScheme.scale_source`, which does both.
+        """
+        self._source_term = value
