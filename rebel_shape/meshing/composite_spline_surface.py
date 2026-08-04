@@ -251,6 +251,22 @@ class CompositeSplineSurface(PatchManager):
         return self._global_quads
 
     @property
+    def degree(self):
+        """
+        Returns the degree of the spline surface.
+
+        All patches must have the same degree. Raises ``ValueError`` if
+        patches have different degrees.
+        """
+        degrees = {patch.degree for patch in self._patch_list}
+        if len(degrees) > 1:
+            raise ValueError(
+                f"Composite surface has mixed patch degrees: {degrees}. "
+                "All patches must have the same degree."
+            )
+        return degrees.pop()
+
+    @property
     def patches_with_mapping(
         self,
     ) -> Iterator[tuple[SplinePatch, npt.NDArray[np.uint32]]]:

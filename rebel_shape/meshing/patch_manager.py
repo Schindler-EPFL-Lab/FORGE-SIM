@@ -98,6 +98,7 @@ class PatchManager(abc.ABC):
         second_index: int
         first_side: Patch.Side
         second_side: Patch.Side
+        same_orientation: bool
 
         def __post_init__(self) -> None:
             if self.first_index >= self.second_index:
@@ -148,9 +149,36 @@ class PatchManager(abc.ABC):
         vertex in the global mesh. This is used to efficiently compute the average
         vertex positions and normals when updating the global mesh.
         """
-
+        
+        self._shared_edges: list[PatchManager.SharedEdge] = self._build_shared_edges()
+        """
+        List of shared edges between patches. Each edge is represented as a `SharedEdge`
+        object that contains the indices of the patches and the sides they are
+        connected to.
+        """
+    
     @property
     def shared_edges(self) -> list[SharedEdge]:
+        """
+        Returns a list of shared edges between patches.
+
+        Shared edges are edges that are connected to two patches on opposite sides.
+        The method returns a list of `SharedEdge` objects that contain the indices of
+        the patches and the sides they are connected to.
+
+        The order of the edges is such that the first patch index is always less than
+        the second patch index, ensuring that each edge is only represented once.
+
+        :returns: List of `SharedEdge` objects.
+        """
+        # For backwards compatibility, if the loaded json does not contain the shared
+        # edges, we build them from the connection list.
+        if not hasattr(self, "_shared_edges"):
+            self._shared_edges = self._build_shared_edges()
+        
+        return self._shared_edges
+
+    def _build_shared_edges(self) -> list[SharedEdge]:
         """
         Returns a list of shared edges between patches.
 
@@ -173,6 +201,22 @@ class PatchManager(abc.ABC):
                 neighbor_side = self._get_neighbor_side(
                     from_patch=neighbor_idx, to_patch=patch_idx
                 )
+                
+                # determine the local orientation from the vector of two sides
+                patch = self._patch_list[patch_idx]
+                neighbor = self._patch_list[neighbor_idx]
+                
+                side_vertices = patch.nodes[patch.get_node_indices_for(side)]
+                neighbor_side_vertices = neighbor.nodes[
+                    neighbor.get_node_indices_for(neighbor_side)
+                ]
+                side_vector = (side_vertices[-1] - side_vertices[0]).numpy()
+                neighbor_vector = (
+                    neighbor_side_vertices[-1] - neighbor_side_vertices[0]
+                ).numpy()
+                
+                dot_product = np.dot(side_vector, neighbor_vector)
+                same_orientation = dot_product > 0
 
                 shared_edges.append(
                     PatchManager.SharedEdge(
@@ -180,6 +224,7 @@ class PatchManager(abc.ABC):
                         first_side=side,
                         second_index=neighbor_idx,
                         second_side=neighbor_side,
+                        same_orientation=same_orientation,
                     )
                 )
 

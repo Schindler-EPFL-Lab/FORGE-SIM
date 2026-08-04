@@ -34,10 +34,10 @@ for _path in (_REPOSITORY_ROOT, _DOLFINX_SCRIPTS_DIR):
     if str(_path) not in sys.path:
         sys.path.insert(0, str(_path))
 
-import gmsh  # noqa: E402
-
-from dolfinx import fem, io, mesh  # noqa: E402
+from dolfinx import fem, mesh  # noqa: E402
 from mpi4py import MPI  # noqa: E402
+
+from geometrically_exact_shell_solver import make_curved_sphere_mesh  # noqa: E402
 
 # Material constants for the tests. `CONCRETE` matches the defaults of
 # `ThermalMaterialConfig` (the single-material case the FEM runner uses);
@@ -66,13 +66,16 @@ def make_sphere_mesh(
     comm: MPI.Comm = MPI.COMM_SELF,
 ) -> mesh.Mesh:
     """
-    Builds a coarse closed triangular surface mesh of a sphere as a DOLFINx mesh
-    of topological dimension 2 embedded in 3D.
+    Builds a coarse *flat* (order-1) closed triangular surface mesh of a sphere,
+    the geometry the heat pipeline operates on: a closed shell with no boundary
+    facets, so the stiffness matrix carries its constant nullspace.
 
-    Only the OCC sphere's *surface* is meshed (the volume is never generated), so
-    the result is the same kind of object the heat pipeline operates on: a closed
-    shell with no boundary facets. gmsh is initialized and finalized around the
-    call so that repeated invocations in one process are safe.
+    This is `geometrically_exact_shell_solver.make_curved_sphere_mesh` at order
+    1. That function is the single gmsh sphere builder in `dolfinx/`; it is
+    production code (the shell solver's own validation geometry) and it also
+    covers the curved order-2 case, so the tests call it rather than keeping a
+    second copy of the same gmsh sequence in step with it. The order-1 meshes the
+    two produced were verified byte-identical before the copy was removed.
 
     :param radius: Sphere radius in metres.
     :param mesh_size: Target element size; the default gives ~250 triangles,
@@ -80,27 +83,9 @@ def make_sphere_mesh(
     :param comm: MPI communicator the mesh is built on.
     :returns: DOLFINx mesh (topological dim 2, geometric dim 3).
     """
-    if gmsh.isInitialized():
-        gmsh.finalize()
-    gmsh.initialize()
-    try:
-        gmsh.option.setNumber("General.Terminal", 0)
-        gmsh.model.add("test_sphere")
-        gmsh.model.occ.addSphere(0.0, 0.0, 0.0, radius)
-        gmsh.model.occ.synchronize()
-
-        gmsh.option.setNumber("Mesh.MeshSizeMin", mesh_size)
-        gmsh.option.setNumber("Mesh.MeshSizeMax", mesh_size)
-
-        surfaces = gmsh.model.getEntities(dim=2)
-        gmsh.model.addPhysicalGroup(2, [surface[1] for surface in surfaces], 1)
-        gmsh.model.mesh.generate(2)
-
-        dolfinx_mesh, _, _ = io.gmshio.model_to_mesh(gmsh.model, comm, 0, gdim=3)
-    finally:
-        gmsh.finalize()
-
-    return dolfinx_mesh
+    return make_curved_sphere_mesh(
+        radius=radius, mesh_size=mesh_size, order=1, comm=comm
+    )
 
 
 def constant_function(V: fem.FunctionSpace, value: float) -> fem.Function:

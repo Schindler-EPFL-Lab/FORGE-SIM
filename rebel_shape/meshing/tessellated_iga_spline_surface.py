@@ -82,7 +82,13 @@ class TessellatedIGASplineSurface(TessellatedSplineSurface):
         tessellated_iga_spline_surface = super().from_file(
             composite_spline_surface_path=composite_spline_surface_path
         )
-        assert isinstance(tessellated_iga_spline_surface, TessellatedIGASplineSurface)
+        if not isinstance(tessellated_iga_spline_surface, TessellatedIGASplineSurface):
+            raise TypeError(
+                f"Expected file to contain a TessellatedIGASplineSurface, "
+                f"but got {type(tessellated_iga_spline_surface).__name__}. "
+                f"Ensure the file at {composite_spline_surface_path} was saved "
+                "from an IGA spline surface."
+            )
 
         return tessellated_iga_spline_surface
 

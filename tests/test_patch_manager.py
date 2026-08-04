@@ -205,6 +205,7 @@ class TestPatchManager(unittest.TestCase):
                 first_side=Patch.Side.RIGHT,
                 second_index=1,
                 second_side=Patch.Side.LEFT,
+                same_orientation=True,
             ),
         )
 
@@ -215,6 +216,7 @@ class TestPatchManager(unittest.TestCase):
                 first_side=Patch.Side.TOP,
                 second_index=2,
                 second_side=Patch.Side.BOTTOM,
+                same_orientation=True,
             ),
         )
 

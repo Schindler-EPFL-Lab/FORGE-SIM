@@ -63,12 +63,23 @@ silently never run anywhere, which is worse than having none. `discover tests`
 only walks `tests/`, so the two suites never collide.
 
 The suite is built on a coarse gmsh sphere and needs no external data. It runs in
-about a second and covers the physics that a careless refactor would break:
-energy conservation under Crank–Nicolson, the analytic uniform-source heating
-rate, the constant-field steady state (the `λ₀=0` nullspace noted below),
+about ten seconds and covers the physics that a careless refactor would break.
+
+Heat: energy conservation under Crank–Nicolson, the analytic uniform-source
+heating rate, the constant-field steady state (the `λ₀=0` nullspace noted below),
 monotone damping of non-constant modes, **second-order accuracy in `dt`** by
 step refinement, `scale_source` linearity, the `dt_over_t_relax` round trip and
 the material scalings of `T_relax`, and lossless `snapshot_state`/`load_state`.
+
+Shell: the **steel-sphere anchor** — the same unit sphere the IGA side pins in
+the repository's top-level `tests/test_steel_sphere_modal_analysis.py`, so the
+two discretisations genuinely cross-validate rather than compare with themselves
+— plus the analytic thin-shell clusters at n = 2, 3, 4 and their degeneracies,
+the six zero-energy rigid-body modes (`K φ = 0` exactly, at any geometry order),
+agreement of the three integration schemes, the drilling guards, the B-bar block
+algebra, the spline → curved-mesh conformity, and the on-disk eigenmode format,
+which is additionally confirmed against a recorded run when
+`REBEL_SHAPE_RECORDED_RUNS` points at one.
 
 `test_crank_nicolson_characterization.py` additionally pins a full small run
 against the committed `crank_nicolson_golden.json`, so a refactor can prove it

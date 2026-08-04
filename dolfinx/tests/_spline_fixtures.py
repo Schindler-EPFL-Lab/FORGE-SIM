@@ -1,8 +1,8 @@
 """
 Tiny IGA spline surfaces for the projector / runner tests.
 
-Kept apart from `_fem_fixtures` on purpose. That module is deliberately
-dependency-light (gmsh + DOLFINx); this one pulls in Mitsuba, Dr.Jit and
+Kept apart from `_fem_fixtures` on purpose. That module stays inside the DOLFINx
+ecosystem (gmsh, DOLFINx, PETSc); this one pulls in Mitsuba, Dr.Jit and
 jsonpickle, and needs the process-global side effect `mi.set_variant(...)` before
 *any* Dr.Jit operation. The seventeen solver tests use none of that.
 

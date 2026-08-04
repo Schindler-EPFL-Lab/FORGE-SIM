@@ -9,6 +9,7 @@ from scipy.sparse import linalg
 
 from rebel_shape import logger
 from rebel_shape.isogeometric_analysis.heat_simulation import HeatSimulation
+from rebel_shape.isogeometric_analysis.sparse_cholesky import SparseCholeskySolver
 from rebel_shape.scene_optimizers.optimization_events import OptimizationEvents
 
 
@@ -40,7 +41,7 @@ def compute_relaxation_time(
     with a small negative shift `sigma < 0`. K is positive semi-definite
     (kernel = constants) and M is positive definite, so the shifted matrix
     `K - sigma * M = K + |sigma| M` is symmetric positive definite. We
-    factor it once via `cholespy` (CHOLMOD) and pass the resulting solver
+    factor it once via `SparseCholeskySolver` and pass the resulting solver
     as `OPinv` to ARPACK -- matching the direct-solver path used for the
     Crank-Nicolson LHS in this file, and avoiding the LU factorization
     scipy would otherwise build internally. `sigma` is taken as a small
@@ -65,10 +66,6 @@ def compute_relaxation_time(
     :raises RuntimeError: If no non-zero eigenvalue can be identified among
         the returned modes.
     """
-    # Deferred import: cholespy's symbols are bound to the Mitsuba variant,
-    # mirroring `_build_cholesky_solver` below.
-    from cholespy import CholeskySolverD, MatrixType
-
     if num_modes < 2:
         raise ValueError("`num_modes` must be at least 2.")
 
@@ -84,26 +81,16 @@ def compute_relaxation_time(
         )
     sigma = -1e-6 * rate_scale
 
-    # Factor K - sigma*M with Cholesky once. cholespy requires int32 indices
-    # and float64 data, contiguous.
+    # Factor K - sigma*M with Cholesky once, then reuse it for every ARPACK
+    # iteration.
     shifted = (stiffness_matrix - sigma * mass_matrix).tocsr()
     n_rows = shifted.shape[0]
-    indptr = np.ascontiguousarray(shifted.indptr, dtype=np.int32)
-    indices = np.ascontiguousarray(shifted.indices, dtype=np.int32)
-    data = np.ascontiguousarray(shifted.data, dtype=np.float64)
-
-    start_time = time.time()
-    chol_solver = CholeskySolverD(n_rows, indptr, indices, data, MatrixType.CSR)
-    factor_time = time.time() - start_time
-
-    def opinv_matvec(x: npt.NDArray[np.float64]) -> npt.NDArray[np.float64]:
-        b = np.ascontiguousarray(x, dtype=np.float64)
-        out = np.empty_like(b)
-        chol_solver.solve(b, out)
-        return out
+    chol_solver = SparseCholeskySolver(
+        matrix=shifted, layout=SparseCholeskySolver.Layout.CSR
+    )
 
     opinv = linalg.LinearOperator(
-        shape=(n_rows, n_rows), matvec=opinv_matvec, dtype=np.float64
+        shape=(n_rows, n_rows), matvec=chol_solver.solve, dtype=np.float64
     )
 
     start_time = time.time()
@@ -133,8 +120,7 @@ def compute_relaxation_time(
 
     lambda_1 = float(nonzero[0])
     logger.debug(
-        f"Relaxation eigsolve: factor {factor_time:.3f} s, "
-        f"{num_modes} modes in {eigsolve_time:.3f} s, "
+        f"Relaxation eigsolve: {num_modes} modes in {eigsolve_time:.3f} s, "
         f"sigma={sigma:.3e}, lambda_1={lambda_1:.6e}."
     )
     return 1.0 / lambda_1
@@ -165,7 +151,8 @@ class CrankNicolsonScheme:
 
     The resulting system of equations can be solved in one of two ways:
         1. An iterative solver (preconditioned conjugate gradient, default).
-        2. A direct solver (sparse Cholesky factorization via `cholespy`).
+        2. A direct solver (sparse Cholesky factorization via
+           `SparseCholeskySolver`).
     The choice is controlled by the `use_cholesky` constructor flag. CG is the
     default because the LHS matrix can become quite large (>100k DOFs) and a
     direct factorization is memory-intensive. However, CG can occasionally
@@ -211,8 +198,9 @@ class CrankNicolsonScheme:
         right-hand side matrix (M - 0.5*dt*K) are assembled. When
         `use_cholesky` is False (the default), a lumped-mass preconditioner is
         built for the CG solver. When True, a sparse Cholesky factorization of
-        the LHS matrix is precomputed via `cholespy` (double precision) and
-        reused at every time step, since the LHS does not change.
+        the LHS matrix is precomputed via `SparseCholeskySolver` (double
+        precision) and reused at every time step, since the LHS does not
+        change.
 
         :raises ValueError: If `time_step_size` is not a positive real number.
         """
@@ -242,7 +230,7 @@ class CrankNicolsonScheme:
 
         # Solver-specific auxiliary state. Exactly one of these is populated.
         self._preconditioner: Optional[sp.csr_matrix] = None
-        self._cholesky_solver: Optional[object] = None
+        self._cholesky_solver: Optional[SparseCholeskySolver] = None
         if self._use_cholesky:
             self._cholesky_solver = self._build_cholesky_solver()
         else:
@@ -433,35 +421,18 @@ class CrankNicolsonScheme:
         lumped_mass_matrix_diag = self._mass_matrix.sum(axis=1).A1
         return sp.diags(1.0 / lumped_mass_matrix_diag, format="csr", dtype=np.float64)
 
-    def _build_cholesky_solver(self) -> object:
+    def _build_cholesky_solver(self) -> SparseCholeskySolver:
         """
         Precomputes a sparse Cholesky factorization of the LHS matrix
-        (M + 0.5*dt*K) using `cholespy` in double precision.
+        (M + 0.5*dt*K) in double precision.
 
         The LHS matrix does not depend on time, so a single factorization is
-        reused at every time step. Cholespy is imported lazily because its
-        symbols are bound to the active Mitsuba variant (see the equivalent
-        pattern in `LaplacianParametrization`).
+        reused at every time step.
         """
-        # Deferred import: cholespy's symbols are bound to the Mitsuba variant
-        # and must be imported after `mi.set_variant` has been called.
-        from cholespy import CholeskySolverD, MatrixType
-
-        lhs_csr = self._lhs_matrix.tocsr()
-        n_rows = lhs_csr.shape[0]
-
-        # cholespy requires int32 index buffers and float64 values, contiguous.
-        indptr = np.ascontiguousarray(lhs_csr.indptr, dtype=np.int32)
-        indices = np.ascontiguousarray(lhs_csr.indices, dtype=np.int32)
-        data = np.ascontiguousarray(lhs_csr.data, dtype=np.float64)
-
-        start_time = time.time()
-        solver = CholeskySolverD(n_rows, indptr, indices, data, MatrixType.CSR)
-        logger.debug(
-            f"Cholesky factorization time: {time.time() - start_time:.3f} s "
-            f"(n={n_rows}, nnz={lhs_csr.nnz})."
+        return SparseCholeskySolver(
+            matrix=self._lhs_matrix.tocsr(),
+            layout=SparseCholeskySolver.Layout.CSR,
         )
-        return solver
 
     def simulate(
         self,
@@ -541,11 +512,7 @@ class CrankNicolsonScheme:
 
             solve_start = time.time()
             if self._use_cholesky:
-                # cholespy writes the solution in place into the output buffer
-                # and requires both buffers to be C-contiguous float64.
-                b = np.ascontiguousarray(rhs, dtype=np.float64)
-                temperature = np.empty_like(b)
-                self._cholesky_solver.solve(b, temperature)
+                temperature = self._cholesky_solver.solve(rhs)
                 solver_name = "Cholesky"
             else:
                 temperature = linalg.cg(

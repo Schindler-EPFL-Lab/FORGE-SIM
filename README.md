@@ -21,6 +21,13 @@ This project is built using the [uv package manager](https://docs.astral.sh/uv/)
 [Segment Anything Model 3 (SAM 3)](https://github.com/facebookresearch/sam3)
 require it as a dependency.
 
+The `fast-cholesky` extra builds against the system SuiteSparse libraries, so
+install those first if you intend to use `--all-extras`:
+
+```bash
+sudo apt-get install libsuitesparse-dev
+```
+
 Running the following commands at the top directory of rebel-shape installs the project:
 
 ```bash
@@ -28,6 +35,14 @@ uv venv &&\
 uv pip install torch torchvision setuptools && \
 uv sync --all-extras
 ```
+
+`fast-cholesky` pulls in `scikit-sparse`, which lets the isogeometric modal and
+heat solvers factor with CHOLMOD's nested-dissection ordering instead of the
+default `cholespy` — roughly four times faster on the matrices these problems
+produce. It is genuinely optional: without it the solvers fall back automatically,
+and the two agree to about 2e-12, so results are unaffected. Omit `--all-extras`
+(or install the extras you need individually) if you would rather not add the
+system dependency.
 
 ### Quick-start
 

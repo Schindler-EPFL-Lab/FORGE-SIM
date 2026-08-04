@@ -27,8 +27,12 @@ dependencies:
   # shift-invert direct factorization.
   - slepc4py
 
-  # Mesh I/O
+  # Mesh I/O. On conda-forge the Gmsh bindings are packaged separately from the
+  # library: `gmsh` installs the executable and libgmsh, and only `python-gmsh`
+  # provides the module `import gmsh` resolves to. Both are named because the
+  # shell mesh builder needs the module and the solver stack links the library.
   - gmsh
+  - python-gmsh
   - meshio>=5.0
   - vtk
 

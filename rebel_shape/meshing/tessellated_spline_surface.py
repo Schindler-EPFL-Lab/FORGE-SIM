@@ -7,6 +7,7 @@ import drjit as dr
 import jsonpickle
 import mitsuba as mi
 
+from rebel_shape.meshing.composite_mesh import CompositeMesh
 from rebel_shape.meshing.composite_spline_surface import CompositeSplineSurface
 from rebel_shape.meshing.rectangular_mesh import RectangularMesh
 from rebel_shape.plugin_wrappers.diffuse_bsdf import DiffuseBSDF
@@ -331,6 +332,18 @@ class TessellatedSplineSurface:
         Returns the composite spline surface associated with this tessellated surface.
         """
         return self._composite_spline_surface
+
+    @property
+    def tessellated_mesh(self) -> CompositeMesh:
+        """
+        Returns the composite mesh this surface is tessellated into.
+
+        The counterpart of `composite_spline`: this class holds the two halves of the
+        dual spline/mesh representation, and this exposes the mesh half. Needed by
+        consumers that require the mesh's own patch topology -- notably
+        `patches_with_mapping`, to scatter per-patch values into global vertex order.
+        """
+        return self._tessellated_mesh
 
     def __getitem__(self, index: int) -> RectangularMesh:
         """

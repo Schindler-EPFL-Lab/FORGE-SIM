@@ -576,6 +576,44 @@ class TestBSplinePatch(unittest.TestCase):
                     decimal=5,
                 )
 
+    def test_normal_derivative_autodiff(self):
+        for i, case in enumerate(self.autodiff_test_cases_dict[2:]):
+            with self.subTest(i=i):
+                u_spline = BSpline(knot_vector=case["u_knots"], degree=case["u_degree"])
+                v_spline = BSpline(knot_vector=case["v_knots"], degree=case["v_degree"])
+                surface = BSplinePatch(
+                    name=f"test_surface_{i}",
+                    u_spline=u_spline,
+                    v_spline=v_spline,
+                    control_points=mi.TensorXf(case["control_points"]),
+                )
+
+                u_vals = dr.linspace(mi.Float, 0.0, 1.0, self.samples_per_dir)
+                v_vals = dr.linspace(mi.Float, 0.0, 1.0, self.samples_per_dir)
+                u_grid, v_grid = dr.meshgrid(u_vals, v_vals, indexing="xy")
+
+                params = dr.empty(dtype=mi.TensorXf, shape=(self.samples_per_dir**2, 2))
+                params[:, 0] = u_grid
+                params[:, 1] = v_grid
+
+                dr.enable_grad(params)
+                normals = surface.evaluate_normals(parametric_coords=params)
+
+                dr.forward(params)
+                derivative_ad_u_plus_v = mi.TensorXf(normals.grad)
+
+                jacobian = surface.evaluate_jacobian(parametric_coords=params)
+                hessian = surface.evaluate_hessian(parametric_coords=params)
+                normal_derivative = surface.normal_derivative(
+                    jacobian=jacobian, hessian=hessian, normal=normals
+                )
+
+                np.testing.assert_array_almost_equal(
+                    (normal_derivative[:, :, 0] + normal_derivative[:, :, 1]).numpy(),
+                    derivative_ad_u_plus_v,
+                    decimal=5,
+                )
+
     def test_evaluate_jacobian(self):
         """
         Tests whether the Jacobian of the Bezier surface with different degrees

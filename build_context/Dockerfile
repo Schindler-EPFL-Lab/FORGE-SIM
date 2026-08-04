@@ -13,6 +13,7 @@ ENV NVIDIA_DRIVER_CAPABILITIES="compute,utility,graphics"
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
     build-essential \
+    libsuitesparse-dev \
     cmake \
     ninja-build \
     curl \
@@ -57,7 +58,7 @@ COPY README.md README.md
 RUN ls
 
 # Install dependencies
-RUN uv sync --frozen --extra azure --extra depth-estimation
+RUN uv sync --frozen --extra azure --extra foreground-background --extra fast-cholesky
 
 RUN uv pip freeze
 # Put the python binary at the front of the path to use directly in future commands.

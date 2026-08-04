@@ -11,7 +11,7 @@ class Manifold(abc.ABC):
         Evaluate a position on the manifold at the given `parametric_coords`.
 
         A 2D tensor of shape (n_points, 2) representing the parametric coordinates
-        at which the normals are evaluated.
+        at which the positions are evaluated.
 
         :returns: A tensor of shape (n_points, 3) representing the positions
                   at the specified parametric coordinates.
@@ -141,6 +141,12 @@ class Manifold(abc.ABC):
         det_metric = (
             metric[:, 0, 0] * metric[:, 1, 1] - metric[:, 0, 1] * metric[:, 1, 0]
         )
+        min_det = float(dr.min(dr.abs(det_metric)).numpy())
+        if min_det < 1.0e-30:
+            raise ValueError(
+                f"Degenerate metric tensor detected: min |det(g)| = {min_det:.4e}. "
+                "Check the surface geometry for collapsed or degenerate elements."
+            )
         inv_metric = dr.empty(dtype=mi.TensorXf, shape=metric.shape)
 
         inv_metric[:, 0, 0] = dr.ravel(metric[:, 1, 1] / det_metric)
@@ -208,7 +214,7 @@ class Manifold(abc.ABC):
     ) -> tuple["mi.TensorXf", "mi.TensorXf"]:
         """
         Compute the principal curvatures at each point on the spline patch based on
-        inverse metric tensor `inv_metric_tensor` (which is also known as the fist
+        inverse metric tensor `inv_metric_tensor` (the inverse of the first
         fundamental form) and the second form `second_form`.
 
         Principal curvatures at a given point of a surface are the maximum and minimum
@@ -267,3 +273,82 @@ class Manifold(abc.ABC):
         eig2 = 0.5 * trace - temp
 
         return eig1, eig2
+
+    @staticmethod
+    def normal_derivative(
+        jacobian: "mi.TensorXf", hessian: "mi.TensorXf", normal: "mi.TensorXf"
+    ) -> "mi.TensorXf":
+        """
+        Compute the partial derivatives of the unit surface normal with respect
+        to the parametric coordinates, given precomputed geometric quantities.
+
+        The unit normal is computed as
+            n = w / ||w||,   w = f_u × f_v,
+        with f_u and f_v being the Jacobian columns. Using this normalization, the
+        derivatives follow
+            n_u = (w_u - n (n · w_u)) / ||w||,
+            n_v = (w_v - n (n · w_v)) / ||w||,
+        where
+            w_u = f_uu x f_v + f_u x f_uv,
+            w_v = f_uv x f_v + f_u x f_vv.
+
+        :returns: A tensor of shape (n_points, 3, 2) representing the normal derivative
+            at each point on the surface.
+
+        :raises ValueError: If the shapes of `jacobian`, `hessian`, or `normal` do not
+            match the expected shapes.
+        """
+        if len(jacobian.shape) != 3 or jacobian.shape[1] != 3 or jacobian.shape[2] != 2:
+            raise ValueError("Jacobian must be a 3D tensor of shape (n_points, 3, 2).")
+
+        if (
+            len(hessian.shape) != 4
+            or hessian.shape[1] != 3
+            or hessian.shape[2] != 2
+            or hessian.shape[3] != 2
+        ):
+            raise ValueError(
+                "Hessian must be a 4D tensor of shape (n_points, 3, 2, 2)."
+            )
+        if (
+            len(normal.shape) != 2
+            or normal.shape[1] != 3
+            or normal.shape[0] != jacobian.shape[0]
+        ):
+            raise ValueError("Normal must be a 2D tensor of shape (n_points, 3).")
+
+        def cross(a: "mi.TensorXf", b: "mi.TensorXf") -> "mi.TensorXf":
+            out = dr.empty(dtype=mi.TensorXf, shape=a.shape)
+            out[:, 0] = dr.ravel(a[:, 1] * b[:, 2] - a[:, 2] * b[:, 1])
+            out[:, 1] = dr.ravel(a[:, 2] * b[:, 0] - a[:, 0] * b[:, 2])
+            out[:, 2] = dr.ravel(a[:, 0] * b[:, 1] - a[:, 1] * b[:, 0])
+            return out
+
+        du = jacobian[:, :, 0]
+        dv = jacobian[:, :, 1]
+
+        w = cross(du, dv)
+        magnitude = dr.safe_sqrt(dr.sum(w * w, axis=1))
+        safe_magnitude = dr.select(
+            magnitude > 1.0e-6,
+            magnitude,
+            dr.full(dtype=mi.TensorXf, value=1.0, shape=magnitude.shape),
+        )
+        inv_safe_magnitude = 1.0 / safe_magnitude
+
+        w_u = cross(hessian[:, :, 0, 0], dv) + cross(du, hessian[:, :, 0, 1])
+        w_v = cross(hessian[:, :, 0, 1], dv) + cross(du, hessian[:, :, 1, 1])
+
+        proj_u = dr.sum(normal * w_u, axis=1)
+        proj_v = dr.sum(normal * w_v, axis=1)
+
+        normal_deriv = dr.empty(dtype=mi.TensorXf, shape=(jacobian.shape[0], 3, 2))
+
+        normal_deriv[:, :, 0] = dr.ravel(
+            inv_safe_magnitude[:, None] * (w_u - normal * proj_u[:, None])
+        )
+        normal_deriv[:, :, 1] = dr.ravel(
+            inv_safe_magnitude[:, None] * (w_v - normal * proj_v[:, None])
+        )
+
+        return normal_deriv

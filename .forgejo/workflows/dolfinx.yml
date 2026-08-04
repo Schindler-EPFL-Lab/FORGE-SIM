@@ -1,0 +1,77 @@
+name: DOLFINx cross-validation tests
+
+# The FEM solvers under `dolfinx/` are not part of the installable package and need
+# their own environment: DOLFINx is a conda-only ecosystem whose VTK requirements
+# conflict with the uv-managed one. They therefore cannot run in the main
+# `Python application` workflow, and until this job existed they ran nowhere
+# automatically -- only when someone remembered to invoke them locally.
+#
+# The environment is built from `dolfinx/environment.yml`, the same file the
+# README tells a developer to use, rather than from a hand-written dependency
+# list. That keeps CI honest in two ways: it exercises the environment people
+# actually run, and a change to `environment.yml` cannot silently diverge from
+# what CI installs. It also means this job fails if that file stops solving,
+# which is worth knowing.
+
+on:
+  workflow_dispatch:
+  pull_request:
+    types: [labeled]
+
+jobs:
+  dolfinx-tests:
+    name: DOLFINx Tests
+    if: github.event_name == 'workflow_dispatch' || github.event.label.name == 'trigger_pipeline'
+    runs-on: ubuntu-24.04
+
+    defaults:
+      run:
+        # `micromamba-shell` activates the environment for every step below.
+        shell: micromamba-shell {0}
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+
+      - name: Install system libraries
+        # Runs under plain bash: the conda environment does not exist yet, so the
+        # `micromamba-shell` default cannot activate anything.
+        #
+        # `llvm` backs Dr.Jit's LLVM variant -- `_spline_fixtures` calls
+        # `mi.set_variant("llvm_ad_mono")`, which dlopens the system libLLVM. The
+        # `Python application` workflow installs the same set for the same reason.
+        #
+        # `libosmesa6` gives VTK a software OpenGL implementation. The runner has
+        # neither a GPU nor an X server, so without it PyVista's off-screen
+        # plotter finds no usable backend and the visualization test can only
+        # skip.
+        shell: bash
+        run: |
+          sudo apt-get update && \
+          sudo apt-get install -y llvm llvm-dev clang libclang-dev libgl1 \
+            libglu1-mesa libosmesa6 libxrender1
+
+      - name: Create the DOLFINx environment
+        uses: https://github.com/mamba-org/setup-micromamba@v2
+        with:
+          environment-file: dolfinx/environment.yml
+          # Solving fenics-dolfinx with PETSc, SLEPc and VTK is slow; the cache
+          # key follows the env file, so it is only paid when that file changes.
+          cache-environment: true
+
+      - name: Report the environment
+        run: |
+          python -c "import dolfinx, petsc4py, slepc4py; \
+            print('dolfinx', dolfinx.__version__, '| petsc4py', petsc4py.__version__, \
+                  '| slepc4py', slepc4py.__version__)"
+
+      - name: Run the DOLFINx tests
+        # Single-threaded so the MUMPS factorization is deterministic: with
+        # threading its summation order varies and results drift by around 1e-15.
+        # `PYTHONPATH` puts the checkout first so `rebel_shape` and the modules
+        # under test resolve from here, matching how the scripts are run.
+        env:
+          OMP_NUM_THREADS: 1
+          PYTHONPATH: ${{ github.workspace }}
+        run: python -m unittest discover dolfinx/tests -v

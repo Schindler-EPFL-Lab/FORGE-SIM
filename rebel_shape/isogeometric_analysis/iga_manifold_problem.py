@@ -256,11 +256,11 @@ class IGAManifoldProblem(IGAProblem):
 
             all_parametric_coords = dr.empty(
                 dtype=mi.TensorXf,
-                shape=(self.num_knot_spans * len(coords_and_weights), 2)
+                shape=(self.num_knot_spans * len(coords_and_weights), 2),
             )
             all_weights = dr.empty(
                 dtype=mi.TensorXf,
-                shape=(self.num_knot_spans * len(coords_and_weights),)
+                shape=(self.num_knot_spans * len(coords_and_weights),),
             )
 
             for i, (coords, weights) in enumerate(coords_and_weights):

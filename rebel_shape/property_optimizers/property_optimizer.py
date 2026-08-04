@@ -45,7 +45,7 @@ class PropertyOptimizer(abc.ABC):
         scene: "mi.Scene",
         scene_params: "mi.SceneParams",
         optimization_events: OptimizationEvents,
-        display_state_interval: int = 2
+        display_state_interval: int = 2,
     ) -> None:
         """
         The `scene` is a loaded Mitsuba scene object, while `scene_params` are a
