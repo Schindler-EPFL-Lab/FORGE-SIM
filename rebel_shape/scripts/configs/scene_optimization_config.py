@@ -36,13 +36,13 @@ class SceneOptimizationConfig(ReverseCli):
 
     use_msssim_loss: bool = True
     """
-    If `True`, the MS-SSIM loss is used as a secondary loss for optimization. 
+    If `True`, the MS-SSIM loss is used as a secondary loss for optimization.
     Otherwise, the L2 loss is used instead.
     """
     l1_loss_weight: float = 0.85
     """
-    Weight of the L1 primary image loss in the composite loss. The other loss is 
-    either SSIM or L2, depending on `use_ssim_loss`, and is weighted by 
+    Weight of the L1 primary image loss in the composite loss. The other loss is
+    either SSIM or L2, depending on `use_ssim_loss`, and is weighted by
     1.0 - `shape_l1_loss_weight`
     """
 
@@ -68,9 +68,9 @@ class SceneOptimizationConfig(ReverseCli):
     """
     lbfgs_history_size: int = 15
     """
-    Applied only if `use_lbfgs` is True. Sets how many past gradient information 
+    Applied only if `use_lbfgs` is True. Sets how many past gradient information
     is used to compute the new search direction. If there are multiple batches per each
-    iteration, the history should be increased by the number of batches. 
+    iteration, the history should be increased by the number of batches.
     """
 
     def __post_init__(self) -> None:

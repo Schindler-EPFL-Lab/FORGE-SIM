@@ -46,8 +46,27 @@ system dependency.
 
 ### Quick-start
 
-Go to `rebel_shape/scripts` directory and run `optimize_suzanne_mesh.py` or `optimize_suzanne_spline.py` scripts.
-These scripts can be run locally on the CPU, but the default setting are tuned for GPU execution on Azure, so adjusting the parameters is necessary.
+1. Extract object with SAM3
+
+    ```bash
+    python rebel_shape/scripts/segmentation/mask_with_sam3.py --sam3-checkpoint-dir model/sam3/ --text-prompt PROMPT --scene-dir  dataset-path
+    ```
+
+2. Optimize the initial pose:
+
+    ```bash
+    python rebel_shape/scripts/optimize_thermoscenes_pose.py --scene-path dataset-path --name output-name
+    ```
+
+3. Optimize the shape for simulation
+
+  Go to `rebel_shape/scripts` directory and run `optimize_suzanne_mesh.py` or `optimize_suzanne_spline.py` scripts.
+
+  ```bash
+  python3 rebel_shape/scripts/optimize_thermoscenes_spline_manual_initial_pose.py --scene-path dataset-path --environment-map-path data/textures/checkerboard_lighter.exr --bbox-transforms-path bbox-path --use-gpu --shape-params.batch-size 200 --shape-params.learning-rate-start 0.5 --shape-params.learning-rate-end 1
+  ```
+
+These scripts can be run locally on the CPU, but the default setting are tuned for GPU execution, so adjusting the parameters is necessary.
 Reducing the number of samples per pixel to 4-9 can yield reasonable execution time without compromising the optimization procedure.
 The fact that the images are quite noisy does not really impact the optimization until fine details have to be resolved.
 For executing a full optimization procedure, you will need patience or a faster computer :)
@@ -57,6 +76,42 @@ They teach everything from making a small renderer to performing inverse design,
 
 For an introduction to splines, there are many good resources online, but it can also be useful to go into the tests and call the `visualize` method for curves and surfaces.
 Knot vectors can be changed and control points moved around to see how the resulting shape changes.
+
+### Experiment tracking
+
+Every script reports its parameters, per-iteration losses and output artifacts through
+`rebel_shape/tracking.py`, a thin seam over [MLflow](https://mlflow.org/). **Tracking is
+off unless the environment turns it on**, so the scripts run unchanged on a machine with
+no tracking infrastructure — nothing is written and no MLflow store is created.
+
+Two environment variables control it:
+
+| variable | effect |
+|---|---|
+| `MLFLOW_TRACKING_URI` | Where runs go, e.g. `http://localhost:5000` for a local MLflow server. Setting it is what turns tracking on. |
+| `REBEL_SHAPE_TRACKING` | `auto` (default: on only if the environment names a destination), `on` (always attempt), `off` (never touch MLflow — the only way to say "off" on a machine that exports a tracking URI). |
+| `MLFLOW_EXPERIMENT_NAME` | Which MLflow experiment runs are created in. The seam never sets an experiment itself. |
+
+```bash
+# Record to a local MLflow server.
+MLFLOW_TRACKING_URI=http://localhost:5000 MLFLOW_EXPERIMENT_NAME="Spline optimization" \
+    python rebel_shape/scripts/optimize_ply_spline.py
+
+# Run the test suite with tracking off even though a URI is exported.
+REBEL_SHAPE_TRACKING=off python -m unittest discover tests
+```
+
+The seam never configures MLflow in code, because `mlflow.set_tracking_uri()` overwrites
+`MLFLOW_TRACKING_URI` for the process and every subprocess it spawns and would leave the
+environment unable to configure anything. It also never raises and never blocks: the
+first failed tracking call logs a warning and disables tracking for the rest of the
+process, since a stale tracking URI takes roughly four minutes to fail. If you want a
+stale destination to fail faster, set MLflow's own `MLFLOW_HTTP_REQUEST_MAX_RETRIES` and
+`MLFLOW_HTTP_REQUEST_TIMEOUT`.
+
+Artifacts are collected once, at the end of a run, by uploading the script's
+`--output-folder`. Anything a script or optimizer writes outside that folder is saved to
+disk but not recorded as an artifact.
 
 ## Project Structure
 
@@ -273,7 +328,35 @@ We use [Segment Anything Model 3 (SAM 3)](https://github.com/facebookresearch/sa
 This is done in the [`mask_with_sam3.py`](./rebel_shape/scripts/segmentation/mask_with_sam3.py) script.
 At the time of writing, this part is expected to be done locally and there is no Azure script.
 
+```bash
+python ./rebel_shape/scripts/segmentation/mask_with_sam3.py --scene-dir dataset-path --sam3-checkpoint-dir model/sam3/ --text-prompt PROMPT
+```
+
+The prompts used are:
+
+- Building A Spring -> "Building"
+- Car -> "A red car"
+- Woodshed -> "Shed"
+- Heater Water Kettle -> "A metallic object"
+- Lion -> "plush toy"
+
 In the case of the BuildNet3D dataset, the semantic masks are used to directly obtain perfectly segmented images, sidestepping the aforementioned segmentation procedure.
+
+#### Element segmentation
+
+Windows can be segmented from the images using SAM3.
+FOr example for Building A Spring:
+
+```bash
+python rebel_shape/scripts/segmentation/mask_with_sam3.py --sam3-checkpoint-dir model/sam3/ --text-prompt PROMPT --output-folder "masks_facade" --output_frame_name masks_facade --mask-mode union --is-mask --scene-dir  dataset-path
+```
+
+It is important that `--mask-mode union` to be able to segment multiple instances per images.
+
+The prompts used are:
+
+- BUilding A Spring -> "Window"
+- Car -> "Window"
 
 ### Pose Optimization
 
@@ -352,3 +435,30 @@ The numerical integration scheme is stable for all time step sizes [(Crank-Nicol
 
 If non-linear terms (e.g. black-body radiation) are introduced, an iterative solve has to be performed at each step to ensure stability and accuracy.
 This can be done either via the [Newton-Raphson method](https://en.wikipedia.org/wiki/Newton%27s_method) or with a simple [fixed-point iteration](https://en.wikipedia.org/wiki/Fixed-point_iteration) scheme.
+
+## Evaluate
+
+Render the images with `rebel_shape/scripts/render_eval_images.py` then run the NVS evaluation with `rebel_shape/scripts/evaluation/eval_real.py`.
+
+### Baseline
+
+Run Large Step with:
+
+```bash
+python rebel_shape/scripts/optimize_thermoscenes_mesh_manual_initial_pose.py --environment-map-path data/textures/checkerboard_lighter.exr --continuous-samples 25 --visibility-samples 9 --optimization-iterations 250 --shape-params.learning-rate-start 0.05 --shape-params.learning-rate-end 0.025 --shape-params.learning-rate-steepness 1.0 --shape-params.batch-size 9 --shape-params.uniform-adam --shape-params.no-use-lbfgs --shape-params.lbfgs-history-size 32 --shape-params.smoothing-strength 50.0 --texture-params.learning-rate-start 0.1 --texture-params.learning-rate-end 0.05 --texture-params.learning-rate-steepness 1.0 --texture-params.batch-size 6 --texture-params.no-uniform-adam --texture-params.no-use-lbfgs --texture-params.lbfgs-history-size 15 --texture-params.texture-resolution 1024 --texture-params.projection-steepness 1.0 --output-folder outputs --num-of-images-to-save 3 --use-gpu --no-mask-pixels-during-optimization --scene-path dataset-path --bbox-transforms-path bbox-file-path
+```
+
+`--optimization-iterations` must stay above every entry of `--h-refinement-iterations`
+(default `[20, 50, 80, 120, 180]`), which is what the default of 250 above respects.
+
+Render novel views with:
+
+```bash
+python rebel_shape/scripts/render_eval_images_mesh.py --flip-y --scene-path dataset-path --result-path outputs
+```
+
+And create NVS evaluation with:
+
+```bash
+python rebel_shape/scripts/evaluation/eval_real.py --scene-path dataset-path --rendered-images-folder outputs/renders
+```

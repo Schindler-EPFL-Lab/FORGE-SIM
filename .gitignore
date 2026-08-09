@@ -3,5 +3,7 @@ __pycache__/
 config.json
 /.venv
 mlruns/
+mlflow.db
 outputs/
 run_experiment/
+dataset/

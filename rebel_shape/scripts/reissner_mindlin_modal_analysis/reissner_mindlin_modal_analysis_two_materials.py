@@ -8,7 +8,6 @@ from pathlib import Path
 
 import drjit as dr
 import mitsuba as mi
-import mlflow
 import tyro
 
 # This is a hack so that the script work with azure sdkv2.
@@ -19,7 +18,7 @@ sys.path.append("../")
 
 from dataclasses_reverse_cli.reverse_cli import ReverseCli
 
-from rebel_shape import logger
+from rebel_shape import logger, tracking
 from rebel_shape.meshing.tessellated_iga_spline_surface import (
     TessellatedIGASplineSurface,
 )
@@ -236,7 +235,7 @@ def run_modal_analysis_two_materials(
         spectral_shift=params.spectral_shift,
         max_batch_size=params.max_batch_size,
     )
-    
+
     runner.export_eigenmodes_to_xdmf(
         eigenvalues=eigenvalues,
         eigenvectors=eigenvectors,
@@ -249,6 +248,7 @@ def run_modal_analysis_two_materials(
 
 if __name__ == "__main__":
     parameters = tyro.cli(ReissnerMindlinModalParametersTwoMaterials)
-    mlflow.log_params(parameters.to_loggable_dict())
+    with tracking.run(artifact_directory=parameters.output_folder):
+        tracking.log_params(parameters.to_loggable_dict())
 
-    run_modal_analysis_two_materials(params=parameters)
+        run_modal_analysis_two_materials(params=parameters)

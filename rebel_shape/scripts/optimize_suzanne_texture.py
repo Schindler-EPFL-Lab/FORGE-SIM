@@ -10,7 +10,6 @@ from pathlib import Path
 
 import drjit as dr
 import mitsuba as mi
-import mlflow
 import tyro
 
 # This is a hack so that the script work with azure sdkv2.
@@ -21,7 +20,7 @@ sys.path.append("./")
 
 from dataclasses_reverse_cli.reverse_cli import ReverseCli
 
-from rebel_shape import logger
+from rebel_shape import logger, tracking
 from rebel_shape.data_processing.masked_pose_image import MaskedPoseImage
 from rebel_shape.plugin_wrappers.diffuse_bsdf import DiffuseBSDF
 from rebel_shape.plugin_wrappers.prb_integrator import GuidingOptions, PRBIntegrator
@@ -125,7 +124,7 @@ def initialize_scene(
         guiding=GuidingOptions.NONE,
     )
 
-    mlflow.log_param("spp_continuous", base_samples)
+    tracking.log_params({"spp_continuous": base_samples})
 
     # Reference scene initialization
     script_dir = Path(__file__).parent.resolve()
@@ -258,6 +257,7 @@ def optimize_suzanne_texture(params: SuzanneTextureParameters) -> None:
 
 if __name__ == "__main__":
     parameters = tyro.cli(SuzanneTextureParameters)
-    mlflow.log_params(parameters.to_loggable_dict())
+    with tracking.run(artifact_directory=parameters.output_folder):
+        tracking.log_params(parameters.to_loggable_dict())
 
-    optimize_suzanne_texture(params=parameters)
+        optimize_suzanne_texture(params=parameters)

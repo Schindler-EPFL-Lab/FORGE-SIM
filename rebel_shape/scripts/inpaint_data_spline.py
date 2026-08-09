@@ -13,7 +13,6 @@ from pathlib import Path
 import drjit as dr
 import jsonpickle
 import mitsuba as mi
-import mlflow
 import tyro
 
 # This is a hack so that the script work with azure sdkv2. The root folder is _not_
@@ -24,7 +23,7 @@ sys.path.append("./")
 
 from dataclasses_reverse_cli.reverse_cli import ReverseCli
 
-from rebel_shape import logger
+from rebel_shape import logger, tracking
 from rebel_shape.data_processing.masked_pose_image import MaskedPoseImage
 from rebel_shape.data_processing.single_channel_scene_loader import (
     SingleChannelImageSceneLoader,
@@ -65,7 +64,7 @@ class SplineInpaintingParameters(ReverseCli):
     """
     inpainting_images_type: InpaintType
     """What data type is inpainted onto the spline `thermoscenes_scene_path`"""
-    initial_color: float = 0.5
+    initial_color: float = 0.1
     """The initial object color for inpainting"""
     spline_path: Path
     """
@@ -167,18 +166,22 @@ def initialize_scene(
         guiding=GuidingOptions.NONE,
     )
 
-    mlflow.log_param("spp_continuous", continuous_samples)
-    mlflow.log_param("spp_projective", 1)
-    mlflow.log_param("spp_indirect", 1)
+    tracking.log_params(
+        {
+            "spp_continuous": continuous_samples,
+            "spp_projective": 1,
+            "spp_indirect": 1,
+        }
+    )
 
     sampler = Sampler(type=Sampler.Type.INDEPENDENT, sample_count=continuous_samples)
 
     if inpaint_type is InpaintType.THERMAL:
-        loader = SingleChannelImageSceneLoader.thermal_scene(
+        loader = SingleChannelImageSceneLoader.thermal_scene_auto(
             scene_path=thermoscenes_scene_path, sensor_sampler=sampler
         )
     if inpaint_type is InpaintType.WINDOWS:
-        loader = SingleChannelImageSceneLoader.windows_masks_scene(
+        loader = SingleChannelImageSceneLoader.windows_masks_scene_auto(
             scene_path=thermoscenes_scene_path, sensor_sampler=sampler
         )
 
@@ -334,6 +337,7 @@ def inpaint_information(params: SplineInpaintingParameters) -> None:
 
 if __name__ == "__main__":
     parameters = tyro.cli(SplineInpaintingParameters)
-    mlflow.log_params(parameters.to_loggable_dict())
+    with tracking.run(artifact_directory=parameters.output_folder):
+        tracking.log_params(parameters.to_loggable_dict())
 
-    inpaint_information(params=parameters)
+        inpaint_information(params=parameters)

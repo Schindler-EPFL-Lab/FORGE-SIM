@@ -174,6 +174,10 @@ class PropertyOptimizer(abc.ABC):
         If the save files are large, it is simple to save every N-th iteration by
         checking if `(iteration + 1) % N == 0` inside of this method.
 
+        Write everything under `output_directory`. The entry-point script uploads that
+        one directory to the experiment tracker when the run ends, so a file written
+        anywhere else is saved to disk but never recorded as an artifact.
+
         :raises NotImplementedError: if the method was not implemented by a child class.
         """
         raise NotImplementedError(

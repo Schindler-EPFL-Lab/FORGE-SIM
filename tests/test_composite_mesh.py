@@ -5,6 +5,7 @@ import mitsuba as mi
 import numpy as np
 
 from rebel_shape.meshing.composite_mesh_factory import CompositeMeshFactory
+from rebel_shape.meshing.mesh import Mesh
 from rebel_shape.meshing.patch import Patch
 from rebel_shape.meshing.rectangular_mesh import RectangularMesh
 
@@ -51,6 +52,20 @@ class TestCompositeMesh(unittest.TestCase):
             second_patch_side=Patch.Side.LEFT,
         )
         self.composite_mesh = self.composite_factory.build()
+
+    def test_global_mesh_exposes_welded_global_mesh(self):
+        """`global_mesh` returns the welded `Mesh` for the global vertices/faces."""
+        global_mesh = self.composite_mesh.global_mesh
+
+        self.assertIsInstance(global_mesh, Mesh)
+        np.testing.assert_allclose(
+            global_mesh.vertices.numpy(),
+            self.composite_mesh.global_vertices.numpy(),
+        )
+        np.testing.assert_array_equal(
+            global_mesh.faces.numpy(),
+            self.composite_mesh.global_faces.numpy(),
+        )
 
     def test_init(self):
         """Test whether the composite mesh initializes correctly."""

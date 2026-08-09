@@ -10,7 +10,6 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 import mitsuba as mi
-import mlflow
 import tyro
 
 # This is a hack so that the script work with azure sdkv2.
@@ -21,7 +20,7 @@ sys.path.append("./")
 
 from dataclasses_reverse_cli.reverse_cli import ReverseCli
 
-from rebel_shape import logger
+from rebel_shape import logger, tracking
 from rebel_shape.data_processing.masked_pose_image import MaskedPoseImage
 from rebel_shape.plugin_wrappers.diffuse_bsdf import DiffuseBSDF
 from rebel_shape.plugin_wrappers.prb_integrator import GuidingOptions, PRBIntegrator
@@ -125,9 +124,13 @@ def initialize_scene(
         guiding=GuidingOptions.NONE,
     )
 
-    mlflow.log_param("spp_continuous", base_samples)
-    mlflow.log_param("spp_projective", base_samples // 4)
-    mlflow.log_param("spp_indirect", base_samples // 4)
+    tracking.log_params(
+        {
+            "spp_continuous": base_samples,
+            "spp_projective": base_samples // 4,
+            "spp_indirect": base_samples // 4,
+        }
+    )
 
     script_dir = Path(__file__).parent.resolve()
     scene_dict = {
@@ -246,6 +249,7 @@ def optimize_suzanne(params: SuzanneMeshParameters) -> None:
 
 if __name__ == "__main__":
     parameters = tyro.cli(SuzanneMeshParameters)
-    mlflow.log_params(parameters.to_loggable_dict())
+    with tracking.run(artifact_directory=parameters.output_folder):
+        tracking.log_params(parameters.to_loggable_dict())
 
-    optimize_suzanne(params=parameters)
+        optimize_suzanne(params=parameters)

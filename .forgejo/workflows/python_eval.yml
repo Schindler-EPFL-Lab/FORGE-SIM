@@ -48,4 +48,8 @@ jobs:
           uv sync --frozen --extra evaluation --extra foreground-background
 
       - name: Run tests
+        env:
+          # The suite does not reach MLflow anyway; this makes that guaranteed rather
+          # than incidental, so no CI run can write to an experiment store.
+          REBEL_SHAPE_TRACKING: "off"
         run: uv run --frozen python -m unittest discover tests

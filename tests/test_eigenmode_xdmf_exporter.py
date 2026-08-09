@@ -1,15 +1,27 @@
+# `h5py` is declared in `pyproject.toml` but absent from `uv.lock`, which cannot be
+# regenerated until the numpy conflict between the `extraction` and `fast-cholesky`
+# extras is declared. CI installs from the lock, so it has no `h5py` and this module
+# would fail to import, taking the whole suite down with it. Guarding the import keeps
+# the rest of the suite runnable there; locally, where `h5py` is installed, these tests
+# run normally. Remove the guard once the lock carries `h5py`.
+try:
+    H5PY_IMPORTED = True
+    import h5py
+
+    from rebel_shape.isogeometric_analysis.eigenmode_xdmf_exporter import (
+        EigenmodeXDMFExporter,
+    )
+except ImportError:
+    H5PY_IMPORTED = False
+
 import tempfile
 import unittest
 import xml.etree.ElementTree as ElementTree
 from pathlib import Path
 
-import h5py
 import mitsuba as mi
 import numpy as np
 
-from rebel_shape.isogeometric_analysis.eigenmode_xdmf_exporter import (
-    EigenmodeXDMFExporter,
-)
 from rebel_shape.isogeometric_analysis.reissner_mindlin_modal_problem import (
     ReissnerMindlinModalProblem,
 )
@@ -26,6 +38,7 @@ from rebel_shape.splines.iga_spline_patch import IGASplinePatch
 DOFS_PER_CONTROL_POINT = ReissnerMindlinModalProblem.DOFS_PER_CONTROL_POINT
 
 
+@unittest.skipUnless(H5PY_IMPORTED, "h5py is not installed.")
 class TestEigenmodeXDMFExporter(unittest.TestCase):
     """
     Contract tests for the eigenmode XDMF/HDF5 export.

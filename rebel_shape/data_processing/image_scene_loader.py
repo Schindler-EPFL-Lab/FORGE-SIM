@@ -1,13 +1,26 @@
+from collections.abc import Generator
 from pathlib import Path
-from typing import Generator
 
 import drjit as dr
 import mitsuba as mi
 
 from rebel_shape.data_processing.masked_pose_image import MaskedPoseImage
 from rebel_shape.data_processing.pose_scene_loader import PoseSceneLoader
+from rebel_shape.data_processing.vggt_pose_scene_loader import VGGTPoseSceneLoader
 from rebel_shape.plugin_wrappers.perspective_camera import PerspectiveCamera
 from rebel_shape.plugin_wrappers.sampler import Sampler
+
+_COLOUR_WITH_MASK_FORMATS = frozenset(
+    {mi.Bitmap.PixelFormat.RGBA, mi.Bitmap.PixelFormat.XYZA}
+)
+"""
+Source pixel formats a scene image may have: three colour channels plus the alpha
+channel that carries the object mask.
+
+`has_alpha()` alone is not enough, because it also holds for `PixelFormat.YA`. A
+grey+alpha source survives the conversion to RGBA -- the grey value is replicated into
+R, G and B -- and would then be optimized against as if it were a colour photograph.
+"""
 
 
 class ImageSceneLoader:
@@ -28,33 +41,31 @@ class ImageSceneLoader:
     def __init__(
         self,
         scene_path: Path,
-        sensor_sampler: Sampler = Sampler(),
+        pose_scene_loader: PoseSceneLoader,
         use_foreground_masks: bool = False,
-        align_cameras_xz: bool = True,
         environment_map_path: Path | None = None,
         output_dir: Path | None = None,
         spp: int = 16,
     ) -> None:
         """
         Loads the ThermoScenes images, foreground masks, and cameras poses from the
-        directory `scene_path`. Optionally aligns camera poses so they lie on the
-        xy-plane if `align_cameras_xz` if `True`. Each camera has `sensor_samples` for
-        rays sampling. Composites RGB images with the background rendered from
+        directory `scene_path`. Composites RGB images with the background rendered from
         `environment_map_path` using `spp` samples per pixel. Choosing a higher value
         than the default (`16`) has limited benefit. If the path is not provided, a
         solid white background is used. Optionally stores the composited images in
         `output_dir` if provided.
 
+        The camera pixel format (`RGB` vs `LUMINANCE` for mono variants) is taken
+        from `pose_scene_loader`; configure it there before passing in.
+
         :raises FileNotFoundError: If the scene path does not exist.
-        :raises RuntimeError: If the presented images does not have object masks as
-            alpha channels.
+        :raises RuntimeError: If a presented image is not a colour image carrying its
+            object mask in an alpha channel.
         """
 
-        self._pose_loader = PoseSceneLoader(
-            scene_path=scene_path,
-            sensor_sampler=sensor_sampler,
-            align_cameras_xz=align_cameras_xz,
-        )
+        self._pose_loader = pose_scene_loader
+        self._spp = spp
+        self._use_foreground_masks = use_foreground_masks
 
         self._train_images: list[MaskedPoseImage] = []
         self._eval_images: list[MaskedPoseImage] = []
@@ -63,6 +74,8 @@ class ImageSceneLoader:
 
         # Iterate through frames from transform_data
         for frame in self._pose_loader._transform_data.get("frames", []):
+            frame = self._pose_loader.get_frame(frame=frame)
+
             rgb_image_filename = Path(frame["file_path"])
             image_rgb_path = self._pose_loader._scene_path / rgb_image_filename
 
@@ -83,22 +96,40 @@ class ImageSceneLoader:
                     + "transform.json is missing in dataset."
                 )
 
+            # The alpha channel carries the object mask. `convert()` synthesises an
+            # opaque alpha for a source that has none and replicates a grey value into
+            # R, G and B, so both an absent mask and a greyscale source can only be
+            # detected on the source bitmap -- the converted image always reports four
+            # colour channels.
+            image_bitmap = mi.Bitmap(str(image_rgb_path))
+            if image_bitmap.pixel_format() not in _COLOUR_WITH_MASK_FORMATS:
+                raise RuntimeError(
+                    f"Object mask image is not found in {image_rgb_path}. Its pixel "
+                    f"format is {image_bitmap.pixel_format().name}, which is not a "
+                    "colour format carrying an alpha channel to use as the object "
+                    "mask."
+                )
+
             mitsuba_image_rgba = mi.TensorXf(
-                mi.Bitmap(str(image_rgb_path)).convert(
-                    component_format=mi.Struct.Type.Float32, srgb_gamma=True
+                image_bitmap.convert(
+                    pixel_format=mi.Bitmap.PixelFormat.RGBA,
+                    component_format=mi.Struct.Type.Float32,
+                    srgb_gamma=True,
                 )
             )
-            if mitsuba_image_rgba.shape[-1] != 4:
-                raise RuntimeError(
-                    f"Object mask image is not found in {image_rgb_path}"
-                )
 
             mitsuba_foreground_mask = mi.TensorXf(
                 dr.zeros_like(mitsuba_image_rgba[:, :, 0:1])
             )
             if foreground_mask_path is not None:
+                # Linear 8-bit grayscale: Mitsuba auto-tags an 8-bit PNG/JPEG as sRGB
+                # on bit depth alone, so `srgb_gamma=False` on `convert()` alone still
+                # applies a bogus sRGB->linear decode (byte 128 -> 0.216 instead of
+                # 0.502). Mark the source linear first so values are read verbatim.
+                foreground_mask_bitmap = mi.Bitmap(str(foreground_mask_path))
+                foreground_mask_bitmap.set_srgb_gamma(False)
                 mitsuba_foreground_mask = mi.TensorXf(
-                    mi.Bitmap(str(foreground_mask_path)).convert(
+                    foreground_mask_bitmap.convert(
                         component_format=mi.Struct.Type.Float32, srgb_gamma=False
                     )
                 )
@@ -128,36 +159,137 @@ class ImageSceneLoader:
                     "it is a training ('train') or evaluation ('eval') image"
                 )
 
-            # render the background and apply it for the image
-            background = mi.render(
-                scene=background_scene, sensor=camera.mitsuba_sensor, spp=spp
-            )
-
-            image = mitsuba_image_rgba[:, :, 0:3]
             object_mask = mitsuba_image_rgba[:, :, 3:4]
-            composited_image = image * object_mask + background * (1.0 - object_mask)
+
+            composited_image_masked_pose = self._generate_image(
+                background_scene=background_scene,
+                camera=camera,
+                mitsuba_foreground_mask=mitsuba_foreground_mask,
+                mitsuba_image_rgba=mitsuba_image_rgba,
+                object_mask=object_mask,
+            )
 
             if output_dir is not None:
-                bitmap = mi.Bitmap(composited_image)
+                bitmap = mi.Bitmap(composited_image_masked_pose.original_image)
                 filename = f"composited_frame_{Path(rgb_image_filename).stem}.exr"
                 bitmap.write(str(output_dir / filename))
-
-            # optionally apply the foreground mask
-            if use_foreground_masks:
-                used_foreground_mask = 1.0 - mitsuba_foreground_mask
-            else:
-                used_foreground_mask = dr.ones_like(mitsuba_foreground_mask)
-            composited_image_masked_pose = MaskedPoseImage(
-                image=composited_image,
-                camera=camera,
-                mask=used_foreground_mask,
-            )
 
             # Separate into train and eval based on the filename
             if is_train:
                 self._train_images.append(composited_image_masked_pose)
             else:
                 self._eval_images.append(composited_image_masked_pose)
+
+    def _generate_image(
+        self,
+        background_scene: "mi.Scene",
+        camera: PerspectiveCamera,
+        mitsuba_image_rgba: "mi.TensorXf",
+        object_mask: "mi.TensorXf",
+        mitsuba_foreground_mask: "mi.TensorXf",
+    ) -> MaskedPoseImage:
+        # render the background and apply it for the image
+        background = mi.render(
+            scene=background_scene, sensor=camera.mitsuba_sensor, spp=self._spp
+        )
+
+        image = mitsuba_image_rgba[:, :, 0:3]
+        composited_image = image * object_mask + background * (1.0 - object_mask)
+
+        # optionally apply the foreground mask
+        if self._use_foreground_masks:
+            used_foreground_mask = 1.0 - mitsuba_foreground_mask
+        else:
+            used_foreground_mask = dr.ones_like(mitsuba_foreground_mask)
+        return MaskedPoseImage(
+            image=composited_image,
+            camera=camera,
+            mask=used_foreground_mask,
+        )
+
+    @classmethod
+    def from_thermoscene(
+        cls,
+        scene_path: Path,
+        sensor_sampler: Sampler = Sampler(),
+        use_foreground_masks: bool = False,
+        align_cameras_xz: bool = True,
+        environment_map_path: Path | None = None,
+        output_dir: Path | None = None,
+        spp: int = 16,
+        pixel_format: PerspectiveCamera.PixelFormat = PerspectiveCamera.PixelFormat.RGB,
+    ) -> "ImageSceneLoader":
+        """
+        Loads the ThermoScenes images, foreground masks, and cameras poses from the
+        directory `scene_path`. Optionally aligns camera poses so they lie on the
+        xz-plane if `align_cameras_xz` is `True`. Each camera has `sensor_samples` for
+        rays sampling. Composites RGB images with the background rendered from
+        `environment_map_path` using `spp` samples per pixel. Choosing a higher value
+        than the default (`16`) has limited benefit. If the path is not provided, a
+        solid white background is used. Optionally stores the composited images in
+        `output_dir` if provided.
+
+        :raises FileNotFoundError: If the scene path does not exist.
+        :raises RuntimeError: If a presented image is not a colour image carrying its
+            object mask in an alpha channel.
+        """
+        pose_loader = PoseSceneLoader(
+            scene_path=scene_path,
+            sensor_sampler=sensor_sampler,
+            align_cameras_xz=align_cameras_xz,
+            pixel_format=pixel_format,
+        )
+
+        return cls(
+            scene_path,
+            pose_loader,
+            use_foreground_masks,
+            environment_map_path,
+            output_dir,
+            spp,
+        )
+
+    @classmethod
+    def from_vggt(
+        cls,
+        scene_path: Path,
+        sensor_sampler: Sampler = Sampler(),
+        use_foreground_masks: bool = False,
+        align_cameras_xz: bool = True,
+        environment_map_path: Path | None = None,
+        output_dir: Path | None = None,
+        spp: int = 16,
+        pixel_format: PerspectiveCamera.PixelFormat = PerspectiveCamera.PixelFormat.RGB,
+    ) -> "ImageSceneLoader":
+        """
+        Loads the ThermoScenes images, foreground masks, and cameras poses from the
+        directory `scene_path`. Optionally aligns camera poses so they lie on the
+        xz-plane if `align_cameras_xz` is `True`. Each camera has `sensor_samples` for
+        rays sampling. Composites RGB images with the background rendered from
+        `environment_map_path` using `spp` samples per pixel. Choosing a higher value
+        than the default (`16`) has limited benefit. If the path is not provided, a
+        solid white background is used. Optionally stores the composited images in
+        `output_dir` if provided.
+
+        :raises FileNotFoundError: If the scene path does not exist.
+        :raises RuntimeError: If a presented image is not a colour image carrying its
+            object mask in an alpha channel.
+        """
+        pose_loader = VGGTPoseSceneLoader(
+            scene_path=scene_path,
+            sensor_sampler=sensor_sampler,
+            align_cameras_xz=align_cameras_xz,
+            pixel_format=pixel_format,
+        )
+
+        return cls(
+            scene_path,
+            pose_loader,
+            use_foreground_masks,
+            environment_map_path,
+            output_dir,
+            spp,
+        )
 
     @staticmethod
     def _create_background_scene(

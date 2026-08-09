@@ -125,7 +125,7 @@ def eval_buildnet3d(params: EvalNVSParametersBase) -> None:
 
     device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
 
-    loader = ImageSceneLoader(
+    loader = ImageSceneLoader.from_thermoscene(
         scene_path=params.thermoscenes_scene_path,
         environment_map_path=params.environment_map_path,
         use_foreground_masks=True,

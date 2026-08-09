@@ -48,6 +48,13 @@ class TestMitsubaToTorch(unittest.TestCase):
             ]
         )
 
-        torch_image_converted = mitsuba_to_torch(mitsuba_image)
+        # Pinned to the CPU because the expected tensor above is built there.
+        # `mitsuba_to_torch` defaults to CUDA wherever it is available, so leaving
+        # the device to that default makes this comparison pass on a machine with
+        # no GPU and fail on one with a GPU, testing the host rather than the
+        # conversion.
+        torch_image_converted = mitsuba_to_torch(
+            mitsuba_image, device=torch.device("cpu")
+        )
 
         self.assertTrue(torch.allclose(torch_image_real, torch_image_converted))

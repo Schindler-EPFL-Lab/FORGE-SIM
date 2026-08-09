@@ -2,10 +2,14 @@ import json
 import subprocess
 from pathlib import Path
 
-import numpy as np
 import tyro
 
 from rebel_shape import logger
+from rebel_shape.scripts.evaluation.eval_all_common import prepare_metrics_output_folder
+from rebel_shape.scripts.render_eval_images_mesh import (
+    discover_mesh_textures,
+    face_key,
+)
 
 
 def eval_all_buildnet3d_large_steps(
@@ -29,6 +33,11 @@ def eval_all_buildnet3d_large_steps(
           match scenes in data/,
         - data/BuildNet3DCorrectedMeshes/ containing ground truth meshes.
 
+    Each scene's reconstruction folder holds one reconstruction, whose mesh and texture
+    `render_eval_images_mesh.py` discovers for itself -- so the folder is handed over
+    whole, and each scene is evaluated once. The scene's metrics are written to
+    `validation_inputs_root`/`output_folder_name`/<scene>_metrics.json.
+
     :raise:
         FileNotFoundError if:
             - The `validation_inputs_root`/data does not exist,
@@ -36,9 +45,15 @@ def eval_all_buildnet3d_large_steps(
             - The `validation_inputs_root`/data/BuildNet3DCorrectedMeshes/ does not
             exist.
             - The `environment_map_path` does not exist,
-        ValueError if `scenes_ids` is not a subset of {"1", "2", "3", "4"}.
-        RuntimeError if the number of found meshes differs from the number of
-        found textures.
+            - A scene's reconstruction folder holds no mesh (from
+            `discover_mesh_textures`),
+        ValueError if `scenes_ids` is not a subset of {"1", "2", "3", "4"}, or a
+        scene's reconstruction folder is ambiguous (from `discover_mesh_textures`).
+        RuntimeError if a scene's reconstruction folder holds cube-face patches
+        rather than a single mesh, which the Chamfer step cannot read.
+        FileExistsError if a scene's output folder already holds the metrics of an
+        earlier run.
+        subprocess.CalledProcessError if a render or evaluation subprocess fails.
     """
 
     dataset_root = validation_inputs_root / "data"
@@ -87,85 +102,78 @@ def eval_all_buildnet3d_large_steps(
     for scene_id in scenes_ids:
         scene_name_data = mapping_to_data[scene_id]
         ground_truth_mesh_name = mapping_to_meshes[scene_id]
-        meshes_paths = list((large_steps_root / scene_name_data).glob("*.ply"))
-        meshes_paths = sorted(meshes_paths)
-        textures_paths = list((large_steps_root / scene_name_data).glob("*.exr"))
-        textures_paths = sorted(textures_paths)
-        if len(meshes_paths) != len(textures_paths):
-            raise RuntimeError(
-                "The number of textures and meshes must be the same but found "
-                + f"{len(meshes_paths)} meshes {meshes_paths} and {len(textures_paths)}"
-                + f" textures {textures_paths}."
-            )
-
+        result_path = large_steps_root / scene_name_data
         thermoscenes_path = dataset_root / scene_name_data / scene_name_data
 
-        aggregated_metrics: dict[str, list[float]] = {}
-        for idx, mesh_path, texture_path in zip(
-            range(len(meshes_paths)), meshes_paths, textures_paths
-        ):
-            logger.info(f"Evaluating {mesh_path} {texture_path}")
-            output_folder = output_root / f"{scene_name_data}_{idx}"
-            output_folder.mkdir(exist_ok=True)
-            output_images_folder = output_folder / "images"
-            output_images_folder.mkdir(exist_ok=True, parents=True)
+        # The Chamfer step reads one mesh file, so resolve it here rather than in the
+        # subprocess: a composite has no single file to hand it and must be caught
+        # before anything is rendered. The test is whether any key names a cube face,
+        # not how many keys there are -- a run that saved one patch and then died
+        # leaves a single key that is still one sixth of a surface, and measuring that
+        # against the whole building would report a wrong number rather than fail.
+        mesh_textures = discover_mesh_textures(result_path)
+        patch_keys = [key for key in mesh_textures if face_key(key) is not None]
+        if patch_keys:
+            raise RuntimeError(
+                f"{result_path} holds the cube-face patches of a composite "
+                f"({', '.join(patch_keys)}), but `eval_buildnet3d_mesh.py` measures "
+                "the Chamfer distance of a single mesh file. Weld the patches and "
+                "evaluate with `stitch_and_eval_cubed_sphere_mesh.py`, which takes the "
+                "patch directory instead."
+            )
+        mesh_path, _ = next(iter(mesh_textures.values()))
 
-            # render reconstruction from eval poses
-            cmd = [
-                "python3",
-                "rebel_shape/scripts/render_eval_images_mesh.py",
-                "--thermoscenes-scene-path",
-                str(thermoscenes_path),
-                "--environment-map-path",
-                str(environment_map_path),
-                "--mesh-path",
-                str(mesh_path),
-                "--texture-path",
-                str(texture_path),
-                "--output-folder",
-                str(output_images_folder),
-                "--no-use-gpu",
-            ]
-            logger.info(f"Running: {' '.join(cmd)}")
-            subprocess.run(cmd)
+        logger.info(f"Evaluating the reconstruction in {result_path}")
+        output_folder = output_root / scene_name_data
+        prepare_metrics_output_folder(output_folder, "eval_nvs.json", "eval_shape.json")
+        output_images_folder = output_folder / "images"
+        output_images_folder.mkdir(exist_ok=True, parents=True)
 
-            # calculate NVS and Chamfer distance metrics
-            cmd = [
-                "python3",
-                "rebel_shape/scripts/evaluation/eval_buildnet3d_mesh.py",
-                "--thermoscenes-scene-path",
-                str(thermoscenes_path),
-                "--environment-map-path",
-                str(environment_map_path),
-                "--rendered-images-folder",
-                str(output_images_folder),
-                "--mesh-path",
-                str(mesh_path),
-                "--reference-shape-path",
-                str(ground_truth_meshes_root / f"{ground_truth_mesh_name}.ply"),
-                "--output-folder",
-                str(output_folder),
-            ]
-            logger.info(f"Running: {' '.join(cmd)}")
-            subprocess.run(cmd)
+        # render reconstruction from eval poses
+        cmd = [
+            "python3",
+            "rebel_shape/scripts/render_eval_images_mesh.py",
+            "--scene-path",
+            str(thermoscenes_path),
+            "--environment-map-path",
+            str(environment_map_path),
+            "--result-path",
+            str(result_path),
+            "--output-folder",
+            str(output_images_folder),
+            "--no-use-gpu",
+        ]
+        logger.info(f"Running: {' '.join(cmd)}")
+        subprocess.run(cmd, check=True)
 
-            current_metrics: dict[str, float] = {}
-            with open(output_folder / "eval_nvs.json") as f:
-                current_metrics.update(json.load(f))
-            with open(output_folder / "eval_shape.json") as f:
-                current_metrics.update(json.load(f))
+        # calculate NVS and Chamfer distance metrics
+        cmd = [
+            "python3",
+            "rebel_shape/scripts/evaluation/eval_buildnet3d_mesh.py",
+            "--thermoscenes-scene-path",
+            str(thermoscenes_path),
+            "--environment-map-path",
+            str(environment_map_path),
+            "--rendered-images-folder",
+            str(output_images_folder),
+            "--mesh-path",
+            str(mesh_path),
+            "--reference-shape-path",
+            str(ground_truth_meshes_root / f"{ground_truth_mesh_name}.ply"),
+            "--output-folder",
+            str(output_folder),
+        ]
+        logger.info(f"Running: {' '.join(cmd)}")
+        subprocess.run(cmd, check=True)
 
-            for k in current_metrics:
-                if k not in aggregated_metrics:
-                    aggregated_metrics[k] = []
-                aggregated_metrics[k].append(current_metrics[k])
+        metrics: dict[str, float] = {}
+        with open(output_folder / "eval_nvs.json") as f:
+            metrics.update(json.load(f))
+        with open(output_folder / "eval_shape.json") as f:
+            metrics.update(json.load(f))
 
-        mean_aggregated: dict[str, float] = {}
-        for k in aggregated_metrics:
-            mean_aggregated[k] = np.mean(aggregated_metrics[k]).item()
-
-        with open(output_root / f"{scene_name_data}_aggregated.json", "w") as f:
-            json.dump(mean_aggregated, f, indent=4)
+        with open(output_root / f"{scene_name_data}_metrics.json", "w") as f:
+            json.dump(metrics, f, indent=4)
 
 
 if __name__ == "__main__":

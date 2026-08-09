@@ -6,6 +6,7 @@ import mitsuba as mi
 import numpy as np
 from OCP.Geom import Geom_BSplineSurface
 
+from rebel_shape import logger as rebel_shape_logger
 from rebel_shape.splines.bspline import BSpline
 from rebel_shape.splines.bspline_patch import BSplinePatch
 
@@ -21,57 +22,33 @@ class TestBSplinePatch(unittest.TestCase):
         cls.bezier_1_spline = BSpline(
             knot_vector=cls.bezier_1_knots, degree=cls.bezier_1_degree
         )
-        cls.bezier_1_control_points = mi.TensorXf(
-            np.array(
-                [
-                    [0.0, 0.0, 0.0],
-                    [1.0, 0.0, 0.0],
-                    [0.0, 1.0, 0.0],
-                    [1.0, 1.0, 1.0],
-                ]
-            )
-        )
-        cls.bezier_1_surface = BSplinePatch(
-            name="bezier_1_surface",
-            u_spline=cls.bezier_1_spline,
-            v_spline=cls.bezier_1_spline,
-            control_points=cls.bezier_1_control_points,
-        )
+        cls._bezier_1_control_points_data = [
+            [0.0, 0.0, 0.0],
+            [1.0, 0.0, 0.0],
+            [0.0, 1.0, 0.0],
+            [1.0, 1.0, 1.0],
+        ]
 
-        cls.parametric_coords = mi.TensorXf(
-            np.array(
-                [
-                    [0.0, 0.0],  # Bottom-left
-                    [1.0, 0.0],  # Bottom-right
-                    [0.0, 1.0],  # Top-left
-                    [1.0, 1.0],  # Top-right
-                    [0.5, 0.5],  # Center
-                ]
-            )
-        )
+        cls._parametric_coords_data = [
+            [0.0, 0.0],  # Bottom-left
+            [1.0, 0.0],  # Bottom-right
+            [0.0, 1.0],  # Top-left
+            [1.0, 1.0],  # Top-right
+            [0.5, 0.5],  # Center
+        ]
 
         cls.bezier_2_u_knots = [0.0, 0.0, 0.0, 1.0, 1.0, 1.0]
         cls.bezier_2_v_knots = [0.0, 0.0, 1.0, 1.0]
-        cls.bezier_2_control_points = mi.TensorXf(
-            np.array(
-                [
-                    [0.0, 0.0, 0.0],
-                    [1.0, 0.0, 1.0],
-                    [2.0, 0.0, 0.0],
-                    [0.0, 1.0, 0.0],
-                    [1.0, 1.0, 1.0],
-                    [2.0, 1.0, 0.0],
-                ]
-            )
-        )
+        cls._bezier_2_control_points_data = [
+            [0.0, 0.0, 0.0],
+            [1.0, 0.0, 1.0],
+            [2.0, 0.0, 0.0],
+            [0.0, 1.0, 0.0],
+            [1.0, 1.0, 1.0],
+            [2.0, 1.0, 0.0],
+        ]
         cls.bezier_2_u_spline = BSpline(knot_vector=cls.bezier_2_u_knots, degree=2)
         cls.bezier_2_v_spline = BSpline(knot_vector=cls.bezier_2_v_knots, degree=1)
-        cls.bezier_2_surface = BSplinePatch(
-            name="bezier_2_surface",
-            u_spline=cls.bezier_2_u_spline,
-            v_spline=cls.bezier_2_v_spline,
-            control_points=cls.bezier_2_control_points,
-        )
 
         cls.samples_per_dir = 19
         """
@@ -82,29 +59,19 @@ class TestBSplinePatch(unittest.TestCase):
 
         cls.bezier_3_u_knots = [0.0, 0.0, 0.0, 1.0, 1.0, 1.0]
         cls.bezier_3_v_knots = [0.0, 0.0, 0.0, 1.0, 1.0, 1.0]
-        cls.bezier_3_control_points = mi.TensorXf(
-            np.array(
-                [
-                    [0.0, 0.0, 0.0],
-                    [1.0, 0.0, 1.0],
-                    [2.0, 0.0, 0.0],
-                    [0.0, 0.0, 1.0],
-                    [1.0, 0.5, 0.0],
-                    [2.0, 1.0, 1.0],
-                    [0.0, 1.0, 0.0],
-                    [1.0, 1.0, 1.0],
-                    [2.0, 1.0, 0.0],
-                ]
-            )
-        )
+        cls._bezier_3_control_points_data = [
+            [0.0, 0.0, 0.0],
+            [1.0, 0.0, 1.0],
+            [2.0, 0.0, 0.0],
+            [0.0, 0.0, 1.0],
+            [1.0, 0.5, 0.0],
+            [2.0, 1.0, 1.0],
+            [0.0, 1.0, 0.0],
+            [1.0, 1.0, 1.0],
+            [2.0, 1.0, 0.0],
+        ]
         cls.bezier_3_u_spline = BSpline(knot_vector=cls.bezier_3_u_knots, degree=2)
         cls.bezier_3_v_spline = BSpline(knot_vector=cls.bezier_3_v_knots, degree=2)
-        cls.bezier_3_surface = BSplinePatch(
-            name="bezier_3_surface",
-            u_spline=cls.bezier_3_u_spline,
-            v_spline=cls.bezier_3_v_spline,
-            control_points=cls.bezier_3_control_points,
-        )
 
         cls.autodiff_test_cases_dict = [
             {
@@ -226,6 +193,44 @@ class TestBSplinePatch(unittest.TestCase):
                 "v_insertion_knots": [0.3, 0.5, 0.7],
             },
         ]
+
+    def setUp(self) -> None:
+        # Control-point tensors and the surfaces built from them are
+        # constructed per test rather than cached on the class: a Mitsuba
+        # object that outlives the test which built it aborts a *later,
+        # unrelated* test inside Dr.Jit's thread pool ("Assertion failed ...
+        # queue.cpp: remain == 1").
+        self.bezier_1_control_points = mi.TensorXf(
+            np.array(self._bezier_1_control_points_data)
+        )
+        self.bezier_1_surface = BSplinePatch(
+            name="bezier_1_surface",
+            u_spline=self.bezier_1_spline,
+            v_spline=self.bezier_1_spline,
+            control_points=self.bezier_1_control_points,
+        )
+
+        self.parametric_coords = mi.TensorXf(np.array(self._parametric_coords_data))
+
+        self.bezier_2_control_points = mi.TensorXf(
+            np.array(self._bezier_2_control_points_data)
+        )
+        self.bezier_2_surface = BSplinePatch(
+            name="bezier_2_surface",
+            u_spline=self.bezier_2_u_spline,
+            v_spline=self.bezier_2_v_spline,
+            control_points=self.bezier_2_control_points,
+        )
+
+        self.bezier_3_control_points = mi.TensorXf(
+            np.array(self._bezier_3_control_points_data)
+        )
+        self.bezier_3_surface = BSplinePatch(
+            name="bezier_3_surface",
+            u_spline=self.bezier_3_u_spline,
+            v_spline=self.bezier_3_v_spline,
+            control_points=self.bezier_3_control_points,
+        )
 
     def test_basic_properties(self):
         """Tests whether the basic initialization is correct."""
@@ -497,6 +502,85 @@ class TestBSplinePatch(unittest.TestCase):
         )
 
         np.testing.assert_array_almost_equal(normals.numpy(), expected_normals)
+
+    @staticmethod
+    def _tilted_plane_patch(scale: float) -> BSplinePatch:
+        """
+        A degree-1 (bilinear) patch whose control points describe a tilted flat
+        plane, uniformly scaled by `scale`. `|du x dv|` at the domain center is
+        `scale ** 2 * sqrt(2)`, so `scale` alone controls how close the patch
+        sits to `evaluate_normals`'s degeneracy threshold. The plane is tilted
+        (not axis-aligned) so its true normal, `(0, -1, 1) / sqrt(2)`, cannot be
+        mistaken for the `(0, 0, 1)` degenerate fallback.
+        """
+        knots = [0.0, 0.0, 1.0, 1.0]
+        spline = BSpline(knot_vector=knots, degree=1)
+        control_points = np.array(
+            [
+                [0.0, 0.0, 0.0],
+                [1.0, 0.0, 0.0],
+                [0.0, 1.0, 1.0],
+                [1.0, 1.0, 1.0],
+            ]
+        )
+        return BSplinePatch(
+            name="tilted_plane",
+            u_spline=spline,
+            v_spline=spline,
+            control_points=mi.TensorXf(control_points * scale),
+        )
+
+    def test_evaluate_normals_below_tolerance_uses_unit_z_fallback(self):
+        """
+        Regression test: `evaluate_normals` treats `|du x dv| <= ZERO_TOL ** 2`
+        as numerically degenerate (colinear or vanishing derivatives). Below
+        that threshold it must return the documented `(0, 0, 1)` fallback
+        instead of dividing a near-zero cross product by its own near-zero
+        magnitude, and it must warn so the caller can see their
+        parameterization or scale collapsed.
+        """
+        # scale ** 2 * sqrt(2) ~= 1.4e-14, far below ZERO_TOL ** 2 = 1e-12.
+        patch = self._tilted_plane_patch(scale=1e-7)
+        uv = mi.TensorXf(np.array([[0.5, 0.5]]))
+
+        with self.assertLogs(rebel_shape_logger, level="WARNING") as captured:
+            normals = patch.evaluate_normals(parametric_coords=uv)
+
+        np.testing.assert_array_equal(normals.numpy(), np.array([[0.0, 0.0, 1.0]]))
+        self.assertTrue(
+            any("fallback" in message for message in captured.output),
+            captured.output,
+        )
+
+    def test_evaluate_normals_just_above_tolerance_is_unit_length_not_fallback(self):
+        """
+        A cross product a factor of two above the `ZERO_TOL ** 2` threshold must
+        be treated as valid: normalized to unit length from the real geometry
+        (not the `(0, 0, 1)` fallback), and without a degeneracy warning.
+
+        Together with `test_evaluate_normals_below_tolerance_uses_unit_z_fallback`
+        this brackets the threshold's *magnitude*: `2 * ZERO_TOL ** 2` is six
+        orders of magnitude below `ZERO_TOL`, so comparing against `ZERO_TOL`
+        itself -- the natural mix-up, since the cross product has units of
+        (length)^2 while `ZERO_TOL` is a length -- sends this case to the
+        fallback and fails here. It does not pin the comparison as `>` rather
+        than `>=`: those differ only for a magnitude bitwise equal to the
+        threshold, which no float32 evaluation chain can be steered onto
+        reproducibly, and which the threshold's meaning makes immaterial anyway.
+        """
+        # scale chosen so |du x dv| = 2 * ZERO_TOL ** 2, i.e. just inside the
+        # valid region.
+        scale = float(np.sqrt(2.0 * BSpline.ZERO_TOL**2 / np.sqrt(2.0)))
+        patch = self._tilted_plane_patch(scale=scale)
+        uv = mi.TensorXf(np.array([[0.5, 0.5]]))
+
+        with self.assertNoLogs(rebel_shape_logger, level="WARNING"):
+            normals = patch.evaluate_normals(parametric_coords=uv)
+
+        normal = normals.numpy()[0]
+        self.assertAlmostEqual(float(np.linalg.norm(normal)), 1.0, places=5)
+        expected_direction = np.array([0.0, -1.0, 1.0]) / np.sqrt(2.0)
+        np.testing.assert_allclose(normal, expected_direction, rtol=0, atol=1e-4)
 
     def test_first_derivative_autodiff(self):
         for i, case in enumerate(self.autodiff_test_cases_dict):

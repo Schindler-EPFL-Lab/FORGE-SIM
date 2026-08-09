@@ -7,7 +7,6 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 import mitsuba as mi
-import mlflow
 import tyro
 
 # This is a hack so that the script work with azure sdkv2.
@@ -18,7 +17,7 @@ sys.path.append("../")
 
 from dataclasses_reverse_cli.reverse_cli import ReverseCli
 
-from rebel_shape import logger
+from rebel_shape import logger, tracking
 from rebel_shape.scripts.configs.structural_material_config import (
     StructuralMaterialConfig,
 )
@@ -110,9 +109,7 @@ class ReissnerMindlinModalParameters(ReverseCli):
     Displacement is normalized and then scaled by
     scale_factor * smallest_bbox_extent."""
 
-    material_config: StructuralMaterialConfig = field(
-        default_factory=car_body_material
-    )
+    material_config: StructuralMaterialConfig = field(default_factory=car_body_material)
     """
     Structural material configuration. Defaults to `car_body_material`; the other
     presets in this module (`sphere_verification_material`, `concrete_shell_material`,
@@ -218,6 +215,7 @@ def run_modal_analysis(params: ReissnerMindlinModalParameters) -> None:
 
 if __name__ == "__main__":
     parameters = tyro.cli(ReissnerMindlinModalParameters)
-    mlflow.log_params(parameters.to_loggable_dict())
+    with tracking.run(artifact_directory=parameters.output_folder):
+        tracking.log_params(parameters.to_loggable_dict())
 
-    run_modal_analysis(params=parameters)
+        run_modal_analysis(params=parameters)

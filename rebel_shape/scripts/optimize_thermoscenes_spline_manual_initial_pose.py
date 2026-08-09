@@ -3,13 +3,13 @@ Optimizes a ThermoScenes scene represented as a multi-patch B-spline surface.
 Performs shape, and texture optimizationm the initial pose is determined manually
 """
 
+import datetime
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 
 import drjit as dr
 import mitsuba as mi
-import mlflow
 import tyro
 
 # This is a hack so that the script work with azure sdkv2.
@@ -21,7 +21,7 @@ sys.path.append("./")
 
 from dataclasses_reverse_cli.reverse_cli import ReverseCli
 
-from rebel_shape import logger
+from rebel_shape import logger, tracking
 from rebel_shape.data_processing.image_scene_loader import ImageSceneLoader
 from rebel_shape.data_processing.manual_initialization import (
     load_bounding_bbox_transforms,
@@ -52,7 +52,7 @@ from rebel_shape.splines.cube_initialization import cubed_sphere
 
 @dataclass(kw_only=True)
 class ThermoSceneSplineOptimizationParameters(ReverseCli):
-    thermoscenes_scene_path: Path
+    scene_path: Path
     """
     Path to the ThermoScenes scene that is optimized. Assumes the foreground
     has been extracted.
@@ -197,13 +197,17 @@ def initialize_scene(
         guiding=GuidingOptions.NONE,
     )
 
-    mlflow.log_param("spp_continuous", continuous_samples)
-    mlflow.log_param("spp_projective", visibility_samples)
-    mlflow.log_param("spp_indirect", visibility_samples)
+    tracking.log_params(
+        {
+            "spp_continuous": continuous_samples,
+            "spp_projective": visibility_samples,
+            "spp_indirect": visibility_samples,
+        }
+    )
 
     sampler = Sampler(type=Sampler.Type.ORTHOGONAL, sample_count=continuous_samples)
 
-    loader = ImageSceneLoader(
+    loader = ImageSceneLoader.from_thermoscene(
         scene_path=thermoscenes_scene_path,
         environment_map_path=envmap_path,
         spp=4,
@@ -264,7 +268,7 @@ def optimize_thermoscenes_scene(
     params: ThermoSceneSplineOptimizationParameters,
 ) -> None:
     """
-    Performs spline optimization on a scene specified by `thermoscenes_scene_path`.
+    Performs spline optimization on a scene specified by `params.scene_path`.
 
     The initial guess is a cubed sphere of a specified `initial_sphere_radius. The
     guess is improved upon by `SplinePoseOptimizer` that optimizes the position,
@@ -292,13 +296,13 @@ def optimize_thermoscenes_scene(
     Optimization can be done with masked pixels or with original pixels depending
     on the `params.mask_pixels_during_optimization` parameter.
 
-    :raises ValueError: If `params.thermoscenes_scene_path` is not a valid path, or
-        it is not a directory.
+    :raises ValueError: If `params.scene_path` is not a valid path, or it is not
+        a directory.
     """
-    if not params.thermoscenes_scene_path.exists():
-        raise ValueError(f"Path {params.thermoscenes_scene_path} does not exist.")
-    if not params.thermoscenes_scene_path.is_dir():
-        raise ValueError(f"Path {params.thermoscenes_scene_path} is not a directory.")
+    if not params.scene_path.exists():
+        raise ValueError(f"Path {params.scene_path} does not exist.")
+    if not params.scene_path.is_dir():
+        raise ValueError(f"Path {params.scene_path} is not a directory.")
 
     if params.use_gpu:
         mi.set_variant("cuda_ad_rgb")
@@ -311,7 +315,7 @@ def optimize_thermoscenes_scene(
     scene, ref_images, eval_images, tessellated_spline = initialize_scene(
         continuous_samples=params.continuous_samples,
         visibility_samples=params.visibility_samples,
-        thermoscenes_scene_path=params.thermoscenes_scene_path,
+        thermoscenes_scene_path=params.scene_path,
         envmap_path=params.environment_map_path,
         texture_resolution=params.texture_params.texture_resolution,
         spline_degree=params.shape_params.degree,
@@ -420,8 +424,15 @@ def optimize_thermoscenes_scene(
 
 if __name__ == "__main__":
     parameters = tyro.cli(ThermoSceneSplineOptimizationParameters)
-    mlflow.log_params(
-        parameters.to_loggable_dict(ignore=set(["thermoscenes_scene_path"]))
-    )
 
-    optimize_thermoscenes_scene(params=parameters)
+    timestamp = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
+    with tracking.run(
+        run_name=f"reconstruction-{timestamp}",
+        artifact_directory=parameters.output_folder,
+    ):
+        tracking.log_dataset_source(
+            url=str(parameters.scene_path), name=str(parameters.scene_path.name)
+        )
+        tracking.log_params(parameters.to_loggable_dict(ignore=set(["scene_path"])))
+
+        optimize_thermoscenes_scene(params=parameters)

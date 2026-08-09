@@ -1,5 +1,6 @@
 import tempfile
 from pathlib import Path
+from typing import Any
 
 import drjit as dr
 import matplotlib.pyplot as plt
@@ -106,6 +107,54 @@ class Mesh(MitsubaPlugin):
             faces=faces,
             normals=vertex_normals,
             texture_coordinates=texture_coordinates,
+        )
+        self._set_mesh_bsdf()
+        self._mesh_params = mi.traverse(self._mesh)
+
+    def __getstate__(self) -> dict[str, Any]:
+        """
+        Exports the mesh state for serialization with `jsonpickle`.
+
+        The Mitsuba mesh `_mesh` and its traversal `_mesh_params` are C++ objects
+        that cannot be pickled, so the geometry is stored as numpy arrays and the
+        mesh is rebuilt on load. `_bsdf` is dropped (textures are not preserved
+        across serialization); a default is used on restore.
+
+        :returns: A dictionary representing the mesh state.
+        """
+        state = self.__dict__.copy()
+        state["_serialized_vertices"] = self.vertices.numpy()
+        state["_serialized_faces"] = self.faces.numpy()
+        state["_serialized_normals"] = self.vertex_normals.numpy()
+        state["_serialized_texcoords"] = (
+            self.texcoords.numpy() if self._mesh.has_vertex_texcoords() else None
+        )
+        del state["_mesh"]
+        del state["_mesh_params"]
+        state.pop("_bsdf", None)
+        return state
+
+    def __setstate__(self, state: dict[str, Any]) -> None:
+        """
+        Restores the mesh from its serialized `state`.
+
+        The geometry stored as numpy arrays is used to rebuild the Mitsuba mesh, and
+        the BSDF is reset to a default `DiffuseBSDF` (textures are not preserved). A
+        Mitsuba variant must already be set by the caller.
+        """
+        vertices = state.pop("_serialized_vertices")
+        faces = state.pop("_serialized_faces")
+        normals = state.pop("_serialized_normals")
+        texcoords = state.pop("_serialized_texcoords")
+        self.__dict__.update(state)
+
+        self._bsdf = DiffuseBSDF()
+        self._mesh = self._create_mitsuba_mesh(
+            mesh_name=self._mesh_name,
+            vertices=vertices,
+            faces=faces,
+            normals=normals,
+            texture_coordinates=texcoords,
         )
         self._set_mesh_bsdf()
         self._mesh_params = mi.traverse(self._mesh)
@@ -291,9 +340,11 @@ class Mesh(MitsubaPlugin):
         Sets the vertex positions of the Mitsuba mesh.
 
         `vertices` is a 2D tensor of shape (V, 3) where V is the number of vertices.
-        Note that updating the vertices will automatically trigger an update of
-        `vertex_normals`, so if specific normals are needed, they should be set
-        after setting the vertices.
+        The existing `vertex_normals` are left untouched: Mitsuba refreshed them
+        from the new geometry on 3.7 but no longer does on 3.8, so this setter
+        cannot promise it. Assign `vertex_normals` afterwards for specific
+        normals, or call `recompute_vertex_normals` to derive them from the
+        moved geometry.
 
         :raises ValueError: If the number of vertices does not match the mesh, or
             if the shape of `vertices` is not as expected.
@@ -387,6 +438,17 @@ class Mesh(MitsubaPlugin):
             )
 
         self._mesh_params["vertex_normals"] = dr.ravel(normals)
+
+    def recompute_vertex_normals(self) -> None:
+        """
+        Recomputes the vertex normals from the current face geometry.
+
+        Assigning `vertices` does not refresh the normals on every Mitsuba
+        version, so a caller that moves geometry and wants the normals to follow
+        must ask for it. Callers that assign `vertex_normals` themselves (the
+        spline tessellation path) do not need this.
+        """
+        self._mesh.recompute_vertex_normals()
 
     def transform_vertices(self, transform: "mi.Transform4f") -> None:
         """

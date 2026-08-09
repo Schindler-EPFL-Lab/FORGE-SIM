@@ -10,6 +10,7 @@ from OCP.TColgp import TColgp_Array2OfPnt
 from OCP.TColStd import TColStd_Array1OfReal, TColStd_Array1OfInteger
 from OCP.gp import gp_Pnt
 
+from rebel_shape import logger
 from rebel_shape.meshing.patch import Patch
 from rebel_shape.splines.bivariate_bspline import BivariateBSpline
 from rebel_shape.splines.bspline import BSpline
@@ -414,9 +415,12 @@ class BSplinePatch(SplinePatch):
         is the number of points to evaluate, and the second dimension is 2 because
         a surface has two parametric directions (u, v).
 
-        The normal is calculated as the cross-product of the partial derivatives
-        with respect to u and v parameters. If the magnitude of the resulting product
-        is too small, normalization is not performed to avoid NaNs.
+        The normal is calculated as the cross-product of the partial derivatives with
+        respect to u and v parameters, normalized to unit length. Where that cross
+        product is numerically zero -- a degenerate point, at which the surface has no
+        normal -- the unit fallback `(0, 0, 1)` is returned for that point instead and
+        a warning naming how many points were affected is logged. Every returned row is
+        therefore a unit vector, and never a NaN.
 
         :returns: A tensor of shape (n_points, 3) representing the surface normals
                   at the given parametric coordinates.
@@ -434,13 +438,37 @@ class BSplinePatch(SplinePatch):
 
         magnitudes = dr.safe_sqrt(dr.sum(normals * normals, axis=1))[:, None]
 
+        # The cross-product magnitude has units of (length)^2 and scales as the
+        # square of the control-point scale, so the natural numerical-zero
+        # threshold here is `ZERO_TOL` squared rather than `ZERO_TOL` itself.
+        cross_product_tol = BSpline.ZERO_TOL**2
+        is_valid = magnitudes > cross_product_tol
         safe_magnitudes = dr.select(
-            magnitudes > BSpline.ZERO_TOL,
+            is_valid,
             magnitudes,
             dr.full(dtype=mi.TensorXf, value=1.0, shape=(n_points, 1)),
         )
+        normalized = normals / safe_magnitudes
 
-        return normals / safe_magnitudes
+        # For genuinely degenerate UV points (e.g. wherever du and dv are
+        # colinear), the cross product is mathematically zero and the division
+        # above would carry that zero through to the output. Emit a unit
+        # fallback `(0, 0, 1)` so the result is always normalized — and warn so
+        # the caller knows their parameterization or scale has a problem.
+        n_degenerate = int(np.sum(magnitudes.numpy() <= cross_product_tol))
+        if n_degenerate > 0:
+            logger.warning(
+                f"evaluate_normals: {n_degenerate}/{n_points} UV points have "
+                f"|du x dv| <= {cross_product_tol:.2e}; using fallback "
+                f"(0, 0, 1) for those rows."
+            )
+
+        fallback = dr.empty(dtype=mi.TensorXf, shape=(n_points, 3))
+        fallback[:, 0] = dr.zeros(dtype=mi.Float, shape=n_points)
+        fallback[:, 1] = dr.zeros(dtype=mi.Float, shape=n_points)
+        fallback[:, 2] = dr.full(dtype=mi.Float, value=1.0, shape=n_points)
+
+        return dr.select(is_valid, normalized, fallback)
 
     @property
     def control_points_grid(self) -> "mi.TensorXf":

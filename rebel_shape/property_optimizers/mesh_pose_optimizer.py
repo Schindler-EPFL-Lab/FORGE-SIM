@@ -24,6 +24,9 @@ class MeshPoseOptimizer(PoseOptimizer):
         shape_key: str,
         scheduler: OptimizationScheduler,
         image_loss: ImageLoss = ImageLossL2(),
+        jitter: float = 0.0,
+        seed: int = 0,
+        initial_scale: float = 1.0,
     ) -> None:
         """
         The `scene` is a loaded Mitsuba scene object, while `scene_params` are a
@@ -49,6 +52,9 @@ class MeshPoseOptimizer(PoseOptimizer):
             optimization_key=shape_key,
             scheduler=scheduler,
             image_loss=image_loss,
+            jitter=jitter,
+            seed=seed,
+            initial_scale=initial_scale,
         )
 
         self._shape_key = shape_key

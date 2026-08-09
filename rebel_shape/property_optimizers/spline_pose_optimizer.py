@@ -26,6 +26,9 @@ class SplinePoseOptimizer(PoseOptimizer):
         tessellated_spline: TessellatedSplineSurface,
         scheduler: OptimizationScheduler,
         image_loss: ImageLoss = ImageLossL2(),
+        jitter: float = 0.0,
+        seed: int = 0,
+        initial_scale: float = 1.0,
     ) -> None:
         """
         The `scene` is a loaded Mitsuba scene object, while `scene_params` are a
@@ -41,6 +44,10 @@ class SplinePoseOptimizer(PoseOptimizer):
         process while `image_loss` is the function used to compute the difference
         between the rendered image and the reference image.
 
+        `jitter`, `seed`, and `initial_scale` are forwarded to `PoseOptimizer`
+        to control the symmetry-breaking perturbation and the radius of the
+        initial proxy.
+
         :raises ValueError: If any of the meshes in `tessellated_spline` is not
             present in `scene_params`.
         """
@@ -51,6 +58,9 @@ class SplinePoseOptimizer(PoseOptimizer):
             optimization_key=tessellated_spline.mesh_name,
             scheduler=scheduler,
             image_loss=image_loss,
+            jitter=jitter,
+            seed=seed,
+            initial_scale=initial_scale,
         )
 
         self._tessellated_spline = tessellated_spline

@@ -10,6 +10,8 @@ from pathlib import Path
 import mitsuba as mi
 import tyro
 
+from rebel_shape.data_processing.vggt_pose_scene_loader import VGGTPoseSceneLoader
+
 # This is a hack so that the script work with azure sdkv2.
 # The root folder is _not_ added to the python path as it was in sdkv1
 # and thus, local imports of rebel_nerf are not found.
@@ -25,20 +27,65 @@ from rebel_shape.plugin_wrappers.sampler import Sampler
 from rebel_shape.render.render import Render
 
 
+def discover_spline_checkpoint(result_folder: Path) -> Path:
+    """
+    Returns the spline checkpoint written by `SplineOptimizer.save_callback` into
+    `result_folder`, picking the highest-iteration one when several are present.
+
+    Checkpoints are named ``<spline name>_<timestamp>_iteration-<N>.json``. A result
+    folder routinely holds other JSON files as well -- an evaluation metrics dump, for
+    instance -- so only names carrying an ``iteration-<N>`` marker are considered.
+
+    :returns: The path of the highest-iteration spline checkpoint.
+    :raises FileNotFoundError: If `result_folder` is not a directory, or holds no file
+        named like a spline checkpoint.
+    """
+    if not result_folder.is_dir():
+        raise FileNotFoundError(f"`result_folder` {result_folder} is not a directory.")
+
+    def iteration_of(path: Path) -> int:
+        """Trailing ``iteration-NNN`` number in `path`'s stem, or -1 if absent."""
+        stem = path.stem
+        marker = "iteration-"
+        if marker not in stem:
+            return -1
+        try:
+            return int(stem.split(marker)[-1])
+        except ValueError:
+            logger.warning(f"Could not parse an iteration number from {path.name}.")
+            return -1
+
+    json_files = sorted(result_folder.glob("*.json"))
+    checkpoints = [path for path in json_files if iteration_of(path) >= 0]
+    if not checkpoints:
+        found = ", ".join(path.name for path in json_files) or "no JSON files at all"
+        raise FileNotFoundError(
+            f"No spline checkpoint (<name>_<timestamp>_iteration-<N>.json) in "
+            f"{result_folder}; it holds {found}."
+        )
+    return max(checkpoints, key=iteration_of)
+
+
 @dataclass(kw_only=True)
 class RenderSplineParameters(ReverseCli):
     """
     Parameters used for rendering spline model from eval images.
     """
 
-    thermoscenes_scene_path: Path
+    scene_path: Path
     """
-    Path to the ThermoScenes scene on what the spline was optimized.
+    Path to the scene on what the spline was optimized.
     """
-    spline_path: Path
+    spline_path: Path | None = None
     """Path to the reconstructed spline surface"""
     textures_paths: list[Path] | None = None
     """Paths to the saved textures"""
+    result_folder: Path | None = None
+    """
+    Folder with all the texture and the spline object as json. The spline checkpoint is
+    the highest-iteration ``<name>_<timestamp>_iteration-<N>.json`` in it; any other
+    JSON file there is ignored. Ignored if textures_paths or spline_path is not None
+    """
     environment_map_path: Path | None = None
     """
     Path to the envionment map that was used as background in optimization. If not
@@ -48,17 +95,37 @@ class RenderSplineParameters(ReverseCli):
     """If the texture was flipped along y axis during saving"""
     samples_per_pixel: int = 289
     """Number of samples per pixel used for rendering"""
-    output_folder: Path = Path("./outputs/")
+    output_folder: Path | None = None
     """Where to save the outputs (created if it does not exist)"""
     use_gpu: bool = True
     """
     Whether to use GPU for rendering or not. Note that the compute instance
     must have GPU support for this to work. For local testing, set to False.
     """
+    from_vggt: bool = False
+    """
+    True if the pose data is from VGGT. Revert to Thermoscene format otherwise
+    """
 
     def __post_init__(self) -> None:
+        if self.spline_path is None:
+            if self.result_folder is None:
+                raise RuntimeError(
+                    "Provide either `spline_path`, the saved spline surface, or "
+                    "`result_folder`, the optimization output directory holding it."
+                )
+            self.spline_path = discover_spline_checkpoint(self.result_folder)
+
         if self.samples_per_pixel < 1:
             raise ValueError("`samples_per_pixel` must be a positive integer.")
+        if self.textures_paths is None and self.result_folder is not None:
+            self.textures_paths: list[Path] = []
+            for el in self.result_folder.iterdir():
+                if not el.suffix == ".exr":
+                    continue
+                self.textures_paths.append(el.resolve())
+        if self.output_folder is None:
+            self.output_folder: Path = self.spline_path.parent / "renders"
 
 
 def initialize_scene(
@@ -125,18 +192,18 @@ def render_spline(params: RenderSplineParameters) -> None:
     Render spline surface from eval cameras.
     It loads the saved spline surface from `params.spline_path`. Optionally it also
     loads spline patches textures from `params.textures_paths` if provided. It reads
-    eval cameras from `params.thermoscenes_scene_path` and renders the spline surface
+    eval cameras from `params.scene_path` and renders the spline surface
     based on cameras. It renders RGB images and stores the results in the
     `params.output_folder`. Names correspond to the eval RGB images from the
     thermoscenes dataset. The files are stored in .exr format.
 
-    :raises ValueError: If `params.thermoscenes_scene_path` is not a valid path, or
+    :raises ValueError: If `params.scene_path` is not a valid path, or
         it is not a directory.
     """
-    if not params.thermoscenes_scene_path.exists():
-        raise ValueError(f"Path {params.thermoscenes_scene_path} does not exist.")
-    if not params.thermoscenes_scene_path.is_dir():
-        raise ValueError(f"Path {params.thermoscenes_scene_path} is not a directory.")
+    if not params.scene_path.exists():
+        raise ValueError(f"Path {params.scene_path} does not exist.")
+    if not params.scene_path.is_dir():
+        raise ValueError(f"Path {params.scene_path} is not a directory.")
 
     if params.use_gpu:
         mi.set_variant("cuda_ad_rgb")
@@ -157,9 +224,12 @@ def render_spline(params: RenderSplineParameters) -> None:
     sampler = Sampler(
         type=Sampler.Type.INDEPENDENT, sample_count=params.samples_per_pixel
     )
-    loader = PoseSceneLoader(
-        scene_path=params.thermoscenes_scene_path, sensor_sampler=sampler
-    )
+    if params.from_vggt:
+        loader = VGGTPoseSceneLoader(
+            scene_path=params.scene_path, sensor_sampler=sampler
+        )
+    else:
+        loader = PoseSceneLoader(scene_path=params.scene_path, sensor_sampler=sampler)
 
     # optionally flip along y axis:
     if params.flip_y and params.textures_paths is not None:

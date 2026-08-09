@@ -8,6 +8,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 import mitsuba as mi
+import numpy as np
 import tyro
 
 # This is a hack so that the script work with azure sdkv2.
@@ -49,11 +50,39 @@ class CameraViewerParams(ReverseCli):
     image_output_folder: Path = Path("./outputs/")
     """Where to save the rendered cameras (created if it does not exist)"""
 
+    camera_size: float = 1.0
+    """
+    Scale factor applied to the camera pyramid meshes. Use values <1 to shrink
+    the markers and >1 to enlarge them.
+    """
+
+    auto_radial_distance: bool = True
+    """
+    If True, overrides `camera_ring_config.radial_distance` and
+    `camera_ring_config.origin_position` in place: `radial_distance` is set to
+    the max distance from the scene cameras' barycenter to any scene camera,
+    scaled by `auto_radial_distance_factor`, and `origin_position` is set to that
+    barycenter, so the viewing camera ring is centered on and sized to fit the
+    whole scene-camera layout. When False, both values from `camera_ring_config`
+    are used as-is.
+    """
+
+    auto_radial_distance_factor: float = 2.5
+    """
+    Multiplier on the max distance from the barycenter to any scene camera when
+    `auto_radial_distance` is True. Larger values pull the viewing cameras back.
+    """
+
     use_gpu: bool = False
     """
     Whether to use GPU for rendering or not. Note that the compute instance
     must have GPU support for this to work. As the script is typically used for
     local testing, the default is False.
+    """
+    from_thermoscene: bool = True
+    """
+    USe the dataloader for a thermoscene dataset.
+    Reverts to the VGGT format when False
     """
 
     def __post_init__(self) -> None:
@@ -64,6 +93,12 @@ class CameraViewerParams(ReverseCli):
         if not self.environment_map_path.exists():
             raise ValueError(
                 f"Environment map {self.environment_map_path} does not exist."
+            )
+        if self.camera_size <= 0.0:
+            raise ValueError("`camera_size` must be a positive real number.")
+        if self.auto_radial_distance_factor <= 0.0:
+            raise ValueError(
+                "`auto_radial_distance_factor` must be a positive real number."
             )
 
 
@@ -77,13 +112,16 @@ def render_cameras(params: CameraViewerParams) -> None:
     with angle `params.viewing_angle` in degrees (positive angle = down,
     negative angle = up).
 
-    The distance of the cameras to the barycenter is given by `params.radial_distance`.
+    The distance of the cameras to the barycenter is given by `params.radial_distance`,
+    or — when `params.auto_radial_distance` is True — computed from the spread of the
+    scene cameras as `max_offset * params.auto_radial_distance_factor`.
     Resolution is `params.sensor_resolution_width` x `params.sensor_resolution_height`
     and the width of the shot is controlled by `params.sensor_fov`.
 
-    Cameras are represented by pyramids with rectangular base and the images are
-    rendered with `params.samples_per_pixel` samples. The rendered views are saved to
-    directory `params.image_output_folder` (created if it does not exist).
+    Cameras are represented by pyramids with rectangular base, scaled by
+    `params.camera_size`, and the images are rendered with `params.samples_per_pixel`
+    samples. The rendered views are saved to directory `params.image_output_folder`
+    (created if it does not exist).
     """
     if params.use_gpu:
         mi.set_variant("cuda_ad_rgb")
@@ -92,13 +130,38 @@ def render_cameras(params: CameraViewerParams) -> None:
         mi.set_variant("llvm_ad_rgb")
         logger.info("Using the CPU for rendering.")
 
-    loader = ImageSceneLoader(scene_path=params.thermoscenes_scene_path)
+    if params.from_thermoscene:
+        loader = ImageSceneLoader.from_thermoscene(
+            scene_path=params.thermoscenes_scene_path
+        )
+    else:
+        loader = ImageSceneLoader.from_vggt(scene_path=params.thermoscenes_scene_path)
 
-    center_coords = mi.ScalarPoint3f(0.0, 0.0, 0.0)
-    for camera in loader.train_cameras:
-        center_coords += camera.tf_pose_matrix.matrix.numpy()[0:3, 3]
+    camera_positions = np.stack(
+        [
+            camera.tf_pose_matrix.matrix.numpy()[0:3, 3]
+            for camera in loader.train_cameras
+        ]
+    )
+    center_coords = camera_positions.mean(axis=0)
 
-    center_coords /= len(loader.train_cameras)
+    if params.auto_radial_distance:
+        max_offset = float(
+            np.linalg.norm(camera_positions - center_coords, axis=1).max()
+        )
+        params.camera_ring_config.radial_distance = (
+            max_offset * params.auto_radial_distance_factor
+        )
+        params.camera_ring_config.origin_position = (
+            float(center_coords[0]),
+            float(center_coords[1]),
+            float(center_coords[2]),
+        )
+        logger.info(
+            f"Auto radial distance: {params.camera_ring_config.radial_distance:.3f} "
+            f"(max offset {max_offset:.3f} x factor "
+            f"{params.auto_radial_distance_factor})"
+        )
 
     scene_dict = {
         "type": "scene",
@@ -110,14 +173,14 @@ def render_cameras(params: CameraViewerParams) -> None:
 
     script_dir = Path(__file__).parent.resolve()
 
+    camera_scale = mi.ScalarTransform4f().scale(params.camera_size)
+
     for i, camera in enumerate(loader.train_cameras):
         scene_dict[f"camera_{i}"] = {
             "type": "ply",
-            "filename": str(
-                script_dir / "../../data/test_scenes/meshes/camera_pyramid.ply"
-            ),
+            "filename": str(script_dir / "../../data/meshes/camera_pyramid.ply"),
             "bsdf": {"type": "diffuse"},
-            "to_world": camera.tf_pose_matrix,
+            "to_world": camera.tf_pose_matrix @ camera_scale,
         }
 
     scene: "mi.Scene" = mi.load_dict(scene_dict)

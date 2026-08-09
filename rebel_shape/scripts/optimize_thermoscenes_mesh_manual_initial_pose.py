@@ -1,15 +1,24 @@
 """
-Optimizes a ThermoScenes scene represented as a single mesh.
-Performs pose, shape, and texture optimization.
+Optimizes a ThermoScenes scene represented as a 6-patch composite mesh cubed
+sphere with a manually authored initial pose.
+
+This is the mesh-side analog of `optimize_thermoscenes_spline_manual_initial_pose.py`:
+the initial surface is a `RegularCompositeMesh.cubed_sphere`, the manual pose
+transform is applied to the global vertices, and shape + per-patch texture are
+optimized jointly via `RegularCompositeMeshTextureOptimizer`. The composite
+topology shares seam vertices across patch boundaries, avoiding the
+duplicate-vertex tearing failure mode of the original single-PLY
+`MeshTextureOptimizer` setup.
 """
 
+import datetime
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 
 import drjit as dr
+import jsonpickle
 import mitsuba as mi
-import mlflow
 import tyro
 from dataclasses_reverse_cli.reverse_cli import ReverseCli
 
@@ -19,18 +28,19 @@ from dataclasses_reverse_cli.reverse_cli import ReverseCli
 # Remove when https://github.com/Azure/azure-sdk-for-python/issues/29724 is fixed
 sys.path.append("./")
 
-
-from rebel_shape import logger
+from rebel_shape import logger, tracking
 from rebel_shape.data_processing.image_scene_loader import ImageSceneLoader
 from rebel_shape.data_processing.manual_initialization import (
     load_bounding_bbox_transforms,
 )
 from rebel_shape.data_processing.masked_pose_image import MaskedPoseImage
-from rebel_shape.meshing.mesh import Mesh
+from rebel_shape.meshing.regular_composite_mesh import RegularCompositeMesh
 from rebel_shape.plugin_wrappers.diffuse_bsdf import DiffuseBSDF
 from rebel_shape.plugin_wrappers.prb_integrator import GuidingOptions, PRBIntegrator
 from rebel_shape.plugin_wrappers.sampler import Sampler
-from rebel_shape.property_optimizers.mesh_texture_optimizer import MeshTextureOptimizer
+from rebel_shape.property_optimizers.regular_composite_mesh_texture_optimizer import (
+    RegularCompositeMeshTextureOptimizer,
+)
 from rebel_shape.scene_optimizers.composite_scene_optimizer import (
     CompositeSceneOptimizer,
 )
@@ -45,15 +55,16 @@ from rebel_shape.scripts.configs.texture_optimization_config import (
 
 @dataclass(kw_only=True)
 class ThermoSceneOptimizationParameters(ReverseCli):
-    thermoscenes_scene_path: Path
+    scene_path: Path
     """
     Path to the ThermoScenes scene that is optimized. Assumes the foreground
     has been extracted
     """
     environment_map_path: Path | None = None
-    """Path to the envionment map that is used as background in optimization."""
-    initial_guess_mesh_path: Path = Path("./data/test_scenes/meshes/sphere_1m_high.ply")
-    """Path to the initial guess mesh."""
+    """
+    Path to the envionment map that is used as background in optimization.
+    Defaults to checkerboard_lighter.exr.
+    """
     bbox_transforms_path: Path
     """Path to the transforms of the bounding box"""
 
@@ -61,31 +72,41 @@ class ThermoSceneOptimizationParameters(ReverseCli):
     """number of samples per pixel used for continuous derivatives"""
     visibility_samples: int = 9
     """number of samples per pixel used for direct and indirect visibility"""
-    optimization_iterations: int = 100
-    """Adam iterations executed on the initial mesh"""
+    optimization_iterations: int = 250
+    """Adam iterations executed on the initial composite mesh"""
+    initial_subdivisions: int = 16
+    """Grid resolution per cube face at the start of optimization"""
+    h_refinement_iterations: list[int] = field(
+        default_factory=lambda: [20, 50, 80, 120, 180],
+    )
+    """Iterations at which the composite mesh is h-refined by a factor of 2"""
 
     shape_params: ShapeOptimizationConfig = field(
         default_factory=lambda: ShapeOptimizationConfig(
-            smoothing_strength=100.0,
-            learning_rate_start=0.25,
-            learning_rate_end=0.1,
-            learning_rate_steepness=1.5,
+            smoothing_strength=50.0,
+            learning_rate_start=0.02,
+            learning_rate_end=0.01,
+            learning_rate_steepness=1.0,
+            use_msssim_loss=False,
+            l1_loss_weight=1.0,
             use_lbfgs=False,
             uniform_adam=True,
             batch_size=9,
-        )
+        ),
     )
     """Parameters for shape optimization"""
     texture_params: TextureOptimizationConfig = field(
         default_factory=lambda: TextureOptimizationConfig(
             texture_resolution=1024,
-            learning_rate_start=0.02,
-            learning_rate_end=0.04,
-            learning_rate_steepness=2.0,
+            learning_rate_start=0.04,
+            learning_rate_end=0.02,
+            learning_rate_steepness=1.0,
+            use_msssim_loss=False,
+            l1_loss_weight=1.0,
             use_lbfgs=False,
             uniform_adam=False,
             batch_size=6,
-        )
+        ),
     )
     """Parameters for texture optimization"""
 
@@ -113,53 +134,66 @@ class ThermoSceneOptimizationParameters(ReverseCli):
         if self.visibility_samples < 1:
             raise ValueError("`visibility_samples` must be a positive integer.")
         if self.optimization_iterations < 1:
-            raise ValueError("`first_pass_iterations` must be a positive integer.")
+            raise ValueError("`optimization_iterations` must be a positive integer.")
 
         if self.num_of_images_to_save < 1:
             raise ValueError("`num_of_images_to_save` must be a positive integer.")
+        if self.initial_subdivisions < 1:
+            raise ValueError("`initial_subdivisions` must be a positive integer.")
+        for it in self.h_refinement_iterations:
+            if it < 0 or it >= self.optimization_iterations:
+                raise ValueError(
+                    "`h_refinement_iterations` entries must be in "
+                    f"[0, {self.optimization_iterations}), got {it}.",
+                )
+
+        if self.environment_map_path is None:
+            self.environment_map_path = Path("data/textures/checkerboard_lighter.exr")
 
 
 def initialize_scene(
     continuous_samples: int,
     visibility_samples: int,
     thermoscenes_scene_path: Path,
-    initial_guess_mesh_path: Path,
     envmap_path: Path | None,
     texture_resolution: int,
+    initial_subdivisions: int,
     bbox_transforms_path: Path,
     mask_pixels_during_optimization: bool,
 ) -> tuple[
     "mi.Scene",
     list[MaskedPoseImage],
     list[MaskedPoseImage],
+    RegularCompositeMesh,
 ]:
     """
     Creates and loads Mitsuba dictionary that represents the scene, as well as providing
-    the reference images and sensor views.
+    the reference images, evaluation views, and the composite mesh.
 
     `continuous_samples` is the number of samples used for optimizing continuous
     derivatives (e.g. Texture), while `visibility_samples` is the number of samples used
     for direct and indirect visibility changes.
 
     `thermoscenes_scene_path` is a `Path` to a scene that can be loaded with
-    `ThermoScenesLoader`. `initial_guess_mesh_path` specifies a path to the mesh file
-    that should be used as an initial guess for optimization. `envmap_path` is the path
-    to the 360 image that is used for the background during optimization. If None is
-    provided then the environment would be white. The `texture_resolution` specifies the
-    texture resolution of the optimized mesh. The `bbox_transforms_path` defines the
-    path for the transformation of the box [-1, 1]^3 to the bounding box of the object.
-    MaskedPoseImage contain the foreground masks if `mask_pixels_during_optimization`
-    and no mask otherwise.
+    `ImageSceneLoader`. `envmap_path` is the path to the 360 image that is used for
+    the background during optimization; if `None`, a constant white background is
+    used. `texture_resolution` specifies the resolution of each per-patch texture.
+    `initial_subdivisions` controls the per-cube-face grid resolution of the
+    initial cubed-sphere mesh, and `bbox_transforms_path` points to a JSON
+    describing the manual initial pose (scale, translation, rotation).
+    MaskedPoseImage masks are populated when `mask_pixels_during_optimization` is
+    True and left as `None` otherwise.
 
-    :returns: A tuple containing:
-        - `scene_source`: A Mitsuba scene object with the initial guess mesh and
-            the environment map loaded.
+    :returns: Tuple of:
+        - `scene_source`: Mitsuba scene with the 6-patch composite mesh and the
+            environment map loaded.
         - `reference_images`: List of reference images for training.
         - `evaluation_images`: List of reference images for evaluation.
+        - `composite_mesh`: The `RegularCompositeMesh` whose shape and per-patch
+            textures will be optimized.
 
-    :raises ValueError: If `thermoscenes_scene_path` is not a valid path, if the
-        `environment_map_path` does not exist, or if the `initial_guess_mesh_path` does
-        not exist.
+    :raises ValueError: If `thermoscenes_scene_path` is not a valid path or the
+        `environment_map_path` does not exist.
     """
     integrator = PRBIntegrator(
         max_bounces=4,
@@ -170,13 +204,17 @@ def initialize_scene(
         guiding=GuidingOptions.NONE,
     )
 
-    mlflow.log_param("spp_continuous", continuous_samples)
-    mlflow.log_param("spp_projective", visibility_samples)
-    mlflow.log_param("spp_indirect", visibility_samples)
+    tracking.log_params(
+        {
+            "spp_continuous": continuous_samples,
+            "spp_projective": visibility_samples,
+            "spp_indirect": visibility_samples,
+        }
+    )
 
     sampler = Sampler(type=Sampler.Type.MULTIJITTER, sample_count=continuous_samples)
 
-    loader = ImageSceneLoader(
+    loader = ImageSceneLoader.from_thermoscene(
         scene_path=thermoscenes_scene_path,
         environment_map_path=envmap_path,
         spp=4,
@@ -199,66 +237,77 @@ def initialize_scene(
         }
     )
 
-    mesh = Mesh.from_ply_file(
-        file_path=initial_guess_mesh_path,
+    composite_mesh = RegularCompositeMesh.cubed_sphere(
+        name="shape",
+        subdivisions=initial_subdivisions,
+        radius=1.0,
         bsdf=DiffuseBSDF(
             DiffuseBSDF.TextureFromTensor(
                 tensor=dr.full(
                     dtype=mi.TensorXf,
                     value=0.5,
                     shape=(texture_resolution, texture_resolution, 3),
-                )
-            )
+                ),
+            ),
         ),
     )
+
     if bbox_transforms_path is not None:
+        # The cubed sphere is already unit-radius, so we do not need a separate
+        # normalization transform (unlike the original PLY-loading mesh path).
+        # This matches the spline manual-initial-pose script exactly.
         tf_bbox = load_bounding_bbox_transforms(bbox_transforms_path)
         tf_initial_pose = mi.Transform4f(loader.tf_cameras) @ tf_bbox
-        mesh.transform_vertices(tf_initial_pose)
+        composite_mesh.transform_global_vertices(tf_initial_pose)
 
-    scene_dict = {
+    scene_dict: dict = {
         "type": "scene",
         "integrator": integrator.mitsuba_dict,
         "emitter": environment,
-        "shape": mesh.mitsuba_dict,
     }
+    for mesh in reversed(composite_mesh):
+        scene_dict[mesh.name] = mesh.mitsuba_dict
+
     scene_source: "mi.Scene" = mi.load_dict(scene_dict)
 
-    return scene_source, ref_images, eval_images
+    return scene_source, ref_images, eval_images, composite_mesh
 
 
 def optimize_thermoscenes_scene(params: ThermoSceneOptimizationParameters) -> None:
     """
-    Performs shape optimization on a scene specified by `thermoscenes_scene_path`.
+    Performs composite-mesh shape + texture optimization on the scene at
+    `params.scene_path`.
 
-    The initial guess is a mesh specified by `initial_guess_mesh_path`. Optimization is
-    performed for `optimization_iterations` with two phases; each phase goes through all
-    the images in the dataset:
+    The initial guess is a 6-patch cubed-sphere `RegularCompositeMesh` with
+    `params.initial_subdivisions` grid cells per cube face. Its global vertices
+    are transformed into the scene's coordinate space using the manual bbox
+    transform composed with the loader's `tf_cameras`, mirroring
+    `optimize_thermoscenes_spline_manual_initial_pose.py`.
 
-    1. Shape optimization of mesh vertex positions with `shape_batch_size` images and
-       learning rate which decreases from `shape_learning_rate_start` to
-       `shape_learning_rate_end` with steepness `shape_learning_rate_steepness`.
-    2. Bitmap texture optimization with `texture_batch_size` images and learning rate
-       which increases from `texture_learning_rate_start` to `texture_learning_rate_end`
-       with steepness `texture_learning_rate_steepness`.
+    Optimization runs for `params.optimization_iterations` with two
+    sub-optimizers driven through `CompositeSceneOptimizer`:
 
-    Optionally, images and meshes can be saved to `params.output_folder`. The path
-    should be a directory where the images will be saved. If the directory does not
-    exist, it will be created, while if a `None` value is provided, nothing is saved.
+    1. Shape: vertex positions of all 6 patches, parametrized through a Laplacian
+       on the composite mesh's global vertex / face graph. Seam vertices are
+       shared by construction and averaged across patches via
+       `update_global_representation`.
+    2. Texture: per-patch bitmap texture, optimized as a `(num_patches, W, H, C)`
+       tensor through `BitmapTextureOptimizer`.
 
-    Optimization can be done with masked pixels or with original pixels depending on the
-    `params.mask_pixels_during_optimization` parameter.
+    H-refinement events are scheduled at iterations listed in
+    `params.h_refinement_iterations`. Each event doubles the per-patch grid
+    resolution and rebuilds the parametrization and scene optimizer state.
 
-    Optimization can either be executed on a GPU or CPU, depending on the`use_gpu`
-    parameter.
+    Images and meshes are saved to `params.output_folder` (directory created if
+    needed) using each per-optimizer's `save_callback`.
 
-    :raises ValueError: If `params.thermoscenes_scene_path` is not a valid path, or it
-        is not a directory.
+    :raises ValueError: If `params.scene_path` is not a valid path or it is not
+        a directory.
     """
-    if not params.thermoscenes_scene_path.exists():
-        raise ValueError(f"Path {params.thermoscenes_scene_path} does not exist.")
-    if not params.thermoscenes_scene_path.is_dir():
-        raise ValueError(f"Path {params.thermoscenes_scene_path} is not a directory.")
+    if not params.scene_path.exists():
+        raise ValueError(f"Path {params.scene_path} does not exist.")
+    if not params.scene_path.is_dir():
+        raise ValueError(f"Path {params.scene_path} is not a directory.")
 
     if params.use_gpu:
         mi.set_variant("cuda_ad_rgb")
@@ -268,13 +317,13 @@ def optimize_thermoscenes_scene(params: ThermoSceneOptimizationParameters) -> No
         logger.info("Using the CPU for rendering.")
 
     # Initialize the scene, reference images and cameras
-    scene_source, ref_images, eval_images = initialize_scene(
+    scene_source, ref_images, eval_images, composite_mesh = initialize_scene(
         continuous_samples=params.continuous_samples,
         visibility_samples=params.visibility_samples,
-        thermoscenes_scene_path=params.thermoscenes_scene_path,
-        initial_guess_mesh_path=params.initial_guess_mesh_path,
+        thermoscenes_scene_path=params.scene_path,
         envmap_path=params.environment_map_path,
         texture_resolution=params.texture_params.texture_resolution,
+        initial_subdivisions=params.initial_subdivisions,
         bbox_transforms_path=params.bbox_transforms_path,
         mask_pixels_during_optimization=params.mask_pixels_during_optimization,
     )
@@ -282,7 +331,7 @@ def optimize_thermoscenes_scene(params: ThermoSceneOptimizationParameters) -> No
         raise ValueError(
             f"Not enough evaluation images available. "
             f"Expected at least {params.num_of_images_to_save}, "
-            f"but got {len(eval_images)}."
+            f"but got {len(eval_images)}.",
         )
 
     ref_images_no_mask = [
@@ -294,30 +343,28 @@ def optimize_thermoscenes_scene(params: ThermoSceneOptimizationParameters) -> No
         for image in eval_images
     ]
 
-    shape_key = "shape"
-    texture_key = "shape.bsdf.reflectance.data"
+    shape_key = composite_mesh.name
+    texture_key = composite_mesh.name + "_texture"
 
     # Set up the pipeline for shape + texture optimization
     shape_scheduler = params.shape_params.scheduler(
-        end_iteration=params.optimization_iterations
+        end_iteration=params.optimization_iterations,
     )
     texture_scheduler = params.texture_params.scheduler(
-        end_iteration=params.optimization_iterations
+        end_iteration=params.optimization_iterations,
     )
 
-    # Instantiate the optimizer with high projection smoothing for stability
-    optimizer = MeshTextureOptimizer(
+    optimizer = RegularCompositeMeshTextureOptimizer(
         scene=scene_source,
         scene_params=mi.traverse(scene_source),
         optimization_events=OptimizationEvents(),
-        shape_key=shape_key,
-        texture_key=texture_key,
-        shape_smoothing_strength=params.shape_params.smoothing_strength,
-        texture_projection_steepness=params.texture_params.projection_steepness,
+        composite_mesh=composite_mesh,
         shape_scheduler=shape_scheduler,
         texture_scheduler=texture_scheduler,
         shape_loss=params.shape_params.image_loss,
         texture_loss=params.texture_params.image_loss,
+        parametrization_smoothing=params.shape_params.smoothing_strength,
+        texture_projection_steepness=params.texture_params.projection_steepness,
     )
 
     save_path = (
@@ -336,9 +383,19 @@ def optimize_thermoscenes_scene(params: ThermoSceneOptimizationParameters) -> No
     composite_scene_optimizer = CompositeSceneOptimizer(
         optimizer_config=[
             (params.shape_params.scene_optimizer, [shape_key]),
-            (params.shape_params.scene_optimizer, [texture_key]),
+            (params.texture_params.scene_optimizer, [texture_key]),
         ],
     )
+
+    for iteration in params.h_refinement_iterations:
+        optimizer.optimization_events.add_event(
+            iteration=iteration,
+            callback=lambda: optimizer.h_refinement(
+                factor=2,
+                scene_optimizer=composite_scene_optimizer,
+            ),
+        )
+        logger.info(f"Scheduling refinement by factor 2 for iteration {iteration}")
 
     if not params.mask_pixels_during_optimization:
         ref_images = ref_images_no_mask
@@ -361,20 +418,42 @@ def optimize_thermoscenes_scene(params: ThermoSceneOptimizationParameters) -> No
         save_path=params.output_folder / "Final_comparison.png",
     )
 
-    # Save the final state of the scene
-    logger.info("Saving final mesh and texture.")
-    texture = mi.Bitmap(optimizer.scene_params["shape.bsdf.reflectance.data"])
-    texture.write(str(params.output_folder / "thermoscene_rgb_texture.exr"))
+    # Save the final optimized state. The full composite is written as a single
+    # jsonpickle ``.json`` (reloadable with `RegularCompositeMesh.from_file` and the
+    # idiomatic artifact for downstream evaluation), the welded global mesh is
+    # written as one PLY (a single file for a quick Blender sanity check), and the
+    # six per-patch PLYs are written alongside their optimized textures.
+    logger.info("Saving final composite mesh, global mesh, patches, and textures.")
 
-    optimizer.scene.shapes()[0].write_ply(
-        str(params.output_folder / "thermoscene_shape.ply")
+    composite_json_path = params.output_folder / "thermoscene_shape.json"
+    with open(composite_json_path, "w") as composite_file:
+        composite_file.write(jsonpickle.encode(composite_mesh))
+
+    composite_mesh.global_mesh.save_to_ply(
+        output_dir=params.output_folder, save_name="thermoscene_global_mesh"
     )
+
+    for patch in composite_mesh:
+        patch.save_to_ply(output_dir=params.output_folder, save_name=patch.name)
+
+        texture = mi.Bitmap(
+            optimizer.scene_params[f"{patch.name}.bsdf.reflectance.data"]
+        )
+        texture_path = params.output_folder / f"{patch.name}_texture.exr"
+        texture.write(str(texture_path))
 
 
 if __name__ == "__main__":
     parameters = tyro.cli(ThermoSceneOptimizationParameters)
-    mlflow.log_params(
-        parameters.to_loggable_dict(ignore=set(["thermoscenes_scene_path"]))
-    )
 
-    optimize_thermoscenes_scene(params=parameters)
+    timestamp = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
+    with tracking.run(
+        run_name=f"large-step-{timestamp}",
+        artifact_directory=parameters.output_folder,
+    ):
+        tracking.log_dataset_source(
+            url=str(parameters.scene_path), name=str(parameters.scene_path.name)
+        )
+        tracking.log_params(parameters.to_loggable_dict(ignore=set(["scene_path"])))
+
+        optimize_thermoscenes_scene(params=parameters)

@@ -1,3 +1,5 @@
+from typing import Any
+
 import drjit as dr
 import mitsuba as mi
 import numpy as np
@@ -78,6 +80,32 @@ class RectangularMesh(Mesh, Patch):
         self._top_side_indices: "mi.ArrayXu" = None
         self._bottom_side_indices: "mi.ArrayXu" = None
 
+        self._update_side_indices()
+
+    def __getstate__(self) -> dict[str, Any]:
+        """
+        Extends `Mesh.__getstate__` by dropping the cached side-index arrays.
+
+        The four `_*_side_indices` are derived Mitsuba arrays (not serializable);
+        they are recomputed from the texture coordinates on load.
+
+        :returns: A dictionary representing the rectangular-mesh state.
+        """
+        state = super().__getstate__()
+        for key in (
+            "_left_side_indices",
+            "_right_side_indices",
+            "_top_side_indices",
+            "_bottom_side_indices",
+        ):
+            state.pop(key, None)
+        return state
+
+    def __setstate__(self, state: dict[str, Any]) -> None:
+        """
+        Restores the rectangular mesh and recomputes the side indices from texcoords.
+        """
+        super().__setstate__(state)
         self._update_side_indices()
 
     def _update_side_indices(self) -> None:

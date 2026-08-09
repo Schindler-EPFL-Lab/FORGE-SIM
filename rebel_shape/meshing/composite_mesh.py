@@ -1,4 +1,5 @@
 from collections.abc import Iterator, Sequence
+from typing import Any
 
 import drjit as dr
 import mitsuba as mi
@@ -74,6 +75,36 @@ class CompositeMesh(PatchManager):
         )
 
         self._build_global_mesh(global_bsdf)
+        self.update_global_representation()
+
+    def __getstate__(self) -> dict[str, Any]:
+        """
+        Exports the composite mesh state for serialization with `jsonpickle`.
+
+        `_averaging_weights` is a Mitsuba tensor and is stored as a numpy array; the
+        global mesh `_global_mesh` is dropped and rebuilt from the patches on load.
+        Each patch serializes itself (see `Mesh.__getstate__`).
+
+        :returns: A dictionary representing the composite mesh state.
+        """
+        state = self.__dict__.copy()
+        state["_averaging_weights"] = self._averaging_weights.numpy()
+        del state["_global_mesh"]
+        return state
+
+    def __setstate__(self, state: dict[str, Any]) -> None:
+        """
+        Restores the composite mesh, rebuilding the global mesh from the patches.
+
+        The patches and patch-to-global mappings are restored from `state`, then the
+        welded global mesh is rebuilt with a default BSDF and re-averaged. A Mitsuba
+        variant must already be set by the caller.
+        """
+        averaging_weights = state.pop("_averaging_weights")
+        self.__dict__.update(state)
+
+        self._averaging_weights = mi.TensorXf(averaging_weights)
+        self._build_global_mesh(DiffuseBSDF())
         self.update_global_representation()
 
     def _build_global_mesh(self, global_bsdf: DiffuseBSDF) -> None:
@@ -245,6 +276,18 @@ class CompositeMesh(PatchManager):
         Sets the BSDF of the global mesh to the new `bsdf` value.
         """
         self._global_mesh.bsdf = global_bsdf
+
+    @property
+    def global_mesh(self) -> Mesh:
+        """
+        The welded global `Mesh` that merges all patches, with seam vertices
+        shared across patch boundaries.
+
+        Kept in sync with the patches by `update_global_representation`; saving it
+        (e.g. via `global_mesh.save_to_ply`) yields the full surface as a single
+        watertight mesh instead of one PLY per patch.
+        """
+        return self._global_mesh
 
     @property
     def patches_with_mapping(self) -> Iterator[tuple[Mesh, npt.NDArray[np.uint32]]]:

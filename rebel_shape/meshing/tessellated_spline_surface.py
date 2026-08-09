@@ -9,6 +9,7 @@ import mitsuba as mi
 
 from rebel_shape.meshing.composite_mesh import CompositeMesh
 from rebel_shape.meshing.composite_spline_surface import CompositeSplineSurface
+from rebel_shape.meshing.mesh import Mesh
 from rebel_shape.meshing.rectangular_mesh import RectangularMesh
 from rebel_shape.plugin_wrappers.diffuse_bsdf import DiffuseBSDF
 
@@ -230,6 +231,16 @@ class TessellatedSplineSurface:
         Name of the tessellated mesh.
         """
         return self._tessellated_mesh.name
+
+    @property
+    def global_mesh(self) -> Mesh:
+        """
+        The welded global tessellated `Mesh` (all patches merged at the seams).
+
+        Saving it (``global_mesh.save_to_ply(...)``) produces the full surface as a
+        single watertight mesh, the mesh-side analog of the per-patch PLYs.
+        """
+        return self._tessellated_mesh.global_mesh
 
     @property
     def global_vertices(self) -> "mi.TensorXf":

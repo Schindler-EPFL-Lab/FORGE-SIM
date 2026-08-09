@@ -130,6 +130,7 @@ class TestSam3ThermoScenes(unittest.TestCase):
             sam3_checkpoint_dir=Path("fake_ckpt"),
             text_prompt="test",
             bpe_path=Path("."),
+            from_vggt=False,
         )
 
         run(params)

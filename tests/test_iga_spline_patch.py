@@ -13,34 +13,53 @@ class TestBSplinePatch(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
         mi.set_variant("llvm_ad_rgb")
-        cls.parametric_coords = mi.TensorXf(
-            [[0.0, 0.0], [1.0, 0.0], [0.0, 1.0], [1.0, 1.0], [0.5, 0.5]]
-        )
+        cls._parametric_coords_data = [
+            [0.0, 0.0],
+            [1.0, 0.0],
+            [0.0, 1.0],
+            [1.0, 1.0],
+            [0.5, 0.5],
+        ]
 
         cls.bezier_u_knots = [0.0, 0.0, 0.0, 1.0, 1.0, 1.0]
         cls.bezier_v_knots = [0.0, 0.0, 1.0, 1.0]
-        cls.bezier_control_points = mi.TensorXf(
-            [
-                [0.0, 0.0, 0.0],
-                [1.0, 0.0, 1.0],
-                [2.0, 0.0, 0.0],
-                [0.0, 1.0, 0.0],
-                [1.0, 1.0, 1.0],
-                [2.0, 1.0, 0.0],
-            ]
-        )
+        cls._bezier_control_points_data = [
+            [0.0, 0.0, 0.0],
+            [1.0, 0.0, 1.0],
+            [2.0, 0.0, 0.0],
+            [0.0, 1.0, 0.0],
+            [1.0, 1.0, 1.0],
+            [2.0, 1.0, 0.0],
+        ]
         cls.bezier_u_spline = BSpline(knot_vector=cls.bezier_u_knots, degree=2)
         cls.bezier_v_spline = BSpline(knot_vector=cls.bezier_v_knots, degree=1)
-        cls.bezier_surface = BSplinePatch(
+
+        cls._bezier_field_values_data = [
+            [0.0, 0.0],
+            [1.0, 0.0],
+            [2.0, 0.0],
+            [0.0, 1.0],
+            [1.0, 1.0],
+            [2.0, 1.0],
+        ]
+
+    def setUp(self) -> None:
+        # Control points, field values, and the surface built from them are
+        # constructed per test rather than cached on the class: a Mitsuba
+        # object that outlives the test which built it aborts a *later,
+        # unrelated* test inside Dr.Jit's thread pool ("Assertion failed ...
+        # queue.cpp: remain == 1").
+        self.parametric_coords = mi.TensorXf(self._parametric_coords_data)
+
+        self.bezier_control_points = mi.TensorXf(self._bezier_control_points_data)
+        self.bezier_surface = BSplinePatch(
             name="bezier_surface",
-            u_spline=cls.bezier_u_spline,
-            v_spline=cls.bezier_v_spline,
-            control_points=cls.bezier_control_points,
+            u_spline=self.bezier_u_spline,
+            v_spline=self.bezier_v_spline,
+            control_points=self.bezier_control_points,
         )
 
-        cls.bezier_field_values = mi.TensorXf(
-            [[0.0, 0.0], [1.0, 0.0], [2.0, 0.0], [0.0, 1.0], [1.0, 1.0], [2.0, 1.0]]
-        )
+        self.bezier_field_values = mi.TensorXf(self._bezier_field_values_data)
 
     def test_initialization(self):
         """

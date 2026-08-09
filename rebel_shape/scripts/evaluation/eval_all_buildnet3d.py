@@ -7,6 +7,7 @@ import numpy as np
 import tyro
 
 from rebel_shape import logger
+from rebel_shape.scripts.evaluation.eval_all_common import prepare_metrics_output_folder
 
 
 @dataclass
@@ -62,6 +63,9 @@ def eval_all_buildnet3d(
         ValueError if `scenes_ids` is not a subset of {"1", "2", "3", "4"}.
         RuntimeError if the number of found meshes differs from the number of
         found textures.
+        FileExistsError if a scene's output folder already holds the metrics of an
+        earlier run.
+        subprocess.CalledProcessError if a render or evaluation subprocess fails.
     """
 
     dataset_root = validation_inputs_root / "data"
@@ -160,7 +164,9 @@ def eval_all_buildnet3d(
         ):
             logger.info(f"Evaluating {spline_path} {spline_texture_path.as_list_str()}")
             output_folder = output_root / f"{scene_name_data}_{idx}"
-            output_folder.mkdir(exist_ok=True)
+            prepare_metrics_output_folder(
+                output_folder, "eval_nvs.json", "eval_shape.json"
+            )
             output_images_folder = output_folder / "images"
             output_images_folder.mkdir(exist_ok=True, parents=True)
 
@@ -168,7 +174,7 @@ def eval_all_buildnet3d(
             cmd = [
                 "python3",
                 "rebel_shape/scripts/render_eval_images.py",
-                "--thermoscenes-scene-path",
+                "--scene-path",
                 str(thermoscenes_path),
                 "--environment-map-path",
                 str(environment_map_path),
@@ -181,7 +187,7 @@ def eval_all_buildnet3d(
                 "--no-use-gpu",
             ]
             logger.info(f"Running: {' '.join(cmd)}")
-            subprocess.run(cmd)
+            subprocess.run(cmd, check=True)
 
             # calculate NVS and Chamfer distance metrics
             cmd = [
@@ -201,7 +207,7 @@ def eval_all_buildnet3d(
                 str(output_folder),
             ]
             logger.info(f"Running: {' '.join(cmd)}")
-            subprocess.run(cmd)
+            subprocess.run(cmd, check=True)
 
             current_metrics: dict[str, float] = {}
             with open(output_folder / "eval_nvs.json") as f:

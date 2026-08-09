@@ -9,7 +9,6 @@ from pathlib import Path
 
 import drjit as dr
 import mitsuba as mi
-import mlflow
 import tyro
 
 # This is a hack so that the script work with azure sdkv2.
@@ -20,7 +19,7 @@ sys.path.append("./")
 
 from dataclasses_reverse_cli.reverse_cli import ReverseCli
 
-from rebel_shape import logger
+from rebel_shape import logger, tracking
 from rebel_shape.data_processing.image_scene_loader import ImageSceneLoader
 from rebel_shape.data_processing.masked_pose_image import MaskedPoseImage
 from rebel_shape.plugin_wrappers.diffuse_bsdf import DiffuseBSDF
@@ -64,7 +63,6 @@ class ThermoSceneOptimizationParameters(ReverseCli):
 
     pose_params: PoseOptimizationConfig = field(
         default_factory=lambda: PoseOptimizationConfig(
-            initial_sphere_radius=3.0,
             learning_rate_start=0.08,
             learning_rate_end=0.04,
             learning_rate_steepness=1.5,
@@ -180,13 +178,17 @@ def initialize_scene(
         guiding=GuidingOptions.NONE,
     )
 
-    mlflow.log_param("spp_continuous", continuous_samples)
-    mlflow.log_param("spp_projective", visibility_samples)
-    mlflow.log_param("spp_indirect", visibility_samples)
+    tracking.log_params(
+        {
+            "spp_continuous": continuous_samples,
+            "spp_projective": visibility_samples,
+            "spp_indirect": visibility_samples,
+        }
+    )
 
     sampler = Sampler(type=Sampler.Type.MULTIJITTER, sample_count=continuous_samples)
 
-    loader = ImageSceneLoader(
+    loader = ImageSceneLoader.from_thermoscene(
         scene_path=thermoscenes_scene_path,
         environment_map_path=envmap_path,
         spp=4,
@@ -406,8 +408,9 @@ def optimize_thermoscenes_scene(params: ThermoSceneOptimizationParameters) -> No
 
 if __name__ == "__main__":
     parameters = tyro.cli(ThermoSceneOptimizationParameters)
-    mlflow.log_params(
-        parameters.to_loggable_dict(ignore=set(["thermoscenes_scene_path"]))
-    )
+    with tracking.run(artifact_directory=parameters.output_folder):
+        tracking.log_params(
+            parameters.to_loggable_dict(ignore=set(["thermoscenes_scene_path"]))
+        )
 
-    optimize_thermoscenes_scene(params=parameters)
+        optimize_thermoscenes_scene(params=parameters)

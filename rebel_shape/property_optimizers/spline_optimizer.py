@@ -262,6 +262,17 @@ class SplineOptimizer(PropertyOptimizer):
 
                     mesh.save_to_ply(output_dir=output_directory, save_name=mesh_name)
 
+                # Also save the welded full surface as a single watertight mesh, so
+                # the optimized spline is available both as per-patch PLYs and as one
+                # global mesh (no separate stitching step required).
+                full_mesh_name = (
+                    f"{self._tessellated_spline.spline_name}_full"
+                    f"_{timestamp}_iteration-{iteration:03}"
+                )
+                self._tessellated_spline.global_mesh.save_to_ply(
+                    output_dir=output_directory, save_name=full_mesh_name
+                )
+
         if self._brep_save_interval is not None:
             if (iteration + 1) % self._brep_save_interval == 0:
                 brep_name = (

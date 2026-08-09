@@ -7,6 +7,7 @@ import tyro
 
 from rebel_shape import logger
 from rebel_shape.scripts.evaluation.eval_all_buildnet3d import SplineTexturePaths
+from rebel_shape.scripts.evaluation.eval_all_common import prepare_metrics_output_folder
 
 
 def eval_all_real(
@@ -38,6 +39,9 @@ def eval_all_real(
             "extracted-car", "extracted-woodshed-sun", "extracted_heater_water_kettle"}.
         RuntimeError if the number of found meshes differs from the number of
         found textures.
+        FileExistsError if a scene's output folder already holds the metrics of an
+        earlier run.
+        subprocess.CalledProcessError if a render or evaluation subprocess fails.
     """
     dataset_root = validation_inputs_root / "data"
     splines_root = validation_inputs_root / "splines"
@@ -55,7 +59,9 @@ def eval_all_real(
     if not dataset_root.exists():
         raise FileNotFoundError(f"The `dataset_root` {dataset_root} does not exist.")
     if not environment_map_path.exists():
-        raise FileNotFoundError(f"The `dataset_root` {dataset_root} does not exist.")
+        raise FileNotFoundError(
+            f"The `environment_map_path` {environment_map_path} does not exist."
+        )
 
     output_root.mkdir(exist_ok=True, parents=True)
 
@@ -118,7 +124,7 @@ def eval_all_real(
         ):
             logger.info(f"Evaluating {spline_path} {spline_texture_path.as_list_str()}")
             output_folder = output_root / f"{scene_name}_{idx}"
-            output_folder.mkdir(exist_ok=True)
+            prepare_metrics_output_folder(output_folder, "eval_nvs.json")
             output_images_folder = output_folder / "images"
             output_images_folder.mkdir(exist_ok=True, parents=True)
 
@@ -126,7 +132,7 @@ def eval_all_real(
             cmd = [
                 "python3",
                 "rebel_shape/scripts/render_eval_images.py",
-                "--thermoscenes-scene-path",
+                "--scene-path",
                 str(thermoscenes_path),
                 "--environment-map-path",
                 str(environment_map_path),
@@ -139,23 +145,23 @@ def eval_all_real(
                 "--no-use-gpu",
             ]
             logger.info(f"Running: {' '.join(cmd)}")
-            subprocess.run(cmd)
+            subprocess.run(cmd, check=True)
 
             # calculate NVS metrics
             cmd = [
                 "python3",
                 "rebel_shape/scripts/evaluation/eval_real.py",
-                "--thermoscenes-scene-path",
+                "--scene-path",
                 str(thermoscenes_path),
                 "--environment-map-path",
                 str(environment_map_path),
                 "--rendered-images-folder",
                 str(output_images_folder),
-                "--output_folder",
+                "--output-folder",
                 str(output_folder),
             ]
             logger.info(f"Running: {' '.join(cmd)}")
-            subprocess.run(cmd)
+            subprocess.run(cmd, check=True)
 
             current_metrics: dict[str, float] = {}
             with open(output_folder / "eval_nvs.json") as f:

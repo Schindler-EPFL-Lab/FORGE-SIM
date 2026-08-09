@@ -15,63 +15,67 @@ class TestBSplinePatch(unittest.TestCase):
 
         cls.bezier_2_u_knots = [0.0, 0.0, 0.0, 1.0, 1.0, 1.0]
         cls.bezier_2_v_knots = [0.0, 0.0, 1.0, 1.0]
-        cls.bezier_2_control_points = mi.TensorXf(
-            np.array(
-                [
-                    [0.0, 0.0, 0.0],
-                    [1.0, 0.0, 1.0],
-                    [2.0, 0.0, 0.0],
-                    [0.0, 1.0, 0.0],
-                    [1.0, 1.0, 1.0],
-                    [2.0, 1.0, 0.0],
-                ]
-            )
-        )
+        cls._bezier_2_control_points_data = [
+            [0.0, 0.0, 0.0],
+            [1.0, 0.0, 1.0],
+            [2.0, 0.0, 0.0],
+            [0.0, 1.0, 0.0],
+            [1.0, 1.0, 1.0],
+            [2.0, 1.0, 0.0],
+        ]
         cls.bezier_2_u_spline = BSpline(knot_vector=cls.bezier_2_u_knots, degree=2)
         cls.bezier_2_v_spline = BSpline(knot_vector=cls.bezier_2_v_knots, degree=1)
-        cls.bezier_2_surface = BSplinePatch(
-            name="bezier_2_surface",
-            u_spline=cls.bezier_2_u_spline,
-            v_spline=cls.bezier_2_v_spline,
-            control_points=cls.bezier_2_control_points,
-        )
 
-        cls.parametric_coords = mi.TensorXf(
-            np.array(
-                [
-                    [0.0, 0.0],  # Bottom-left
-                    [1.0, 0.0],  # Bottom-right
-                    [0.0, 1.0],  # Top-left
-                    [1.0, 1.0],  # Top-right
-                    [0.5, 0.5],  # Center
-                ]
-            )
-        )
+        cls._parametric_coords_data = [
+            [0.0, 0.0],  # Bottom-left
+            [1.0, 0.0],  # Bottom-right
+            [0.0, 1.0],  # Top-left
+            [1.0, 1.0],  # Top-right
+            [0.5, 0.5],  # Center
+        ]
 
         cls.bezier_3_u_knots = [0.0, 0.0, 0.0, 1.0, 1.0, 1.0]
         cls.bezier_3_v_knots = [0.0, 0.0, 0.0, 1.0, 1.0, 1.0]
-        cls.bezier_3_control_points = mi.TensorXf(
-            np.array(
-                [
-                    [0.0, 0.0, 0.0],
-                    [1.0, 0.0, 1.0],
-                    [2.0, 0.0, 0.0],
-                    [0.0, 0.0, 1.0],
-                    [1.0, 0.5, 0.0],
-                    [2.0, 1.0, 1.0],
-                    [0.0, 1.0, 0.0],
-                    [1.0, 1.0, 1.0],
-                    [2.0, 1.0, 0.0],
-                ]
-            )
-        )
+        cls._bezier_3_control_points_data = [
+            [0.0, 0.0, 0.0],
+            [1.0, 0.0, 1.0],
+            [2.0, 0.0, 0.0],
+            [0.0, 0.0, 1.0],
+            [1.0, 0.5, 0.0],
+            [2.0, 1.0, 1.0],
+            [0.0, 1.0, 0.0],
+            [1.0, 1.0, 1.0],
+            [2.0, 1.0, 0.0],
+        ]
         cls.bezier_3_u_spline = BSpline(knot_vector=cls.bezier_3_u_knots, degree=2)
         cls.bezier_3_v_spline = BSpline(knot_vector=cls.bezier_3_v_knots, degree=2)
-        cls.bezier_3_surface = BSplinePatch(
+
+    def setUp(self) -> None:
+        # Control-point tensors and the surfaces built from them are
+        # constructed per test rather than cached on the class: a Mitsuba
+        # object that outlives the test which built it aborts a *later,
+        # unrelated* test inside Dr.Jit's thread pool ("Assertion failed ...
+        # queue.cpp: remain == 1").
+        self.bezier_2_control_points = mi.TensorXf(
+            np.array(self._bezier_2_control_points_data)
+        )
+        self.bezier_2_surface = BSplinePatch(
+            name="bezier_2_surface",
+            u_spline=self.bezier_2_u_spline,
+            v_spline=self.bezier_2_v_spline,
+            control_points=self.bezier_2_control_points,
+        )
+
+        self.parametric_coords = mi.TensorXf(np.array(self._parametric_coords_data))
+
+        self.bezier_3_control_points = mi.TensorXf(
+            np.array(self._bezier_3_control_points_data)
+        )
+        self.bezier_3_surface = BSplinePatch(
             name="bezier_3_surface",
-            u_spline=cls.bezier_3_u_spline,
-            v_spline=cls.bezier_3_v_spline,
-            control_points=cls.bezier_3_control_points,
+            u_spline=self.bezier_3_u_spline,
+            v_spline=self.bezier_3_v_spline,
+            control_points=self.bezier_3_control_points,
         )
 
     def test_metric_tensor(self):

@@ -11,7 +11,6 @@ from pathlib import Path
 
 import drjit as dr
 import mitsuba as mi
-import mlflow
 import tyro
 
 # This is a hack so that the script work with azure sdkv2.
@@ -22,7 +21,7 @@ sys.path.append("./")
 
 from dataclasses_reverse_cli.reverse_cli import ReverseCli
 
-from rebel_shape import logger
+from rebel_shape import logger, tracking
 from rebel_shape.data_processing.masked_pose_image import MaskedPoseImage
 from rebel_shape.meshing.tessellated_spline_surface import TessellatedSplineSurface
 from rebel_shape.plugin_wrappers.diffuse_bsdf import DiffuseBSDF
@@ -53,7 +52,11 @@ from rebel_shape.utils.sensor_utils import create_cameras_fibonacci
 class SuzanneSplineTextureParameters(ReverseCli):
     """Parameters used for simultaneous spline and texture optimization of Suzanne"""
 
-    sensor_count: int = 19
+    mesh_path: Path
+    """Path to the mesh to optimize"""
+    environment_map_path: Path | None = None
+    """Environment map. Defaults to checkerboard_lighter.exr"""
+    sensor_count: int = 25
     """Number of camera views used in optimization"""
     reference_samples: int = 4096
     """Number of samples per pixel used for the reference/target images"""
@@ -63,20 +66,19 @@ class SuzanneSplineTextureParameters(ReverseCli):
     """number of samples per pixel used for direct and indirect visibility gradients"""
     image_resolution: int = 512
     """Resolution of the rendered images along height and width"""
-    optimization_iterations: int = 250
+    optimization_iterations: int = 400
     """Adam learning rate in the first pass"""
 
     shape_params: SplineShapeOptimizationConfig = field(
         default_factory=lambda: SplineShapeOptimizationConfig(
             smoothing_strength=0.0,
-            learning_rate_start=1.0,
+            learning_rate_start=0.5,
             learning_rate_end=1.0,
             learning_rate_steepness=1.0,
             use_lbfgs=True,
             uniform_adam=True,
             batch_size=None,
-            lbfgs_history_size=10,
-            h_refinement_iterations=[25, 50, 80, 140],
+            h_refinement_iterations=[50, 120, 200, 300],
             degree=3,
             knot_spans=2,
             tessellation_subdivisions=256,
@@ -86,8 +88,8 @@ class SuzanneSplineTextureParameters(ReverseCli):
     texture_params: TextureOptimizationConfig = field(
         default_factory=lambda: TextureOptimizationConfig(
             texture_resolution=512,
-            learning_rate_start=0.03,
-            learning_rate_end=0.12,
+            learning_rate_start=0.05,
+            learning_rate_end=0.05,
             learning_rate_steepness=2.0,
             use_lbfgs=False,
             uniform_adam=False,
@@ -118,9 +120,16 @@ class SuzanneSplineTextureParameters(ReverseCli):
             raise ValueError("`resolution` must be a positive integer")
         if self.optimization_iterations < 1:
             raise ValueError("`optimization_iterations` must be a positive integer.")
+        if self.environment_map_path is None:
+            cwd = Path(__file__).resolve().parent
+            self.environment_map_path: Path = Path(
+                cwd, "../../data/textures/checkerboard_lighter.exr"
+            )
 
 
 def initialize_scene(
+    mesh_path: Path,
+    environment_map_path: Path,
     sensor_count: int,
     continuous_samples: int,
     visibility_samples: int,
@@ -165,25 +174,27 @@ def initialize_scene(
         guiding=GuidingOptions.NONE,
     )
 
-    mlflow.log_param("spp_continuous", continuous_samples)
-    mlflow.log_param("spp_projective", visibility_samples)
-    mlflow.log_param("spp_indirect", visibility_samples)
+    tracking.log_params(
+        {
+            "spp_continuous": continuous_samples,
+            "spp_projective": visibility_samples,
+            "spp_indirect": visibility_samples,
+        }
+    )
 
     script_dir = Path(__file__).parent.resolve()
-    target_texture_path = (
-        script_dir / "../../data/test_scenes/textures/checkerboard_texture.jpg"
-    )
+    target_texture_path = script_dir / "../../data/textures/checkerboard_texture.jpg"
 
     scene_dict = {
         "type": "scene",
         "integrator": integrator.mitsuba_dict,
         "emitter": {
             "type": "envmap",
-            "filename": str(script_dir / "../../data/test_scenes/textures/envmap2.exr"),
+            "filename": str(environment_map_path),
         },
         "shape": {
             "type": "ply",
-            "filename": str(script_dir / "../../data/test_scenes/meshes/suzanne.ply"),
+            "filename": str(mesh_path),
             "bsdf": DiffuseBSDF(
                 reflectance=DiffuseBSDF.Texture(texture_path=target_texture_path)
             ).mitsuba_dict,
@@ -241,7 +252,7 @@ def initialize_scene(
         "integrator": integrator.mitsuba_dict,
         "emitter": {
             "type": "envmap",
-            "filename": str(script_dir / "../../data/test_scenes/textures/envmap2.exr"),
+            "filename": str(environment_map_path),
         },
     }
     for mesh in reversed(cubedsphere):
@@ -277,6 +288,8 @@ def optimize_suzanne(params: SuzanneSplineTextureParameters) -> None:
         mi.set_variant("llvm_ad_rgb")
 
     scene_source, ref_images, tessellated_spline = initialize_scene(
+        mesh_path=params.mesh_path,
+        environment_map_path=params.environment_map_path,
         sensor_count=params.sensor_count,
         continuous_samples=params.continuous_samples,
         visibility_samples=params.visibility_samples,
@@ -353,6 +366,7 @@ def optimize_suzanne(params: SuzanneSplineTextureParameters) -> None:
 
 if __name__ == "__main__":
     parameters = tyro.cli(SuzanneSplineTextureParameters)
-    mlflow.log_params(parameters.to_loggable_dict())
+    with tracking.run(artifact_directory=parameters.output_folder):
+        tracking.log_params(parameters.to_loggable_dict())
 
-    optimize_suzanne(params=parameters)
+        optimize_suzanne(params=parameters)

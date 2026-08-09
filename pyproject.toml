@@ -9,14 +9,14 @@ description = "Perform shape optimization with Mitsuba"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
-    "mitsuba>=3.7.0",
+    "mitsuba>=3.8.0",
     "matplotlib>=3.10.0",
     "cholespy>=2.1.0",
     "h5py>=3.11.0",
     "jsonpickle>=4.0.2",
     "dataclasses-reverse-cli>=0.0.5",
     "tyro>=0.9.27",
-    "mlflow>=3.5.0rc0",
+    "mlflow>=3.7.0",
     "cadquery-ocp>=7.8.1.1.post1",
     "ocp-stubs",
 ]
@@ -48,14 +48,15 @@ foreground-background = [
     "moge>=2.0.0",
     "scikit-image>=0.25.2",
 ]
+visualization = ["pyqt6>=6.11.0"]
 fast-cholesky = ["scikit-sparse>=0.5.0"]
 
 
 [tool.uv.sources]
 azure-ml-utils = { path = "../azure-ml-utils", editable = true }
 moge = { git = "https://github.com/microsoft/MoGe", rev = "0286b495230a074aadf1c76cc5c679e943e5d1c6" }
-ocp-stubs = { git = "https://github.com/CadQuery/OCP-stubs", rev="e838ff400d5ee2f4a0579d2a713b19311855288f" }
-sam3 = { git = "https://github.com/facebookresearch/sam3", rev="86ed77094094e5cabb16b0414ec60c5ba9ce0a0f" }
+ocp-stubs = { git = "https://github.com/CadQuery/OCP-stubs", rev = "e838ff400d5ee2f4a0579d2a713b19311855288f" }
+sam3 = { git = "https://github.com/facebookresearch/sam3", rev = "86ed77094094e5cabb16b0414ec60c5ba9ce0a0f" }
 # switched to the git version to avoid the decod dependency on arm by not installing any extra
 # using this commit because there is a type error with the code SAM3.1 and using SAM3
 

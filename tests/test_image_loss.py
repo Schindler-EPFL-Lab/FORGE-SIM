@@ -4,6 +4,7 @@ from pathlib import Path
 import mitsuba as mi
 import numpy as np
 
+from rebel_shape import logger as rebel_shape_logger
 from rebel_shape.loss_evaluators.image_loss_l1 import ImageLossL1
 from rebel_shape.loss_evaluators.image_loss_l2 import ImageLossL2
 from rebel_shape.loss_evaluators.image_loss_msssim import ImageLossMSSSIM
@@ -118,3 +119,55 @@ class TestImageLossFunctions(unittest.TestCase):
         self.assertAlmostEqual(
             same_image_loss.numpy().astype(np.float64), 0.0, places=6
         )
+
+    def test_msssim_loss_crops_mismatched_dimensions_instead_of_raising(self):
+        """
+        Regression test: images whose height/width are not divisible by
+        `2 ** (scales - 1)` used to fail inside the multi-scale downsampling
+        reshape. `compute_msssim` now crops both images to the largest
+        compatible size and logs a warning instead of raising. A pair of
+        *identical*, spatially-varying (non-constant) images is used so that
+        an inconsistent crop between the two images -- e.g. cropping rows off
+        one and columns off the other -- would show up as a nonzero loss;
+        with a shared, correct crop the loss must still be exactly the
+        self-similarity value (~0), not merely "some finite number".
+        """
+        height, width = 11, 13
+        # 2 scales requires height/width divisible by 2**(2-1) = 2; both are
+        # odd, so both dimensions must be cropped by one.
+        row = np.linspace(0.0, 1.0, height, dtype=np.float32)[:, None]
+        col = np.linspace(0.0, 1.0, width, dtype=np.float32)[None, :]
+        gradient_image = mi.TensorXf((0.5 * row + 0.5 * col)[:, :, None])
+
+        msssim_loss = ImageLossMSSSIM(
+            k1=0.01, k2=0.03, dynamic_range=1.0, weights=[0.5, 0.5]
+        )
+
+        with self.assertLogs(rebel_shape_logger, level="WARNING") as captured:
+            loss = msssim_loss.evaluate(gradient_image, gradient_image)
+
+        self.assertTrue(
+            any("cropping" in message for message in captured.output),
+            captured.output,
+        )
+        self.assertAlmostEqual(loss.numpy().astype(np.float64), 0.0, places=5)
+
+    def test_msssim_loss_rejects_images_smaller_than_the_scale_divisor(self):
+        """
+        Regression test for the other end of that crop: an image smaller than
+        `2 ** (scales - 1)` has no compatible size to be cropped to, so the crop
+        target is 0 and the images become empty. Dr.Jit then fails deep inside
+        the reshape with "operands have incompatible sizes! (sizes: 0, 1)", which
+        names neither the image nor the divisor. `compute_msssim` must reject the
+        input up front with a `ValueError` naming both.
+        """
+        # The 5-scale default needs both dimensions divisible by 2**(5-1) = 16.
+        small_image = mi.TensorXf(np.zeros((8, 8, 3), dtype=np.float32))
+        msssim_loss = ImageLossMSSSIM()
+
+        with self.assertRaises(ValueError) as context:
+            msssim_loss.evaluate(small_image, small_image)
+
+        message = str(context.exception)
+        self.assertIn("8x8", message)
+        self.assertIn("16", message)

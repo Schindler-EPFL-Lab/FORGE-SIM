@@ -1,5 +1,5 @@
 """
-A script to create a black environmental map and save it
+A script to create a black or white environmental map and save it
 """
 
 import os
@@ -16,7 +16,7 @@ from dataclasses_reverse_cli.reverse_cli import ReverseCli
 
 
 @dataclass
-class CreateBlackEnvironmentalMapConfig(ReverseCli):
+class CreateEnvironmentalMapConfig(ReverseCli):
     """
     Configuration for creation of an environmental map with resolution `resolution` and
     to save it at `save_path`
@@ -28,6 +28,9 @@ class CreateBlackEnvironmentalMapConfig(ReverseCli):
     save_path: Path
     """Where to store the output path of the file"""
 
+    black: bool = True
+    """black if true, white otherwise"""
+
     resolution: tuple[int, int] = (1024, 2048)
     """Resolution of the environmental map"""
 
@@ -38,15 +41,18 @@ class CreateBlackEnvironmentalMapConfig(ReverseCli):
             raise ValueError(f"Extension of save_path {self.save_path} is not .exr")
 
 
-def create_black_environmental_map(params: CreateBlackEnvironmentalMapConfig):
+def create_environmental_map(params: CreateEnvironmentalMapConfig):
     """
     Creates a black environmental map with resolution `params.resolution` and
     store it at `params.save_path`
     """
-    black_image = np.zeros(params.resolution, dtype=np.float32)
-    iio.imwrite(params.save_path, black_image)
+    if params.black:
+        image = np.zeros(params.resolution, dtype=np.float32)
+    else:
+        image = np.ones(params.resolution, dtype=np.float32)
+    iio.imwrite(params.save_path, image)
 
 
 if __name__ == "__main__":
-    params = tyro.cli(CreateBlackEnvironmentalMapConfig)
-    create_black_environmental_map(params)
+    params = tyro.cli(CreateEnvironmentalMapConfig)
+    create_environmental_map(params)

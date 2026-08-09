@@ -45,12 +45,12 @@ def main() -> None:
 
     ml_client = get_client()
     dataset = ml_client.data.get(
-        name=str(parameters.script_params.thermoscenes_scene_path),
+        name=str(parameters.script_params.scene_path),
         version=parameters.scene_version,
     )
 
     job_inputs = dict(
-        scene_name=str(parameters.script_params.thermoscenes_scene_path),
+        scene_name=str(parameters.script_params.scene_path),
         data=Input(
             type=AssetTypes.URI_FOLDER,  # type: ignore
             path=dataset.id,
@@ -59,7 +59,7 @@ def main() -> None:
     )
 
     job_name = (
-        str(parameters.script_params.thermoscenes_scene_path)
+        str(parameters.script_params.scene_path)
         + "-"
         + model_type
         + "-"
@@ -67,9 +67,9 @@ def main() -> None:
     )
 
     parameters.experiment_name = (
-        str(parameters.script_params.thermoscenes_scene_path) + "-training-job"
+        str(parameters.script_params.scene_path) + "-training-job"
     )
-    parameters.script_params.thermoscenes_scene_path = Path("${{inputs.data}}")
+    parameters.script_params.scene_path = Path("${{inputs.data}}")
 
     cmd = (
         "python3.12 rebel_shape/scripts/"

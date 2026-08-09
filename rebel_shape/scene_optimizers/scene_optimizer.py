@@ -4,9 +4,9 @@ from dataclasses import dataclass
 from typing import Callable, TypeAlias, Union
 
 import mitsuba as mi
-import mlflow
 import numpy as np
 
+from rebel_shape import tracking
 from rebel_shape.data_processing.masked_pose_image import MaskedPoseImage
 from rebel_shape.loss_evaluators.image_loss import ImageLoss
 from rebel_shape.regularization.regularization import Regularization
@@ -330,10 +330,12 @@ class SceneOptimizer(abc.ABC):
         the gradient has been applied and loss computed, can be added to
         `optimization_events` and will be triggered.
 
-        `mlflow` records the learning rate, total loss, regularization loss, and
-        reconstruction loss for each iteration. The learning rate is logged for each
-        parameter, while the losses are logged as a single value for the entire
-        optimization step.
+        The learning rate, total loss, regularization loss, and reconstruction loss are
+        reported for each iteration through `rebel_shape.tracking`. The learning rate is
+        reported for each parameter, while the losses are reported as a single value for
+        the entire optimization step. Whether any of it is actually recorded depends on
+        how the environment configured tracking; the optimization itself is identical
+        either way.
 
         :raises RuntimeError: if `set_parameters` was not called before calling
             `optimize` - this is detected by checking if all parameters in
@@ -366,7 +368,7 @@ class SceneOptimizer(abc.ABC):
             self.set_learning_rate(learning_rates)
 
             for key, learning_rate in learning_rates.items():
-                mlflow.log_metric(
+                tracking.log_metric(
                     f"learning rate - {key}", learning_rate, step=iteration
                 )
 
@@ -379,13 +381,13 @@ class SceneOptimizer(abc.ABC):
                 seed=iteration,
             )
 
-            # Log the losses with mlflow
+            # Report the losses to the experiment tracker
             loss_float = float(loss.numpy().astype(np.float64))
             reg_loss_float = float(reg_loss.numpy().astype(np.float64))
 
-            mlflow.log_metric("total loss", loss_float, step=iteration)
-            mlflow.log_metric("regularization loss", reg_loss_float, step=iteration)
-            mlflow.log_metric(
+            tracking.log_metric("total loss", loss_float, step=iteration)
+            tracking.log_metric("regularization loss", reg_loss_float, step=iteration)
+            tracking.log_metric(
                 "reconstruction loss", loss_float - reg_loss_float, step=iteration
             )
 

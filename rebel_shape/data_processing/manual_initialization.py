@@ -1,9 +1,61 @@
 import json
 from pathlib import Path
 
+import drjit as dr
 import mitsuba as mi
 import numpy as np
 from scipy.spatial.transform import Rotation
+
+
+def unit_sphere_normalization_transform(
+    vertex_positions: "mi.TensorXf",
+) -> "mi.Transform4f":
+    """
+    Returns the transform that recenters `vertex_positions` at the origin and
+    rescales them so the farthest vertex from the recentered origin lies on
+    the unit sphere.
+
+    The bbox transforms produced by `pose_params_to_bbox_transforms` (and the
+    hand-authored JSONs in `data/bbox_transforms/`) assume an input that sits
+    on a unit sphere centered at the origin. Composing this normalization in
+    front of `tf_bbox` keeps that contract valid for an input mesh of
+    arbitrary native size AND position.
+
+    Centering uses the axis-aligned bounding-box center (not the vertex
+    centroid) so the result is invariant to tessellation density.
+
+    `vertex_positions` is a `(V, 3)` tensor as exposed by `Mesh.vertices`.
+
+    :raises ValueError: If the bounding box has zero extent (all vertices
+        coincide).
+    """
+    vertex_points = dr.unravel(mi.Point3f, vertex_positions.array)
+
+    center_x = 0.5 * (
+        float(dr.min(vertex_points.x)[0]) + float(dr.max(vertex_points.x)[0])
+    )
+    center_y = 0.5 * (
+        float(dr.min(vertex_points.y)[0]) + float(dr.max(vertex_points.y)[0])
+    )
+    center_z = 0.5 * (
+        float(dr.min(vertex_points.z)[0]) + float(dr.max(vertex_points.z)[0])
+    )
+    center = mi.Point3f(center_x, center_y, center_z)
+
+    max_radius = float(dr.max(dr.norm(vertex_points - center))[0])
+    if max_radius <= 0.0:
+        raise ValueError(
+            "Cannot normalize a mesh whose vertices all coincide with a single point."
+        )
+    inv_radius = 1.0 / max_radius
+
+    # Apply translate-to-origin first, then uniform scale.
+    return mi.Transform4f().scale(
+        mi.Point3f(inv_radius, inv_radius, inv_radius),
+    ) @ mi.Transform4f().translate(
+        mi.Point3f(-center_x, -center_y, -center_z),
+    )
+
 
 def load_bounding_bbox_transforms(bbox_transforms_path: Path) -> "mi.Transform4f":
     """

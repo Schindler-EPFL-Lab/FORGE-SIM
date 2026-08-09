@@ -18,17 +18,33 @@ class PoseOptimizationConfig(SceneOptimizationConfig):
     pose is optimized using the specified loss functions and optimizers. Typically,
     a simple L1 loss is best suited for this task, as it is robust to outliers and
     provides a good initial guess for the pose.
+
+    `jitter` adds a small symmetry-breaking perturbation to the initial scale and
+    translation (proportional to the radius); `seed` controls reproducibility of
+    that draw. They are honored by `PoseOptimizer` and ignored by callers that
+    do not plumb them through.
+
+    The radius of the initial sphere proxy is not configured here. The dedicated
+    pose script computes it via a golden-section search; the combined
+    mesh/spline scripts expose it as a top-level field of their own parameter
+    dataclass.
     """
 
-    initial_sphere_radius: float
-    """Radius of the initial sphere used for optimization"""
     optimization_iterations: int = 10
     """Number of iterations for pose optimization"""
+    jitter: float = 0.01
+    """
+    Magnitude of the symmetry-breaking perturbation applied to the initial pose.
+    Each of the 6 translation/scale components receives `jitter * N(0, 1)` (with
+    translation scaled by the radius). Set to 0 to disable.
+    """
+    seed: int = 0
+    """Random seed used to draw the jitter values."""
 
     def __post_init__(self) -> None:
         super().__post_init__()
 
-        if self.initial_sphere_radius <= 0.0:
-            raise ValueError("`initial_sphere_radius` must be a positive real number.")
         if self.optimization_iterations < 1:
             raise ValueError("`optimization_iterations` must be a positive integer.")
+        if self.jitter < 0.0:
+            raise ValueError("`jitter` must be a non-negative real number.")

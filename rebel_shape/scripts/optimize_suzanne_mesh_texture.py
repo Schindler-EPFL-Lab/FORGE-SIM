@@ -1,6 +1,13 @@
 """
 Example script for optimizing the shape and texture of the Suzanne mesh,
-Verifies the correctness of the `MeshTextureOptimizer` class.
+Verifies the correctness of the `RegularCompositeMeshTextureOptimizer` class.
+
+This script is currently set up to test the new 6-patch composite-mesh path: it
+initializes the source mesh as a cubed sphere whose six faces share topology via
+`PatchManager`, each with its own texture, mirroring the spline cubed-sphere
+setup in `optimize_suzanne_spline_texture.py`. The original single-PLY +
+`MeshTextureOptimizer` path is replaced for the duration of this test — revert
+the optimizer swap to compare against the old behavior.
 """
 
 import sys
@@ -10,7 +17,6 @@ from pathlib import Path
 
 import drjit as dr
 import mitsuba as mi
-import mlflow
 import tyro
 
 # This is a hack so that the script work with azure sdkv2.
@@ -21,12 +27,15 @@ sys.path.append("./")
 
 from dataclasses_reverse_cli.reverse_cli import ReverseCli
 
-from rebel_shape import logger
+from rebel_shape import logger, tracking
 from rebel_shape.data_processing.masked_pose_image import MaskedPoseImage
+from rebel_shape.meshing.regular_composite_mesh import RegularCompositeMesh
 from rebel_shape.plugin_wrappers.diffuse_bsdf import DiffuseBSDF
 from rebel_shape.plugin_wrappers.prb_integrator import GuidingOptions, PRBIntegrator
 from rebel_shape.plugin_wrappers.sampler import Sampler
-from rebel_shape.property_optimizers.mesh_texture_optimizer import MeshTextureOptimizer
+from rebel_shape.property_optimizers.regular_composite_mesh_texture_optimizer import (
+    RegularCompositeMeshTextureOptimizer,
+)
 from rebel_shape.scene_optimizers.composite_scene_optimizer import (
     CompositeSceneOptimizer,
 )
@@ -48,16 +57,20 @@ class SuzanneMeshTextureParameters(ReverseCli):
 
     sensor_count: int = 12
     """Number of camera views used in optimization"""
-    reference_samples: int = 1024
+    reference_samples: int = 256
     """Number of samples per pixel used for the reference/target images"""
-    base_samples: int = 64
+    base_samples: int = 16
     """Number of samples per pixel used for continuous derivatives"""
     image_resolution: int = 480
     """Resolution of the rendered images along height and width"""
-    texture_resolution: int = 1024
+    texture_resolution: int = 512
     """Resolution of the texture along height and width"""
     optimization_iterations: int = 100
     """Number of optimization iterations with `SceneAdamBatch`"""
+    initial_subdivisions: int = 32
+    """Grid resolution per cube face at the start of optimization"""
+    h_refinement_iterations: list[int] = field(default_factory=lambda: [25, 50, 80])
+    """Iterations at which the composite mesh is h-refined by a factor of 2"""
 
     shape_params: ShapeOptimizationConfig = field(
         default_factory=lambda: ShapeOptimizationConfig(
@@ -68,7 +81,7 @@ class SuzanneMeshTextureParameters(ReverseCli):
             use_lbfgs=False,
             uniform_adam=True,
             batch_size=4,
-        )
+        ),
     )
     """Parameters for shape optimization"""
     texture_params: TextureOptimizationConfig = field(
@@ -80,7 +93,7 @@ class SuzanneMeshTextureParameters(ReverseCli):
             use_lbfgs=False,
             uniform_adam=False,
             batch_size=2,
-        )
+        ),
     )
     """Parameters for texture optimization"""
 
@@ -106,6 +119,14 @@ class SuzanneMeshTextureParameters(ReverseCli):
             raise ValueError("`resolution` must be a positive integer")
         if self.optimization_iterations < 1:
             raise ValueError("`optimization_iterations` must be a positive integer.")
+        if self.initial_subdivisions < 1:
+            raise ValueError("`initial_subdivisions` must be a positive integer.")
+        for it in self.h_refinement_iterations:
+            if it < 0 or it >= self.optimization_iterations:
+                raise ValueError(
+                    "`h_refinement_iterations` entries must be in "
+                    f"[0, {self.optimization_iterations}), got {it}.",
+                )
 
 
 def initialize_scene(
@@ -114,7 +135,8 @@ def initialize_scene(
     reference_samples: int,
     image_resolution: int,
     texture_resolution: int,
-) -> tuple["mi.Scene", list[MaskedPoseImage]]:
+    initial_subdivisions: int,
+) -> tuple["mi.Scene", list[MaskedPoseImage], RegularCompositeMesh]:
     """
     Sets up the scene, sensors, and reference images for shape optimization.
 
@@ -128,17 +150,16 @@ def initialize_scene(
     is `base_samples` while projective and indirect ones are 4 times smaller for
     the sake of efficiency.
 
-    The initial mesh is an icosphere with 10k vertices, and the initial texture
-    is a solid grey color. The target mesh is a Suzanne mesh with a checkerboard
-    texture applied to it.
+    The initial source mesh is a 6-patch cubed sphere built via
+    `RegularCompositeMesh.cubed_sphere` with `initial_subdivisions` grid cells
+    per cube face; each face carries its own solid-grey initial texture so seams
+    across patch boundaries do not require duplicated vertices. The target mesh
+    is the same Suzanne PLY with a checkerboard texture as in the original
+    single-mesh test setup.
 
-    :returns: A tuple containing:
-
-        - `scene_source`: The Mitsuba scene to be optimized, which contains the
-            initial shape and texture.
-        - `ref_images`: a list of reference images rendered from a camera sensors
-            created in a Fibonacci pattern around the origin, each with a resolution of
-            `image_resolution` with `reference_samples` samples per pixel.
+    :returns: A tuple containing the source Mitsuba scene, the list of reference
+        images, and the `RegularCompositeMesh` whose shape and per-patch
+        textures will be optimized.
     """
     integrator = PRBIntegrator(
         max_bounces=4,
@@ -149,33 +170,35 @@ def initialize_scene(
         guiding=GuidingOptions.NONE,
     )
 
-    mlflow.log_param("spp_continuous", base_samples)
-    mlflow.log_param("spp_projective", base_samples // 4)
-    mlflow.log_param("spp_indirect", base_samples // 4)
-
-    script_dir = Path(__file__).parent.resolve()
-    target_texture_path = (
-        script_dir / "../../data/test_scenes/textures/checkerboard_texture.jpg"
+    tracking.log_params(
+        {
+            "spp_continuous": base_samples,
+            "spp_projective": base_samples // 4,
+            "spp_indirect": base_samples // 4,
+        }
     )
 
-    scene_dict = {
+    script_dir = Path(__file__).parent.resolve()
+    target_texture_path = script_dir / "../../data/textures/checkerboard_texture.jpg"
+
+    target_scene_dict = {
         "type": "scene",
         "integrator": integrator.mitsuba_dict,
         "emitter": {
             "type": "envmap",
-            "filename": str(script_dir / "../../data/test_scenes/textures/envmap2.exr"),
+            "filename": str(script_dir / "../../data/textures/envmap2.exr"),
         },
         "shape": {
             "type": "ply",
-            "filename": str(script_dir / "../../data/test_scenes/meshes/suzanne.ply"),
+            "filename": str(script_dir / "../../data/meshes/suzanne.ply"),
             "bsdf": DiffuseBSDF(
-                reflectance=DiffuseBSDF.Texture(texture_path=target_texture_path)
+                reflectance=DiffuseBSDF.Texture(texture_path=target_texture_path),
             ).mitsuba_dict,
         },
     }
 
     # Target images are obtained through rendering
-    scene_target: "mi.Scene" = mi.load_dict(scene_dict)
+    scene_target: "mi.Scene" = mi.load_dict(target_scene_dict)
     cameras = create_cameras_fibonacci(
         sensor_count=sensor_count,
         target_coords=(0.0, 0.0, 0.0),
@@ -194,39 +217,56 @@ def initialize_scene(
     ]
 
     show_rendered_views(
-        views=[mi.util.convert_to_bitmap(image.original_image) for image in ref_images]
+        views=[mi.util.convert_to_bitmap(image.original_image) for image in ref_images],
     )
     logger.info(f"Rendered target images. Took {time.time() - start_time:.2f} seconds")
 
-    # Set the initial shape of the object - ico-sphere
-    scene_dict["shape"]["filename"] = str(
-        script_dir / "../../data/test_scenes/meshes/ico_10k.ply"
+    # Build the source mesh: 6-patch cubed sphere with one solid-grey texture per
+    # face. This is the mesh-side analog of the cubed_sphere() call in
+    # optimize_suzanne_spline_texture.py.
+    composite_mesh = RegularCompositeMesh.cubed_sphere(
+        name="suzanne",
+        subdivisions=initial_subdivisions,
+        radius=1.0,
+        bsdf=DiffuseBSDF(
+            DiffuseBSDF.TextureFromTensor(
+                tensor=dr.full(
+                    dtype=mi.TensorXf,
+                    value=0.5,
+                    shape=(texture_resolution, texture_resolution, 3),
+                ),
+            ),
+        ),
     )
 
-    # Set the initial texture of the object - solid grey
-    scene_dict["shape"]["bsdf"] = DiffuseBSDF(
-        DiffuseBSDF.TextureFromTensor(
-            tensor=dr.full(
-                dtype=mi.TensorXf,
-                value=0.5,
-                shape=(texture_resolution, texture_resolution, 3),
-            )
-        )
-    ).mitsuba_dict
+    source_scene_dict: dict = {
+        "type": "scene",
+        "integrator": integrator.mitsuba_dict,
+        "emitter": {
+            "type": "envmap",
+            "filename": str(script_dir / "../../data/textures/envmap2.exr"),
+        },
+    }
+    # `reversed` matches the spline_texture script's pattern; it ensures patches
+    # are inserted in a stable order regardless of factory order.
+    for mesh in reversed(composite_mesh):
+        source_scene_dict[mesh.name] = mesh.mitsuba_dict
 
-    scene_source: "mi.Scene" = mi.load_dict(scene_dict)
+    scene_source: "mi.Scene" = mi.load_dict(source_scene_dict)
 
-    return scene_source, ref_images
+    return scene_source, ref_images, composite_mesh
 
 
 def optimize_suzanne(params: SuzanneMeshTextureParameters) -> None:
     """
     An example of optimizing both the shape and texture of the Suzanne mesh.
 
-    Serves to validate that the implementation of `ShapeTextureOptimizer` works
-    correctly on a simple example. A reference suzanne mesh is loaded and rendered
-    and then a spherical initialization with a gray texture is used as initialization
-    for the optimization.
+    Serves to validate that `RegularCompositeMeshTextureOptimizer` works as the
+    drop-in mesh-side analog of `SplineTextureOptimizer`. A reference Suzanne
+    mesh is rendered, then a 6-patch cubed sphere with solid-grey per-patch
+    textures is optimized to match it. The composite topology means the seam
+    vertices between cube faces are shared rather than duplicated, eliminating
+    the tearing failure mode of the original single-PLY `MeshTextureOptimizer`.
 
     Optionally, images and meshes can be saved to `params.output_folder`. The path
     should be a directory where the images will be saved. If the directory does not
@@ -242,25 +282,24 @@ def optimize_suzanne(params: SuzanneMeshTextureParameters) -> None:
         mi.set_variant("llvm_ad_rgb")
         logger.info("Using the CPU for rendering.")
 
-    scene_source, ref_images = initialize_scene(
+    scene_source, ref_images, composite_mesh = initialize_scene(
         sensor_count=params.sensor_count,
         base_samples=params.base_samples,
         reference_samples=params.reference_samples,
         image_resolution=params.image_resolution,
         texture_resolution=params.texture_resolution,
+        initial_subdivisions=params.initial_subdivisions,
     )
 
     # Configuring the property optimizer
-    shape_key = "shape"
-    texture_key = "shape.bsdf.reflectance.data"
+    shape_key = composite_mesh.name
+    texture_key = composite_mesh.name + "_texture"
 
-    optimizer = MeshTextureOptimizer(
+    optimizer = RegularCompositeMeshTextureOptimizer(
         scene=scene_source,
         scene_params=mi.traverse(scene_source),
         optimization_events=OptimizationEvents(),
-        shape_key=shape_key,
-        texture_key=texture_key,
-        shape_smoothing_strength=params.shape_params.smoothing_strength,
+        composite_mesh=composite_mesh,
         shape_scheduler=params.shape_params.scheduler(
             end_iteration=params.optimization_iterations,
         ),
@@ -269,6 +308,7 @@ def optimize_suzanne(params: SuzanneMeshTextureParameters) -> None:
         ),
         shape_loss=params.shape_params.image_loss,
         texture_loss=params.texture_params.image_loss,
+        parametrization_smoothing=params.shape_params.smoothing_strength,
     )
 
     composite_scene_optimizer = CompositeSceneOptimizer(
@@ -277,6 +317,16 @@ def optimize_suzanne(params: SuzanneMeshTextureParameters) -> None:
             (SceneAdamSequential(batch_size=2, uniform=False), [texture_key]),
         ],
     )
+
+    for iteration in params.h_refinement_iterations:
+        optimizer.optimization_events.add_event(
+            iteration=iteration,
+            callback=lambda: optimizer.h_refinement(
+                factor=2,
+                scene_optimizer=composite_scene_optimizer,
+            ),
+        )
+        logger.info(f"Scheduling refinement by factor 2 for iteration {iteration}")
 
     optimizer.optimize(
         ref_images=ref_images,
@@ -295,18 +345,22 @@ def optimize_suzanne(params: SuzanneMeshTextureParameters) -> None:
         save_path=params.output_folder / "Final_comparison.png",
     )
 
-    # Save the final state of the scene
-    texture = mi.Bitmap(optimizer.scene_params["shape.bsdf.reflectance.data"])
-    texture.write(str(params.output_folder / "suzanne_rgb_texture.exr"))
-    texture.write(str(params.output_folder / "suzanne_rgb_texture.png"))
-
-    optimizer.scene.shapes()[0].write_ply(
-        str(params.output_folder / "suzanne_shape.ply")
-    )
+    # Save the final state of each patch's texture and geometry.
+    for mesh in composite_mesh:
+        texture = mi.Bitmap(
+            optimizer.scene_params[f"{mesh.name}.bsdf.reflectance.data"],
+        )
+        texture.write(str(params.output_folder / f"{mesh.name}_texture.exr"))
+        texture.write(str(params.output_folder / f"{mesh.name}_texture.png"))
+        mesh.save_to_ply(
+            output_dir=params.output_folder,
+            save_name=f"{mesh.name}_final",
+        )
 
 
 if __name__ == "__main__":
     parameters = tyro.cli(SuzanneMeshTextureParameters)
-    mlflow.log_params(parameters.to_loggable_dict())
+    with tracking.run(artifact_directory=parameters.output_folder):
+        tracking.log_params(parameters.to_loggable_dict())
 
-    optimize_suzanne(params=parameters)
+        optimize_suzanne(params=parameters)

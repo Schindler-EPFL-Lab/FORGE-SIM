@@ -39,8 +39,8 @@ class EvalNVSParameters(ReverseCli):
     Parameters used for evaluation of novel view synthesis.
     """
 
-    thermoscenes_scene_path: Path
-    """Path to the ThermoScenes scene on what the spline was optimized."""
+    scene_path: Path
+    """Path to the scene on what the spline was optimized."""
     rendered_images_folder: Path
     """Path to the rendered images folder of the optimized spline surface."""
     environment_map_path: Path | None = None
@@ -50,14 +50,29 @@ class EvalNVSParameters(ReverseCli):
     """
     samples_per_pixel: int = 169
     """Number of samples per pixel used for rendering"""
-    output_folder: Path = Path("./outputs/")
+    output_folder: Path | None = None
     """Where to save the metrics (created if does not exist)"""
+    from_vggt: bool = False
+    """
+    True of pose are estimatedusing VGGT. Reverts to Thermoscene otherwise
+    """
+    ignore_background: bool = False
+    """
+    If True, white pixels of the eval images (considered white here) are ignored in the
+    evaluation of the rendered images. This is used for real world dataset to avoid
+    low scores due to modeling of occluding elements which will be removed from the
+    eval images but present in the render. if we kept them, a "bad" render of a missing
+    part in the eval images could lead to a higher score for a method that performs
+    badly.
+    """
 
     def __post_init__(self) -> None:
-        if not self.thermoscenes_scene_path.exists():
-            raise FileNotFoundError(f"'{self.thermoscenes_scene_path}' does not exist.")
+        if not self.scene_path.exists():
+            raise FileNotFoundError(f"'{self.scene_path}' does not exist.")
         if not self.rendered_images_folder.exists():
             raise FileNotFoundError(f"'{self.rendered_images_folder}' does not exist.")
+        if self.output_folder is None:
+            self.output_folder: Path = self.rendered_images_folder / "nvs"
 
 
 def eval_novel_view_synthesis(params: EvalNVSParameters) -> None:
@@ -65,14 +80,14 @@ def eval_novel_view_synthesis(params: EvalNVSParameters) -> None:
     Calculates the metrics for novel view synthesis between the ground truth images and
     the optimized spline surface rendered images.
 
-    It loads the ThermoScenes scene from `params.thermoscenes_scene_path` along with
+    It loads the ThermoScenes scene from `params.scene_path` along with
     rendered images from `params.rendered_images_folder`. Then it calculates novel view
     synthesis metrics between ground truth (GT) and rendered images.
     It assumes that stems of rendered images and grouth truth images
     are the same for the corresponding images. It saves the result metrics in json file
     at `params.output_file_path`
 
-    :raises ValueError: If `params.thermoscenes_scene_path` is not a valid path, or
+    :raises ValueError: If `params.scene_path` is not a valid path, or
         it is not a directory.
     """
 
@@ -80,11 +95,18 @@ def eval_novel_view_synthesis(params: EvalNVSParameters) -> None:
 
     device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
 
-    loader = ImageSceneLoader(
-        scene_path=params.thermoscenes_scene_path,
-        environment_map_path=params.environment_map_path,
-        use_foreground_masks=True,
-    )
+    if params.from_vggt:
+        loader = ImageSceneLoader.from_vggt(
+            scene_path=params.scene_path,
+            environment_map_path=params.environment_map_path,
+            use_foreground_masks=True,
+        )
+    else:
+        loader = ImageSceneLoader.from_thermoscene(
+            scene_path=params.scene_path,
+            environment_map_path=params.environment_map_path,
+            use_foreground_masks=True,
+        )
 
     rendered_images_paths = sorted(list(params.rendered_images_folder.glob("*")))
     rendered_images_paths = {
@@ -106,8 +128,20 @@ def eval_novel_view_synthesis(params: EvalNVSParameters) -> None:
         )
         rendered_image = eval_image.apply_mask(mitsuba_rendered_image)
         rendered_image_torch = mitsuba_to_torch(rendered_image, device=device)
+
+        # Ignore white background pixel to avoid occlusion in real datasets
+        # The trick is we make all white pixels in eval_image_torch a white pixel in
+        # rendered_image_torch
+        if params.ignore_background:
+            white_value = 1.0
+            white_mask = (eval_image_torch == white_value).all(dim=0, keepdim=True)
+            rendered_image_torch = torch.where(
+                white_mask, white_value, rendered_image_torch
+            )
+
         rendered_images_torch.append(rendered_image_torch)
 
+    params.output_folder.mkdir(parents=True, exist_ok=True)
     torchvision.utils.save_image(
         eval_images_torch, params.output_folder / "eval_images.png"
     )
@@ -121,7 +155,6 @@ def eval_novel_view_synthesis(params: EvalNVSParameters) -> None:
         device=device,
     )
 
-    params.output_folder.mkdir(parents=True, exist_ok=True)
     with open(params.output_folder / "eval_nvs.json", "w") as f:
         json.dump(metrics, f, indent=4)
 

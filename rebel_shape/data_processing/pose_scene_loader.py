@@ -1,9 +1,10 @@
 import json
 from pathlib import Path
-from typing import Generator
+from typing import Any, Generator
 
 import mitsuba as mi
 import numpy as np
+import numpy.typing as npt
 
 from rebel_shape.plugin_wrappers.perspective_camera import PerspectiveCamera
 from rebel_shape.plugin_wrappers.sampler import Sampler
@@ -23,6 +24,7 @@ class PoseSceneLoader:
         scene_path: Path,
         sensor_sampler: Sampler = Sampler(),
         align_cameras_xz: bool = True,
+        pixel_format: PerspectiveCamera.PixelFormat = PerspectiveCamera.PixelFormat.RGB,
     ):
         """
         Loads the poses from the directory `scene_path`.
@@ -35,7 +37,9 @@ class PoseSceneLoader:
 
         Mitsuba sensors have an associated sampler; when loading the camera poses
         from the dataset, the `PerspectiveCamera` instance is initialized with the
-        provided `sensor_sampler`.
+        provided `sensor_sampler`. `pixel_format` selects the per-camera output pixel
+        format; for use under the Mitsuba `mono` variants set this to
+        `LUMINANCE`, otherwise leave the default `RGB`.
 
         :raises FileNotFoundError: If the scene path does not exist.
         """
@@ -58,12 +62,6 @@ class PoseSceneLoader:
         with open(transform_path, "r") as f:
             self._transform_data = json.load(f)
 
-        image_width = int(self._transform_data["w"])
-        image_height = int(self._transform_data["h"])
-
-        focal_length_x = float(self._transform_data["fl_x"])
-        fov_x = 2.0 * np.arctan(image_width / (2.0 * focal_length_x)) * 180.0 / np.pi
-
         # Transformation applied to the reference nerfstudio format
         applied_transform = np.eye(4)
         if "applied_transform" in self._transform_data:
@@ -75,6 +73,8 @@ class PoseSceneLoader:
         inv_reference_pose_matrix: mi.ScalarTransform4f | None = None
         # Iterate through frames from transform_data
         for frame in self._transform_data.get("frames", []):
+            frame = self.get_frame(frame=frame)
+
             rgb_image_filename = Path(frame["file_path"]).name
 
             # Mitsuba, COLMAP and nerfstudio use different conventions for camera frame
@@ -87,18 +87,12 @@ class PoseSceneLoader:
             # What nerfstudio does with COLMAP data (start line 390)
             # https://github.com/nerfstudio-project/nerfstudio/blob/73fe54dda0b743616854fc839889d955522e0e68/nerfstudio/process_data/colmap_utils.py
 
-            # Nerfstudio exported transform_matrix
-            pose_matrix = np.array(frame["transform_matrix"])
-            # Apply the inverse of applied_transform to convert poses
-            # to the COLMAP global frame
-            pose_matrix = applied_transform_inv @ pose_matrix
-
-            # Going from Nerfstudio to Mitsuba requires flipping the sign of x and z
-            pose_matrix = mi.ScalarTransform4f(pose_matrix)
-            # scale(-1, 1, -1) should not be taken into account when calculating
-            # _extra_transforms because the scaling changes only the camera local
-            # coordinates but not the camera poses
-            pose_matrix = pose_matrix.scale(mi.ScalarPoint3f(-1.0, 1.0, -1.0))
+            pose_matrix = self.get_pose_matrix(frame=frame)
+            pose_matrix = self.preprocess_pose_matrix(
+                pose_matrix=pose_matrix,
+                applied_transform_inv=applied_transform_inv,
+            )
+            pose_matrix = self.pose_matrix_to_mitsuba(pose_matrix=pose_matrix)
 
             # Transform into the reference frame
             if inv_reference_pose_matrix is None:
@@ -108,12 +102,15 @@ class PoseSceneLoader:
 
             pose_matrix = inv_reference_pose_matrix @ pose_matrix
 
+            image_width, image_height, fov_x = self.get_image_info(frame=frame)
+
             # Create a camera object from pose, fov and resolution
             camera = PerspectiveCamera(
                 tf_camera_pose=pose_matrix,
                 camera_resolution=(image_width, image_height),
                 fov=fov_x,
                 fov_axis=PerspectiveCamera.FovAxis.X,
+                pixel_format=pixel_format,
                 sampler=self._sensor_sampler,
             )
 
@@ -133,6 +130,76 @@ class PoseSceneLoader:
 
         if align_cameras_xz:
             self._align_cameras_to_xz_plane()
+
+    def get_frame(self, frame: dict[str, Any]) -> dict[str, Any]:
+        """
+        Extracts the per-image frame record from the raw `frame` entry read from
+        `transforms.json`. The default implementation assumes `frame` already is
+        that record; subclasses whose dataset nests it under a different key (e.g.
+        under `"rgb"`) must override this to return the nested dictionary.
+
+        :returns: The frame record, with `"file_path"` and `"transform_matrix"` keys
+            (plus whatever `get_image_info` needs).
+        """
+        return frame
+
+    def get_pose_matrix(self, frame: dict[str, Any]) -> npt.NDArray[np.float64]:
+        """
+        Extracts the raw 4x4 camera pose matrix from `frame` (as returned by
+        `get_frame`), before any coordinate-convention conversion is applied.
+        Subclasses whose dataset stores a different matrix convention or shape
+        (e.g. a 3x4 world-to-camera matrix) must override this to return the
+        camera-to-world matrix in `frame`'s native coordinate convention.
+
+        :returns: A `(4, 4)` camera-to-world pose matrix, still in the dataset's
+            native coordinate convention.
+        """
+        return np.array(frame["transform_matrix"])
+
+    def preprocess_pose_matrix(
+        self,
+        pose_matrix: npt.NDArray[np.float64],
+        applied_transform_inv: npt.NDArray[np.float64],
+    ) -> npt.NDArray[np.float64]:
+        """
+        Applies dataset-level global transforms before converting camera conventions.
+
+        Default behavior follows Nerfstudio's convention where `applied_transform`
+        maps from COLMAP frame to exported frame and therefore needs to be inverted.
+        """
+        return applied_transform_inv @ pose_matrix
+
+    def pose_matrix_to_mitsuba(
+        self,
+        pose_matrix: npt.NDArray[np.float64],
+    ) -> "mi.ScalarTransform4f":
+        """
+        Convert camera-to-world matrix from Nerfstudio coordinates to Mitsuba.
+
+        Nerfstudio uses X right / Y up / Z backward, while Mitsuba uses
+        X left / Y up / Z forward.
+        """
+        tf_pose = mi.ScalarTransform4f(pose_matrix)
+        return tf_pose.scale(mi.ScalarPoint3f(-1.0, 1.0, -1.0))
+
+    def get_image_info(self, frame: dict[str, Any]) -> tuple[int, int, float]:
+        """
+        Reads the image resolution and horizontal field of view for `frame` (as
+        returned by `get_frame`). The default implementation assumes a single
+        shared `"w"` / `"h"` / `"fl_x"` (focal length) at the top level of
+        `self._transform_data` and derives `fov_x` from the focal length.
+        Subclasses whose dataset stores resolution/FOV per frame instead of
+        globally, or already stores `fov_x` directly, must override this.
+
+        :returns: A tuple of `(image_width, image_height, fov_x)`, with `fov_x` in
+            degrees.
+        """
+        image_width = int(self._transform_data["w"])
+        image_height = int(self._transform_data["h"])
+
+        focal_length_x = float(self._transform_data["fl_x"])
+        fov_x = 2.0 * np.arctan(image_width / (2.0 * focal_length_x)) * 180.0 / np.pi
+        return image_width, image_height, fov_x
 
     @staticmethod
     def _load_image_paths_from_folder(folder: Path) -> dict[str, Path]:

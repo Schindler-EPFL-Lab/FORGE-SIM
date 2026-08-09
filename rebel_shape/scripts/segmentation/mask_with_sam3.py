@@ -65,6 +65,9 @@ class Sam3ThermoScenesParams(ReverseCli):
     """In the transform.json, the new field will be saved under this name.
     Can overwrite an existing field."""
 
+    from_vggt: bool = False
+    """True if dataset from vggt. False if thermoscene"""
+
     def __post_init__(self) -> None:
         if isinstance(self.text_prompt, Prompts):
             self.text_prompt: str = self.text_prompt.value
@@ -199,6 +202,8 @@ def run(params: Sam3ThermoScenesParams) -> None:
     n_fail = 0
 
     for i, frame in enumerate(frames, start=1):
+        if params.from_vggt:
+            frame = frame["rgb"]
         relative_path: str = frame.get("file_path", None)
         image_path = params.scene_dir / relative_path
 

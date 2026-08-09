@@ -9,7 +9,6 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 import mitsuba as mi
-import mlflow
 import tyro
 from dataclasses_reverse_cli.reverse_cli import ReverseCli
 
@@ -20,7 +19,7 @@ from dataclasses_reverse_cli.reverse_cli import ReverseCli
 sys.path.append("./")
 
 
-from rebel_shape import logger
+from rebel_shape import logger, tracking
 from rebel_shape.data_processing.masked_pose_image import MaskedPoseImage
 from rebel_shape.meshing.tessellated_spline_surface import TessellatedSplineSurface
 from rebel_shape.plugin_wrappers.diffuse_bsdf import DiffuseBSDF
@@ -161,9 +160,13 @@ def initialize_scene(
         guiding=GuidingOptions.NONE,
     )
 
-    mlflow.log_param("spp_continuous", continuous_samples)
-    mlflow.log_param("spp_projective", visibility_samples)
-    mlflow.log_param("spp_indirect", visibility_samples)
+    tracking.log_params(
+        {
+            "spp_continuous": continuous_samples,
+            "spp_projective": visibility_samples,
+            "spp_indirect": visibility_samples,
+        }
+    )
 
     scene_dict = {
         "type": "scene",
@@ -326,6 +329,7 @@ def optimize_ply(params: PLYSplineParameters) -> None:
 
 if __name__ == "__main__":
     parameters = tyro.cli(PLYSplineParameters)
-    mlflow.log_params(parameters.to_loggable_dict())
+    with tracking.run(artifact_directory=parameters.output_folder):
+        tracking.log_params(parameters.to_loggable_dict())
 
-    optimize_ply(params=parameters)
+        optimize_ply(params=parameters)

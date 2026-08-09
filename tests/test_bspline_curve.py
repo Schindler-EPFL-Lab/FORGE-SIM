@@ -9,6 +9,15 @@ from rebel_shape.splines.bspline_curve import BSplineCurve
 
 
 class TestBSplineCurve(unittest.TestCase):
+    # Control-point coordinates for the linear and Bezier reference curves,
+    # held as plain tuples rather than `mi.TensorXf` on the class: a Mitsuba
+    # object that outlives the test which built it aborts a *later,
+    # unrelated* test inside Dr.Jit's thread pool ("Assertion failed ...
+    # queue.cpp: remain == 1"), so the tensors (and the curves built from
+    # them) are constructed fresh in `setUp` instead.
+    _CONTROL_POINTS_LINEAR = ((0.0, 0.0, 0.0), (1.0, 2.0, 3.0))
+    _CONTROL_POINTS_BEZIER = ((0.0, 0.0, 0.0), (1.0, 2.0, 0.0), (2.0, 0.0, 0.0))
+
     @classmethod
     def setUpClass(cls) -> None:
         mi.set_variant("llvm_ad_rgb")
@@ -18,30 +27,12 @@ class TestBSplineCurve(unittest.TestCase):
         cls.spline_linear = BSpline(
             knot_vector=cls.knots_linear, degree=cls.degree_linear
         )
-        cls.control_points_linear = mi.TensorXf(
-            np.array([[0.0, 0.0, 0.0], [1.0, 2.0, 3.0]])
-        )
-        cls.curve_linear = BSplineCurve(
-            spline=cls.spline_linear, control_points=cls.control_points_linear
-        )
 
         # Simple Bezier curve example
         cls.knots_bezier = [0.0, 0.0, 0.0, 1.0, 1.0, 1.0]
         cls.degree_bezier = 2
-        cls.control_points_bezier = mi.TensorXf(
-            np.array(
-                [
-                    [0.0, 0.0, 0.0],
-                    [1.0, 2.0, 0.0],
-                    [2.0, 0.0, 0.0],
-                ]
-            )
-        )
         cls.spline_bezier = BSpline(
             knot_vector=cls.knots_bezier, degree=cls.degree_bezier
-        )
-        cls.curve_bezier = BSplineCurve(
-            spline=cls.spline_bezier, control_points=cls.control_points_bezier
         )
 
         cls.samples = 99
@@ -121,6 +112,17 @@ class TestBSplineCurve(unittest.TestCase):
                 ),
             },
         ]
+
+    def setUp(self) -> None:
+        self.control_points_linear = mi.TensorXf(np.array(self._CONTROL_POINTS_LINEAR))
+        self.curve_linear = BSplineCurve(
+            spline=self.spline_linear, control_points=self.control_points_linear
+        )
+
+        self.control_points_bezier = mi.TensorXf(np.array(self._CONTROL_POINTS_BEZIER))
+        self.curve_bezier = BSplineCurve(
+            spline=self.spline_bezier, control_points=self.control_points_bezier
+        )
 
     def test_invalid_control_points_shape(self):
         """

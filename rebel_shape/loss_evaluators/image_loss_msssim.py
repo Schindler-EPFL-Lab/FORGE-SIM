@@ -1,6 +1,7 @@
 import drjit as dr
 import mitsuba as mi
 
+from rebel_shape import logger
 from rebel_shape.loss_evaluators.image_loss import ImageLoss
 from rebel_shape.loss_evaluators.image_loss_ssim import ImageLossSSIM
 
@@ -29,7 +30,7 @@ class ImageLossMSSSIM(ImageLoss):
 
     DEFAULT_WEIGHTS = (0.0448, 0.2856, 0.3001, 0.2363, 0.1332)
     """
-    Default weights from the original MS-SSIM paper 
+    Default weights from the original MS-SSIM paper
     https://www.cns.nyu.edu/pub/eero/wang03b.pdf
     """
 
@@ -156,11 +157,17 @@ class ImageLossMSSSIM(ImageLoss):
         Checks are performed on `weights` and other parameters to ensure they are valid.
         See `_check_weights` and `check_ssim_settings` for details.
 
+        Images whose height or width is not divisible by `2^(length(weights) - 1)`
+        cannot be down-sampled the required number of times, so both are cropped to
+        the nearest compatible size. The crop is reported as a warning naming the
+        discarded rows and columns. An image smaller than the divisor along either
+        dimension has no compatible size to crop to and is rejected.
+
         :returns: Single MS-SSIM value as a TensorXf
 
         :raises ValueError: If the images do not have the same shape, if the images
-            have an incorrect shape, or if the images cannot be down-sampled by the
-            number of scales (not divisible by `2^(length(weights) - 1)`)
+            have an incorrect shape, or if either dimension is smaller than
+            `2^(length(weights) - 1)`.
         """
         if weights is None:
             weights = list(ImageLossMSSSIM.DEFAULT_WEIGHTS)
@@ -183,16 +190,32 @@ class ImageLossMSSSIM(ImageLoss):
             raise ValueError("Input images must have the same shape")
 
         scales = len(weights)
-        # Check that the image can be divided down-sampled scales-1from
+        # Crop images to the nearest size compatible with the number of scales
+        # The required divisor is 2^(scales - 1)
+        divisor = 2 ** (scales - 1)
+        target_height = image_1.shape[0] - (image_1.shape[0] % divisor)
+        target_width = image_1.shape[1] - (image_1.shape[1] % divisor)
 
-        if (
-            image_1.shape[0] % (2 ** (scales - 1)) != 0
-            or image_1.shape[1] % (2 ** (scales - 1)) != 0
-        ):
+        if target_height <= 0 or target_width <= 0:
             raise ValueError(
-                "Image dimensions must be divisible by 2^(len(weights) - 1) for "
-                "down-sampling to be possible"
+                f"Input images of shape {image_1.shape[0]}x{image_1.shape[1]} are "
+                f"smaller than the divisor {divisor} = 2^({scales} - 1) along at "
+                f"least one dimension, so cropping them to a size that can be "
+                f"down-sampled {scales - 1} times leaves nothing to compare. Use "
+                "larger images or fewer scales."
             )
+
+        if target_height != image_1.shape[0] or target_width != image_1.shape[1]:
+            # Crop both images to the compatible size
+            logger.warning(
+                f"MS-SSIM inputs of shape {image_1.shape[0]}x{image_1.shape[1]} are "
+                f"not divisible by {divisor} = 2^({scales} - 1); cropping both images "
+                f"to {target_height}x{target_width}, discarding the bottom "
+                f"{image_1.shape[0] - target_height} row(s) and the rightmost "
+                f"{image_1.shape[1] - target_width} column(s)."
+            )
+            image_1 = image_1[:target_height, :target_width, :]
+            image_2 = image_2[:target_height, :target_width, :]
 
         ssim_vals = []
         sensitivity_maps = []
