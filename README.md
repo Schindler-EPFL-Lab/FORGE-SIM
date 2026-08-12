@@ -21,28 +21,36 @@ This project is built using the [uv package manager](https://docs.astral.sh/uv/)
 [Segment Anything Model 3 (SAM 3)](https://github.com/facebookresearch/sam3)
 require it as a dependency.
 
-The `fast-cholesky` extra builds against the system SuiteSparse libraries, so
-install those first if you intend to use `--all-extras`:
+The `extraction` and `fast-cholesky` extras cannot share an environment, because
+SAM 3 requires `numpy<2` while `scikit-sparse` requires `numpy>2`. Every install
+drops one of the two, so a bare `--all-extras` fails.
 
-```bash
-sudo apt-get install libsuitesparse-dev
-```
-
-Running the following commands at the top directory of rebel-shape installs the project:
+Running the following commands at the top directory of rebel-shape installs the
+project with the reconstruction extras, which is what the quick-start below uses:
 
 ```bash
 uv venv &&\
 uv pip install torch torchvision setuptools && \
-uv sync --all-extras
+uv sync --all-extras --no-extra fast-cholesky
+```
+
+For the simulation work, drop `extraction` instead and keep `fast-cholesky`. That
+one builds against the system SuiteSparse libraries, so install those first:
+
+```bash
+sudo apt-get install libsuitesparse-dev
+uv sync --all-extras --no-extra extraction
 ```
 
 `fast-cholesky` pulls in `scikit-sparse`, which lets the isogeometric modal and
 heat solvers factor with CHOLMOD's nested-dissection ordering instead of the
 default `cholespy` — roughly four times faster on the matrices these problems
 produce. It is genuinely optional: without it the solvers fall back automatically,
-and the two agree to about 2e-12, so results are unaffected. Omit `--all-extras`
-(or install the extras you need individually) if you would rather not add the
-system dependency.
+and the two agree to about 2e-12, so results are unaffected.
+
+`remeshing` pulls in `gpytoolbox`, which prepares the ground-truth meshes the
+end-to-end verification measures against. It publishes no linux-aarch64 wheel, so
+add `--no-extra remeshing` on those machines.
 
 ### Quick-start
 

@@ -24,6 +24,10 @@ dependencies = [
 [tool.uv]
 prerelease = "allow"
 environments = ["sys_platform == 'linux'"]
+# sam3 requires numpy<2 while scikit-sparse requires numpy>2, so the two extras
+# cannot share an environment. Declaring the conflict lets uv resolve each of them
+# against its own numpy instead of failing to produce a lockfile at all.
+conflicts = [[{ extra = "extraction" }, { extra = "fast-cholesky" }]]
 
 [project.optional-dependencies]
 extraction = [
@@ -50,6 +54,10 @@ foreground-background = [
 ]
 visualization = ["pyqt6>=6.11.0"]
 fast-cholesky = ["scikit-sparse>=0.5.0"]
+# Pinned rather than bounded below: gpytoolbox remeshes the ground-truth meshes the
+# end-to-end verification measures against, so a new release would silently move
+# every metric derived from them.
+remeshing = ["gpytoolbox==0.3.6"]
 
 
 [tool.uv.sources]
