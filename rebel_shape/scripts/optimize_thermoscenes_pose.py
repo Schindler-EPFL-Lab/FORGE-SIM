@@ -114,6 +114,9 @@ class ThermoScenePoseOptimizationParameters(ReverseCli):
     for this to work; for local testing, set to False.
     """
 
+    use_vggt: bool = False
+    """ Whether to use silhouette scene loader for vggt or thermoscene"""
+
     def __post_init__(self) -> None:
         if self.continuous_samples < 1:
             raise ValueError("`continuous_samples` must be a positive integer.")
@@ -179,11 +182,18 @@ def initialize_scene(
 
     sampler = Sampler(type=Sampler.Type.ORTHOGONAL, sample_count=continuous_samples)
 
-    loader = SilhouetteSceneLoader.from_thermoscene(
-        scene_path=thermoscenes_scene_path,
-        sensor_sampler=sampler,
-        pixel_format=PerspectiveCamera.PixelFormat.LUMINANCE,
-    )
+    if parameters.use_vggt:
+        loader = SilhouetteSceneLoader.from_vggt(
+            scene_path=thermoscenes_scene_path,
+            sensor_sampler=sampler,
+            pixel_format=PerspectiveCamera.PixelFormat.LUMINANCE,
+        )
+    else:
+        loader = SilhouetteSceneLoader.from_thermoscene(
+            scene_path=thermoscenes_scene_path,
+            sensor_sampler=sampler,
+            pixel_format=PerspectiveCamera.PixelFormat.LUMINANCE,
+        )
 
     cubedsphere = cubed_sphere(
         name="shape",
