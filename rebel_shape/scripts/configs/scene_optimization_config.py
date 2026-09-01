@@ -6,6 +6,7 @@ from rebel_shape.loss_evaluators.composite_loss import CompositeImageLoss
 from rebel_shape.loss_evaluators.image_loss_l1 import ImageLossL1
 from rebel_shape.loss_evaluators.image_loss_l2 import ImageLossL2
 from rebel_shape.loss_evaluators.image_loss_msssim import ImageLossMSSSIM
+from rebel_shape.scene_optimizers.batch_maker import BatchMaker
 from rebel_shape.scene_optimizers.scene_adam_sequential import SceneAdamSequential
 from rebel_shape.scene_optimizers.scene_lbfgs import SceneLBFGS
 from rebel_shape.scene_optimizers.scene_optimizer import SceneOptimizer
@@ -137,7 +138,8 @@ class SceneOptimizationConfig(ReverseCli):
         """
         if self.use_lbfgs:
             return SceneLBFGS(
-                batch_size=self.batch_size, history_size=self.lbfgs_history_size
+                batch_maker=BatchMaker(max_batch_size=self.batch_size),
+                history_size=self.lbfgs_history_size,
             )
 
         assert self.batch_size is not None

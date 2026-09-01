@@ -3,6 +3,7 @@ import mitsuba as mi
 
 from rebel_shape import logger
 from rebel_shape.data_processing.masked_pose_image import MaskedPoseImage
+from rebel_shape.scene_optimizers.batch_maker import BatchMaker
 from rebel_shape.scene_optimizers.lbfgs import LBFGS
 from rebel_shape.scene_optimizers.scene_optimizer import (
     MitsubaOptimizationType,
@@ -76,9 +77,7 @@ class SceneLBFGS(SceneOptimizer):
         history_size: int = 10,
         use_wolfe_conditions: bool = False,
         line_search_iterations: int = 30,
-        batch_size: int | None = None,
-        randomize_image_order: bool = True,
-        image_order_seed: int = 42,
+        batch_maker: BatchMaker | None = None,
     ) -> None:
         """
         Initialize the L-BFGS optimizer with the specified parameters.
@@ -119,11 +118,7 @@ class SceneLBFGS(SceneOptimizer):
         :raises ValueError: If `learning_rate` is not positive or if `batch_size` is
             specified and is less than 1.
         """
-        super().__init__(
-            max_batch_size=batch_size,
-            randomize_image_order=randomize_image_order,
-            image_order_seed=image_order_seed,
-        )
+        super().__init__(batch_maker=batch_maker)
 
         if learning_rate <= 0.0:
             raise ValueError("`learning_rate` has to be a positive real number")
@@ -175,7 +170,9 @@ class SceneLBFGS(SceneOptimizer):
         total_reg_loss = mi.TensorXf(0.0)
 
         for param_config in param_optimization_configs:
-            for batch_indices in self.iteration_batch_indices(sensor_count):
+            for batch_indices in self._batch_maker.iteration_batch_indices(
+                sensor_count
+            ):
                 batch_image_loss, batch_reg_loss = self._objective_function(
                     scene=scene,
                     scene_params=scene_params,
