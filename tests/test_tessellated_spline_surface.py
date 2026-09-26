@@ -424,7 +424,3 @@ class TestTessellatedSplineSurface(unittest.TestCase):
         self.assertTrue(
             dr.allclose(control_points_expected, control_points_transformed)
         )
-
-
-if __name__ == "__main__":
-    unittest.main()

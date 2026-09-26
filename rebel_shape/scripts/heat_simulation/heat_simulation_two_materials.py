@@ -11,6 +11,7 @@ threshold are treated as glass (windows) and regions below as concrete.
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Callable
 
 import drjit as dr
 import mitsuba as mi
@@ -25,10 +26,10 @@ sys.path.append("../")
 from dataclasses_reverse_cli.reverse_cli import ReverseCli
 
 from rebel_shape import logger, tracking
+from rebel_shape.isogeometric_analysis.heat_simulation import HeatSimulation
 from rebel_shape.meshing.tessellated_iga_spline_surface import (
     TessellatedIGASplineSurface,
 )
-from rebel_shape.scripts.configs.camera_ring_config import CameraRingConfig
 from rebel_shape.scripts.configs.thermal_material_config import ThermalMaterialConfig
 from rebel_shape.scripts.heat_simulation.heat_simulation_runner import (
     HeatSimulationRunner,
@@ -64,35 +65,30 @@ class HeatSimulationParametersTwoMaterials(ReverseCli):
     error scales as O((dt_over_t_relax)^2); 0.01 is the canonical choice
     for high-accuracy runs, 0.05 trades modest accuracy for speed.
     """
+    time_step_size: float | None = None
+    """
+    Explicit physical dt in seconds, overriding `dt_over_t_relax` when set,
+    for anchoring this run's clock to a dt resolved elsewhere (e.g. an
+    independent FEM run), rather than deriving one from this model's own
+    relaxation time.
+    """
     save_interval: int = 50
     """Interval at which to save the simulation state."""
     facade_mask_threshold: float = 0.5
     """Threshold to distinguish between concrete and glass in the facade mask."""
 
-    camera_config: CameraRingConfig = field(
-        default_factory=lambda: CameraRingConfig(
-            samples_per_pixel=4,
-            sensor_count=6,
-            sensor_resolution_height=480,
-            sensor_resolution_width=480,
-            sensor_fov=45.0,
-        )
-    )
-    """Camera configuration for rendering the scene during the simulation."""
-    texture_resolution: int = 512
-    """Resolution of the texture used for the thermal data"""
+    xdmf_path: Path | None = None
+    """
+    Full path of the output XDMF file. Defaults to
+    `output_folder / "heat_simulation_two_materials.xdmf"` when not given.
+    """
+    xdmf_subdivisions: int = 512
+    """Per-patch tessellation for the XDMF export (2 * xdmf_subdivisions^2 tris)."""
 
     concrete_config: ThermalMaterialConfig = field(
-        # default_factory=lambda: ThermalMaterialConfig(
-        #     conductivity=2.0, density=2250.0, specific_heat=900.0, thickness=0.2
-        # )
         default_factory=lambda: ThermalMaterialConfig(
             conductivity=0.15, density=600.0, specific_heat=2400.0, thickness=0.02
         )
-        # Values for steel on a car.
-        # default_factory=lambda: ThermalMaterialConfig(
-        #     conductivity=50.0, density=7850.0, specific_heat=500.0, thickness=0.002
-        # )
     )
     """Thermal material configuration for concrete."""
 
@@ -103,12 +99,6 @@ class HeatSimulationParametersTwoMaterials(ReverseCli):
             specific_heat=840.0,
             thickness=0.01,
         )
-        # default_factory=lambda: ThermalMaterialConfig(
-        #     conductivity=0.9,
-        #     density=2500.0,
-        #     specific_heat=840.0,
-        #     thickness=0.001,
-        # )
     )
     """Thermal material configuration for glass."""
     facade_heat_source: float = 0.1
@@ -122,7 +112,7 @@ class HeatSimulationParametersTwoMaterials(ReverseCli):
     heat source Q (W/m²) is computed after matrix assembly:
         Q = target_delta_temp * rho_glass * c_glass * h_glass / t_sim
     This is the temperature rise an *insulated* glass element would
-    achieve — actual rise will be lower due to conduction losses.
+    achieve; actual rise will be lower due to conduction losses.
     """
 
     target_length_scale: float | None = 2.5
@@ -133,8 +123,9 @@ class HeatSimulationParametersTwoMaterials(ReverseCli):
 
     use_gpu: bool = True
     """
-    Whether to use GPU for rendering or not. Note that the compute instance
-    must have GPU support for this to work. For local testing, set to False.
+    Whether to use the CUDA Mitsuba/Dr.Jit variant for tensor assembly. Note
+    that the compute instance must have GPU support for this to work. For
+    local testing, set to False.
     """
 
     def __post_init__(self):
@@ -149,10 +140,12 @@ class HeatSimulationParametersTwoMaterials(ReverseCli):
             raise ValueError("`num_time_steps` must be a positive integer.")
         if self.dt_over_t_relax <= 0:
             raise ValueError("`dt_over_t_relax` must be a positive real number.")
+        if self.time_step_size is not None and self.time_step_size <= 0.0:
+            raise ValueError("`time_step_size` must be a positive real number.")
         if self.save_interval < 1:
             raise ValueError("`save_interval` must be a positive integer.")
-        if self.texture_resolution < 1:
-            raise ValueError("`texture_resolution` must be a positive integer.")
+        if self.xdmf_subdivisions < 1:
+            raise ValueError("`xdmf_subdivisions` must be a positive integer.")
         if self.target_length_scale is not None and self.target_length_scale <= 0.0:
             raise ValueError("`target_length_scale` must be positive if provided.")
         if self.target_delta_temp is not None and self.target_delta_temp <= 0.0:
@@ -161,7 +154,8 @@ class HeatSimulationParametersTwoMaterials(ReverseCli):
 
 def simulate_heat_cn_two_materials(
     params: HeatSimulationParametersTwoMaterials,
-) -> None:
+    on_snapshot: Callable[[int, float, HeatSimulation], None] | None = None,
+) -> HeatSimulationRunner:
     """
     Runs a heat simulation with spatially varying material properties.
 
@@ -169,23 +163,27 @@ def simulate_heat_cn_two_materials(
     Crank-Nicolson method with two distinct materials: concrete and glass.
     Material properties are assigned based on a facade mask, where values above a
     threshold (0.5) indicate glass (windows) and values below indicate concrete.
-    Glass regions also have an internal heat source of 10 W/m^2, while concrete
-    regions have no heat source.
+    Glass regions also carry an internal heat source, set by `facade_heat_source`;
+    concrete regions have none.
 
     The simulation loads both the geometry spline and the facade mask spline,
     thresholds the mask to create a binary material map. The two splines are assumed
     to originate from the same geometrical model, but with different inpainted
     modalities (thermal data vs. facade mask).
 
-    Every `params.save_interval` time steps, the current temperature
-    field is rendered and saved to the output folder.
+    `on_snapshot`, when given, is called at the XDMF save cadence with the
+    step index, its physical time, and the live `HeatSimulation` the run
+    solved with; see `HeatSimulationRunner.run_heat_simulation_with_xdmf`.
+
+    :returns: The `HeatSimulationRunner` the simulation ran on, so a caller
+        can read `heat_simulation` and `cn_scheme` diagnostics off it.
     """
     if params.use_gpu:
         mi.set_variant("cuda_ad_rgb")
-        logger.info("Using the GPU for rendering and tensor assembly.")
+        logger.info("Using the GPU for tensor assembly.")
     else:
         mi.set_variant("llvm_ad_rgb")
-        logger.info("Using the CPU for rendering and tensor assembly.")
+        logger.info("Using the CPU for tensor assembly.")
 
     tessellated_iga_spline = TessellatedIGASplineSurface.from_file(
         composite_spline_surface_path=params.spline_path
@@ -221,8 +219,6 @@ def simulate_heat_cn_two_materials(
     heat_simulation_runner = HeatSimulationRunner(
         tessellated_iga_spline=tessellated_iga_spline,
         material_config=params.concrete_config,
-        camera_config=params.camera_config,
-        texture_resolution=params.texture_resolution,
     )
 
     thresholded_facade = (
@@ -262,17 +258,36 @@ def simulate_heat_cn_two_materials(
         thresholded_facade, source_value * ones, 0.0 * ones
     )
 
+    dt_kwargs = (
+        {"time_step_size": params.time_step_size}
+        if params.time_step_size is not None
+        else {"dt_over_t_relax": params.dt_over_t_relax}
+    )
+    xdmf_path = (
+        params.xdmf_path
+        if params.xdmf_path is not None
+        else params.output_folder / "heat_simulation_two_materials.xdmf"
+    )
+
+    def forward_snapshot(step_index: int, time: float) -> None:
+        if on_snapshot is not None:
+            assert heat_simulation_runner.heat_simulation is not None
+            on_snapshot(step_index, time, heat_simulation_runner.heat_simulation)
+
     heat_simulation_runner.run_heat_simulation_with_xdmf(
         num_time_steps=params.num_time_steps,
-        dt_over_t_relax=params.dt_over_t_relax,
-        output_folder=params.output_folder,
-        xdmf_path=params.output_folder / "heat_simulation_two_materials.xdmf",
+        xdmf_path=xdmf_path,
         target_delta_temp=params.target_delta_temp,
         heat_source_material=params.glass_config
         if params.target_delta_temp is not None
         else None,
         xdmf_save_interval=params.save_interval,
+        tessellation_subdivisions=params.xdmf_subdivisions,
+        on_snapshot=forward_snapshot,
+        **dt_kwargs,
     )
+
+    return heat_simulation_runner
 
 
 if __name__ == "__main__":

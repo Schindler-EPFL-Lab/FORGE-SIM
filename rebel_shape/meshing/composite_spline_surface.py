@@ -255,7 +255,7 @@ class CompositeSplineSurface(PatchManager):
         """
         Returns the degree of the spline surface.
 
-        All patches must have the same degree. Raises ``ValueError`` if
+        All patches must have the same degree. Raises `ValueError` if
         patches have different degrees.
         """
         degrees = {patch.degree for patch in self._patch_list}

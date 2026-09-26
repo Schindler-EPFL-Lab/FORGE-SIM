@@ -1,0 +1,76 @@
+# Conda environment for DOLFINx-based FEM heat and shell simulations, the
+# independent cross-validator of rebel-shape's IGA solvers.
+#
+# Create with:
+#   conda env create -f environment.yml
+# Then install rebel-shape itself, without letting it re-resolve the versions above:
+#   pip install -e . --no-deps        (from the repository root)
+
+name: dolfinx-rebel-shape
+
+channels:
+  - conda-forge
+  - defaults
+
+dependencies:
+  - python==3.12
+
+  # DOLFINx and FEM dependencies.
+  - fenics-dolfinx=0.9.0
+  - petsc4py
+  - mpi4py
+  # slepc4py backs the relaxation-time eigensolve and the shell modal analysis;
+  # PETSc must be built with MUMPS (default) for the shift-invert factorization.
+  - slepc4py
+
+  # Mesh I/O. conda-forge splits the Gmsh bindings from the library: `gmsh` installs
+  # the executable and libgmsh, `python-gmsh` is what `import gmsh` resolves to. Both
+  # are needed (the shell mesh builder imports the module, the solver stack links
+  # the library), and neither may be dropped.
+  - gmsh
+  - python-gmsh
+  - meshio>=5.0
+  # vtk is pulled in by occt (gmsh's OpenCASCADE kernel), not by DOLFINx.
+  - vtk
+
+  # The mesh-quality histograms (fem/end_to_end/mesh_quality/).
+  - matplotlib>=3.10
+
+  # numpy/scipy are bounded here rather than left to the solver: gpytoolbox below
+  # requires numpy<2.3, scipy<=1.15 (a dependency constraint, not a reproducibility
+  # guarantee), and bounding up front keeps one solver in charge of the resolution
+  # instead of pip downgrading both after DOLFINx, PETSc, SLEPc and VTK have linked
+  # against the unbounded versions.
+  - numpy<2.3
+  - scipy<=1.15
+  - h5py
+
+  - pip
+  - pip:
+      # rebel-shape itself is not installed by this file; `pip install -e .` would
+      # resolve `ocp-stubs`'s uv git source incorrectly and pull `cadquery-ocp` in
+      # place of the novtk build below, so install with `--no-deps` (see above).
+      #
+      # Pinned rather than bounded: the uv lockfile resolves mitsuba 3.9.1, so both
+      # environments load splines rendered by the same Mitsuba build.
+      - mitsuba==3.9.1
+      - tyro>=0.9.27
+      - dataclasses-reverse-cli>=0.0.5
+      - jsonpickle>=4.0.2
+      # Fallback path behind `SparseCholeskySolver`'s unguarded import; scikit-sparse
+      # is deliberately not declared here since its own import there is guarded.
+      - cholespy>=2.1.0
+      - mlflow>=3.5.0rc0
+      # The novtk build avoids the VTK conflict `occt` would otherwise cause.
+      - cadquery-ocp-novtk==7.9.3.1.1
+
+      # Mesh preparation for the end-to-end stages (`fem/end_to_end/`). Both pip
+      # rather than conda: conda-forge's `open3d` pins `vtk-base` below what DOLFINx
+      # needs, and conda-forge has no gpytoolbox 0.3.6 for linux-64/py312.
+      - open3d
+      # Pinned to the uv lockfile's version. gpytoolbox remeshes the ground-truth
+      # meshes the end-to-end comparison measures against, so a different version
+      # is a different remesh, hence a different mesh: load-bearing for
+      # reproducing the recorded metrics. Its own numpy/scipy ceiling is declared
+      # in the conda block above so the solver honours it directly.
+      - gpytoolbox==0.3.6

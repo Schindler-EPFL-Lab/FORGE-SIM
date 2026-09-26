@@ -104,10 +104,6 @@ class ReissnerMindlinModalParameters(ReverseCli):
         default_factory=lambda: [i for i in range(20)]
     )
     """Mode indices to export to XDMF if `export_xdmf` is True."""
-    xdmf_scale_factor: float = 0.1
-    """Scale factor for displacement in temporal XDMF export.
-    Displacement is normalized and then scaled by
-    scale_factor * smallest_bbox_extent."""
 
     material_config: StructuralMaterialConfig = field(default_factory=car_body_material)
     """
@@ -121,7 +117,7 @@ class ReissnerMindlinModalParameters(ReverseCli):
     Target length for the longest axis of the CONTROL-POINT bounding box. When
     set, a uniform scale is applied so that extent
     matches this value. The surface lies inside the control hull, so its own
-    bounding box comes out slightly smaller -- by an amount set by how finely the
+    bounding box comes out slightly smaller, by an amount set by how finely the
     control net is refined, not by curvature. Rescaling is opt-in: the default
     `None` leaves the geometry at the scale it was loaded.
     """
@@ -135,14 +131,14 @@ class ReissnerMindlinModalParameters(ReverseCli):
     """
     target_spans: int | None = None
     """
-    If set, OVERRIDES ``h_refinement_factor``: refine each patch so it has ~this many
+    If set, OVERRIDES `h_refinement_factor`: refine each patch so it has ~this many
     knot spans per direction, computing the factor from the loaded spline's base spans
-    (``factor = round(target_spans / base_spans)``). Use to pin a fixed effective
+    (`factor = round(target_spans / base_spans)`). Use to pin a fixed effective
     resolution across splines with DIFFERENT base span counts. Thin RM shells
     (h/L ~ 1e-3) suffer IGA MEMBRANE locking at coarse spans, so 64 spans
     over-stiffens the spectrum ~5-6%; 128 spans lands on the converged FEM
     plateau. Reconstructed splines vary (32-base needs factor 4,
-    64-base needs factor 2 for 128), so a fixed factor cannot pin the resolution --
+    64-base needs factor 2 for 128), so a fixed factor cannot pin the resolution:
     this does.
     """
 
@@ -207,7 +203,6 @@ def run_modal_analysis(params: ReissnerMindlinModalParameters) -> None:
             eigenvectors=eigenvectors,
             mode_indices=params.export_xdmf_indices,
             output_folder=params.output_folder / "xdmf",
-            scale_factor=params.xdmf_scale_factor,
         )
 
     logger.info("Modal analysis completed.")

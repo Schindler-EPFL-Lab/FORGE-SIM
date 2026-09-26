@@ -25,8 +25,6 @@ from rebel_shape.meshing.tessellated_iga_spline_surface import (
 )
 from rebel_shape.meshing.tessellated_spline_surface import TessellatedSplineSurface
 
-SPHERE_PATH = Path("data/splines/spline_sphere_16.json")
-
 
 class TestSteelSphereModalAnalysis(unittest.TestCase):
     """
@@ -46,15 +44,17 @@ class TestSteelSphereModalAnalysis(unittest.TestCase):
     frequency is 5090 * 0.1135 = 577 Hz.
     """
 
+    SPHERE_PATH = Path("data/splines/spline_sphere_16.json")
+
     @classmethod
     def setUpClass(cls) -> None:
         mi.set_variant("llvm_ad_rgb")
 
-        if not SPHERE_PATH.exists():
-            raise unittest.SkipTest(f"Sphere file not found: {SPHERE_PATH}")
+        if not cls.SPHERE_PATH.exists():
+            raise unittest.SkipTest(f"Sphere file not found: {cls.SPHERE_PATH}")
 
         tessellated_sphere = TessellatedSplineSurface.from_file(
-            composite_spline_surface_path=SPHERE_PATH
+            composite_spline_surface_path=cls.SPHERE_PATH
         )
 
         per_patch_field_values = [

@@ -32,9 +32,9 @@ def discover_spline_checkpoint(result_folder: Path) -> Path:
     Returns the spline checkpoint written by `SplineOptimizer.save_callback` into
     `result_folder`, picking the highest-iteration one when several are present.
 
-    Checkpoints are named ``<spline name>_<timestamp>_iteration-<N>.json``. A result
-    folder routinely holds other JSON files as well -- an evaluation metrics dump, for
-    instance -- so only names carrying an ``iteration-<N>`` marker are considered.
+    Checkpoints are named `<spline name>_<timestamp>_iteration-<N>.json`. A result
+    folder routinely holds other JSON files as well (an evaluation metrics dump, for
+    instance), so only names carrying an `iteration-<N>` marker are considered.
 
     :returns: The path of the highest-iteration spline checkpoint.
     :raises FileNotFoundError: If `result_folder` is not a directory, or holds no file
@@ -44,7 +44,7 @@ def discover_spline_checkpoint(result_folder: Path) -> Path:
         raise FileNotFoundError(f"`result_folder` {result_folder} is not a directory.")
 
     def iteration_of(path: Path) -> int:
-        """Trailing ``iteration-NNN`` number in `path`'s stem, or -1 if absent."""
+        """Trailing `iteration-NNN` number in `path`'s stem, or -1 if absent."""
         stem = path.stem
         marker = "iteration-"
         if marker not in stem:
@@ -83,7 +83,7 @@ class RenderSplineParameters(ReverseCli):
     result_folder: Path | None = None
     """
     Folder with all the texture and the spline object as json. The spline checkpoint is
-    the highest-iteration ``<name>_<timestamp>_iteration-<N>.json`` in it; any other
+    the highest-iteration `<name>_<timestamp>_iteration-<N>.json` in it; any other
     JSON file there is ignored. Ignored if textures_paths or spline_path is not None
     """
     environment_map_path: Path | None = None

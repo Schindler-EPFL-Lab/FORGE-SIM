@@ -22,13 +22,14 @@ from pathlib import Path
 import numpy as np
 
 
-def _position_set(points: np.ndarray) -> set:
-    """The set of rounded ``(x, y, z)`` tuples in `points` (order-independent)."""
-    return {tuple(np.round(point, 4)) for point in np.asarray(points)}
-
-
 @unittest.skipUnless(OPEN3D_IMPORTED, "open3d is not installed.")
 class TestStitchAndEvalCubedSphereMesh(unittest.TestCase):
+    @staticmethod
+    def _position_set(points: np.ndarray) -> set:
+        """The set of rounded `(x, y, z)` tuples in `points`
+        (order-independent)."""
+        return {tuple(np.round(point, 4)) for point in np.asarray(points)}
+
     def _write_triangle_ply(self, path: Path, vertices: Sequence) -> None:
         """Writes a single-triangle mesh with the given `vertices` to `path`."""
         mesh = o3d.geometry.TriangleMesh(
@@ -54,7 +55,7 @@ class TestStitchAndEvalCubedSphereMesh(unittest.TestCase):
         np.testing.assert_allclose(NERFSTUDIO_AXIS_FIX[3, :], [0, 0, 0, 1], atol=1e-12)
 
     def test_discover_patch_files_picks_highest_iteration(self):
-        """The highest ``iteration-NNN`` file is chosen for each cube face."""
+        """The highest `iteration-NNN` file is chosen for each cube face."""
         with tempfile.TemporaryDirectory() as directory:
             directory = Path(directory)
             for face in CUBE_FACE_ORDER:
@@ -108,10 +109,12 @@ class TestStitchAndEvalCubedSphereMesh(unittest.TestCase):
 
             # The welded surface reproduces every original triangle (as a position set).
             welded_triangles = {
-                frozenset(_position_set(welded_vertices[face])) for face in welded_faces
+                frozenset(self._position_set(welded_vertices[face]))
+                for face in welded_faces
             }
             original_triangles = {
-                frozenset(_position_set(vertices)) for vertices in triangles.values()
+                frozenset(self._position_set(vertices))
+                for vertices in triangles.values()
             }
             self.assertEqual(welded_triangles, original_triangles)
 
@@ -124,17 +127,13 @@ class TestStitchAndEvalCubedSphereMesh(unittest.TestCase):
 
             identity = load_reference_in_scene(path, np.eye(4))
             self.assertEqual(
-                _position_set(identity.vertex.positions.numpy()),
-                _position_set(vertices),
+                self._position_set(identity.vertex.positions.numpy()),
+                self._position_set(vertices),
             )
 
             rotated = load_reference_in_scene(path, NERFSTUDIO_AXIS_FIX)
             expected = np.asarray(vertices) @ NERFSTUDIO_AXIS_FIX[:3, :3].T
             self.assertEqual(
-                _position_set(rotated.vertex.positions.numpy()),
-                _position_set(expected),
+                self._position_set(rotated.vertex.positions.numpy()),
+                self._position_set(expected),
             )
-
-
-if __name__ == "__main__":
-    unittest.main()

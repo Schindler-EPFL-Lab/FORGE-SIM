@@ -165,8 +165,8 @@ class IGAProblem:
         need not be a Mitsuba tensor to preserve
 
         `local_matrices` are a Mitsuba tensor of shape (n_elements, n_dofs_per_element,
-        n_dofs_per_element). Both single-precision (``mi.TensorXf``) and
-        double-precision (``mi.TensorXd``) tensors are accepted; the assembled
+        n_dofs_per_element). Both single-precision (`mi.TensorXf`) and
+        double-precision (`mi.TensorXd`) tensors are accepted; the assembled
         global matrix is always returned in float64.
 
         :returns: A sparse matrix in the CSR format representing the global matrix.

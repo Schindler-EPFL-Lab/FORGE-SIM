@@ -204,7 +204,7 @@ class HeatSimulation(IGAManifoldProblem):
 
         Basis function evaluations and geometric quantities are computed in
         float32 by the spline methods and immediately promoted to
-        ``mi.TensorXd``. All subsequent arithmetic operates in double
+        `mi.TensorXd`. All subsequent arithmetic operates in double
         precision to avoid truncation errors during accumulation.
 
         When the matrices of each span are assembled, they are concatenated into a
@@ -349,7 +349,7 @@ class HeatSimulation(IGAManifoldProblem):
 
         Basis function evaluations and geometric quantities are computed in
         float32 by the spline methods and immediately promoted to
-        ``mi.TensorXd``. All subsequent arithmetic operates in double
+        `mi.TensorXd`. All subsequent arithmetic operates in double
         precision to avoid truncation errors during accumulation.
 
         When the matrices of each span are assembled, they are concatenated into a
@@ -760,6 +760,6 @@ class HeatSimulation(IGAManifoldProblem):
 
         Assembled load vectors are linear in this field but are not recomputed here,
         so a caller that rescales the source must rescale any already-assembled vector
-        to match -- see `CrankNicolsonScheme.scale_source`, which does both.
+        to match; see `CrankNicolsonScheme.scale_source`, which does both.
         """
         self._source_term = value

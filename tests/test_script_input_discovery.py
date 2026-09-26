@@ -17,62 +17,64 @@ from pathlib import Path
 import mitsuba as mi
 import numpy as np
 
-from rebel_shape.scripts.evaluation.eval_all_common import (
-    prepare_metrics_output_folder,
-)
+from main_scripts.evaluation.eval_all_common import prepare_metrics_output_folder
+from rebel_shape.scripts.evaluation.spline_texture_paths import SplineTexturePaths
+from rebel_shape.scripts.rename_dataset import RenameDatasetParams, rename_dataset
 from rebel_shape.scripts.render_eval_images import discover_spline_checkpoint
 from rebel_shape.scripts.render_eval_images_mesh import (
     discover_mesh_textures,
     face_key,
 )
-from rebel_shape.scripts.rename_dataset import RenameDatasetParams, rename_dataset
-
-
-def _touch(directory: Path, *names: str) -> None:
-    """Creates every file in `names` under `directory`, with no content."""
-    for name in names:
-        (directory / name).touch()
-
-
-def _build_vggt_dataset(root: Path, frame_count: int) -> None:
-    """
-    Writes a minimal VGGT-style dataset under `root`: `frame_count` frames, each with
-    an `images/<frame>.jpeg`, a `depths/<frame>.npy`, and an entry in
-    `transforms.json`. Only the file names matter to `rename_dataset`, so the image
-    bytes are a bare JPEG marker pair.
-    """
-    (root / "images").mkdir(parents=True)
-    (root / "depths").mkdir()
-
-    frames = []
-    for index in range(frame_count):
-        frame_name = f"f{index:04d}"
-        (root / "images" / f"{frame_name}.jpeg").write_bytes(b"\xff\xd8\xff\xd9")
-        np.save(root / "depths" / f"{frame_name}.npy", np.zeros((2, 2)))
-        frames.append(
-            {
-                "rgb": {
-                    "file_path": f"images/{frame_name}.jpeg",
-                    "depth_file_path": f"depths/{frame_name}.npy",
-                }
-            }
-        )
-    (root / "transforms.json").write_text(json.dumps({"frames": frames}, indent=4))
 
 
 class TestScriptInputDiscovery(unittest.TestCase):
     """
     Tests for `render_eval_images.discover_spline_checkpoint`,
     `render_eval_images_mesh.discover_mesh_textures`,
+    `SplineTexturePaths.discover_all`,
     `eval_all_common.prepare_metrics_output_folder` and `rename_dataset`'s
     already-renamed guard.
     """
+
+    @staticmethod
+    def _touch(directory: Path, *names: str) -> None:
+        """Creates every file in `names` under `directory`, with no content."""
+        for name in names:
+            (directory / name).touch()
+
+    @staticmethod
+    def _build_vggt_dataset(root: Path, frame_count: int) -> None:
+        """
+        Writes a minimal VGGT-style dataset under `root`: `frame_count` frames,
+        each with an `images/<frame>.jpeg`, a `depths/<frame>.npy`, and an
+        entry in `transforms.json`. Only the file names matter to
+        `rename_dataset`, so the image bytes are a bare JPEG marker pair.
+        """
+        (root / "images").mkdir(parents=True)
+        (root / "depths").mkdir()
+
+        frames = []
+        for index in range(frame_count):
+            frame_name = f"f{index:04d}"
+            (root / "images" / f"{frame_name}.jpeg").write_bytes(b"\xff\xd8\xff\xd9")
+            np.save(root / "depths" / f"{frame_name}.npy", np.zeros((2, 2)))
+            frames.append(
+                {
+                    "rgb": {
+                        "file_path": f"images/{frame_name}.jpeg",
+                        "depth_file_path": f"depths/{frame_name}.npy",
+                    }
+                }
+            )
+        (root / "transforms.json").write_text(
+            json.dumps({"frames": frames}, indent=4)
+        )
 
     @classmethod
     def setUpClass(cls):
         mi.set_variant("llvm_ad_rgb")
 
-    # -- discover_spline_checkpoint ---------------------------------------------
+    # discover_spline_checkpoint
 
     def test_spline_checkpoint_ignores_an_evaluation_metrics_json(self):
         """The recorded result folders hold an `eval_*.json` metrics dump next to
@@ -81,7 +83,7 @@ class TestScriptInputDiscovery(unittest.TestCase):
         `iteration-<N>` marker may be considered."""
         with tempfile.TemporaryDirectory() as tmp_dir:
             folder = Path(tmp_dir)
-            _touch(
+            self._touch(
                 folder,
                 "eval_spline_chamfer.json",
                 "shape_20260601-023350_iteration-249.json",
@@ -99,7 +101,7 @@ class TestScriptInputDiscovery(unittest.TestCase):
         after `10`."""
         with tempfile.TemporaryDirectory() as tmp_dir:
             folder = Path(tmp_dir)
-            _touch(
+            self._touch(
                 folder,
                 "shape_20260601-023350_iteration-009.json",
                 "shape_20260601-023350_iteration-249.json",
@@ -116,7 +118,7 @@ class TestScriptInputDiscovery(unittest.TestCase):
         naming what it did find, rather than handing a metrics file downstream."""
         with tempfile.TemporaryDirectory() as tmp_dir:
             folder = Path(tmp_dir)
-            _touch(folder, "eval_spline_chamfer.json", "chamfer.json")
+            self._touch(folder, "eval_spline_chamfer.json", "chamfer.json")
 
             with self.assertRaises(FileNotFoundError) as context:
                 discover_spline_checkpoint(folder)
@@ -124,7 +126,7 @@ class TestScriptInputDiscovery(unittest.TestCase):
             self.assertIn("eval_spline_chamfer.json", str(context.exception))
             self.assertIn("chamfer.json", str(context.exception))
 
-    # -- discover_mesh_textures --------------------------------------------------
+    # discover_mesh_textures
 
     def test_mesh_textures_keys_the_final_save_without_its_suffix(self):
         """`shape_left.ply`, the unnumbered final save, used to be keyed
@@ -133,7 +135,7 @@ class TestScriptInputDiscovery(unittest.TestCase):
         `shape_left_texture.exr`."""
         with tempfile.TemporaryDirectory() as tmp_dir:
             folder = Path(tmp_dir)
-            _touch(folder, "shape_left.ply", "shape_left_texture.exr")
+            self._touch(folder, "shape_left.ply", "shape_left_texture.exr")
 
             discovered = discover_mesh_textures(folder)
 
@@ -151,7 +153,7 @@ class TestScriptInputDiscovery(unittest.TestCase):
         must not enter the scene as a seventh patch, duplicating geometry."""
         with tempfile.TemporaryDirectory() as tmp_dir:
             folder = Path(tmp_dir)
-            _touch(folder, "shape_left.ply", "thermoscene_global_mesh.ply")
+            self._touch(folder, "shape_left.ply", "thermoscene_global_mesh.ply")
 
             self.assertEqual(list(discover_mesh_textures(folder)), ["shape_left"])
 
@@ -161,7 +163,7 @@ class TestScriptInputDiscovery(unittest.TestCase):
         ranking applies to the patch's texture."""
         with tempfile.TemporaryDirectory() as tmp_dir:
             folder = Path(tmp_dir)
-            _touch(
+            self._touch(
                 folder,
                 "shape_left_20260601-023350_iteration-020.ply",
                 "shape_left_20260601-023350_iteration-100.ply",
@@ -183,7 +185,7 @@ class TestScriptInputDiscovery(unittest.TestCase):
         again by number, so `100` beats `020` where a sort by name would not."""
         with tempfile.TemporaryDirectory() as tmp_dir:
             folder = Path(tmp_dir)
-            _touch(
+            self._touch(
                 folder,
                 "shape_top_20260601-023350_iteration-020.ply",
                 "shape_top_20260601-023350_iteration-100.ply",
@@ -208,7 +210,7 @@ class TestScriptInputDiscovery(unittest.TestCase):
         grey placeholder."""
         with tempfile.TemporaryDirectory() as tmp_dir:
             folder = Path(tmp_dir)
-            _touch(
+            self._touch(
                 folder, "shape_left.ply", "shape_right.ply", "shape_left_texture.exr"
             )
 
@@ -223,7 +225,7 @@ class TestScriptInputDiscovery(unittest.TestCase):
         replaces."""
         with tempfile.TemporaryDirectory() as tmp_dir:
             folder = Path(tmp_dir)
-            _touch(folder, "shape_left.ply", "other_left.ply")
+            self._touch(folder, "shape_left.ply", "other_left.ply")
 
             with self.assertRaises(ValueError) as context:
                 discover_mesh_textures(folder)
@@ -235,7 +237,7 @@ class TestScriptInputDiscovery(unittest.TestCase):
         per-face pattern and the single-mesh alternative."""
         with tempfile.TemporaryDirectory() as tmp_dir:
             folder = Path(tmp_dir)
-            _touch(folder, "views_20260605-190856_iteration-249.png")
+            self._touch(folder, "views_20260605-190856_iteration-249.png")
 
             with self.assertRaises(FileNotFoundError) as context:
                 discover_mesh_textures(folder)
@@ -251,9 +253,9 @@ class TestScriptInputDiscovery(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp_dir:
             folder = Path(tmp_dir)
             faces = ("back", "bottom", "front", "left", "right", "top")
-            _touch(folder, "fuzed.ply")
+            self._touch(folder, "fuzed.ply")
             for face in faces:
-                _touch(
+                self._touch(
                     folder,
                     f"shape_{face}_20260604-093436_iteration-249.ply",
                     f"shape_{face}-bsdf-reflectance-data_20260604-093436"
@@ -271,7 +273,7 @@ class TestScriptInputDiscovery(unittest.TestCase):
                 self.assertIsNotNone(texture)
                 self.assertIn(face, texture.name)
 
-    # -- discover_mesh_textures, single-mesh layout -------------------------------
+    # discover_mesh_textures, single-mesh layout
 
     def test_mesh_textures_single_mesh_pairs_the_only_mesh_and_texture(self):
         """The recorded `car` and `buildinga_spring` LargeSteps layout: one mesh and
@@ -279,7 +281,7 @@ class TestScriptInputDiscovery(unittest.TestCase):
         only candidates is what pairs them."""
         with tempfile.TemporaryDirectory() as tmp_dir:
             folder = Path(tmp_dir)
-            _touch(
+            self._touch(
                 folder,
                 "thermoscene_shape.ply",
                 "thermoscene_rgb_texture.exr",
@@ -305,7 +307,7 @@ class TestScriptInputDiscovery(unittest.TestCase):
         must still pair them."""
         with tempfile.TemporaryDirectory() as tmp_dir:
             folder = Path(tmp_dir)
-            _touch(
+            self._touch(
                 folder,
                 "shape_20260521-225221_iteration-049.ply",
                 "shape-bsdf-reflectance-data_20260521-225221_iteration-049.exr",
@@ -327,7 +329,7 @@ class TestScriptInputDiscovery(unittest.TestCase):
         the only reading available - so it is now paired rather than refused."""
         with tempfile.TemporaryDirectory() as tmp_dir:
             folder = Path(tmp_dir)
-            _touch(folder, "thermoscene_global_mesh.ply")
+            self._touch(folder, "thermoscene_global_mesh.ply")
 
             self.assertEqual(
                 list(discover_mesh_textures(folder)), ["thermoscene_global_mesh"]
@@ -338,7 +340,7 @@ class TestScriptInputDiscovery(unittest.TestCase):
         untextured patch does; `initialize_scene` then substitutes grey."""
         with tempfile.TemporaryDirectory() as tmp_dir:
             folder = Path(tmp_dir)
-            _touch(folder, "thermoscene_shape.ply")
+            self._touch(folder, "thermoscene_shape.ply")
 
             self.assertEqual(
                 discover_mesh_textures(folder)["thermoscene_shape"],
@@ -351,7 +353,7 @@ class TestScriptInputDiscovery(unittest.TestCase):
         would be a guess. Both names must appear in the refusal."""
         with tempfile.TemporaryDirectory() as tmp_dir:
             folder = Path(tmp_dir)
-            _touch(folder, "thermoscene_shape.ply", "fuzed.ply")
+            self._touch(folder, "thermoscene_shape.ply", "fuzed.ply")
 
             with self.assertRaises(ValueError) as context:
                 discover_mesh_textures(folder)
@@ -364,7 +366,7 @@ class TestScriptInputDiscovery(unittest.TestCase):
         is ambiguous and must be refused rather than resolved by sort order."""
         with tempfile.TemporaryDirectory() as tmp_dir:
             folder = Path(tmp_dir)
-            _touch(
+            self._touch(
                 folder,
                 "thermoscene_shape.ply",
                 "thermoscene_rgb_texture.exr",
@@ -383,7 +385,9 @@ class TestScriptInputDiscovery(unittest.TestCase):
         ambiguous."""
         with tempfile.TemporaryDirectory() as tmp_dir:
             folder = Path(tmp_dir)
-            _touch(folder, "shape_left.ply", "fuzed.ply", "thermoscene_global_mesh.ply")
+            self._touch(
+                folder, "shape_left.ply", "fuzed.ply", "thermoscene_global_mesh.ply"
+            )
 
             self.assertEqual(list(discover_mesh_textures(folder)), ["shape_left"])
 
@@ -407,18 +411,87 @@ class TestScriptInputDiscovery(unittest.TestCase):
         the key must stay face-derived for the Chamfer guard to see the difference."""
         with tempfile.TemporaryDirectory() as tmp_dir:
             folder = Path(tmp_dir)
-            _touch(folder, "shape_left_20260605-190857_iteration-249.ply")
+            self._touch(folder, "shape_left_20260605-190857_iteration-249.ply")
 
             discovered = discover_mesh_textures(folder)
 
             self.assertEqual(len(discovered), 1)
             self.assertIsNotNone(face_key(next(iter(discovered))))
 
-    # -- prepare_metrics_output_folder -------------------------------------------
+    # SplineTexturePaths.discover_all
+
+    def test_spline_textures_pair_each_run_s_six_faces(self):
+        """Two reconstruction runs share one folder, beside their spline JSONs. Each
+        discovered set must hold one run's six faces, each on its own face field,
+        in run order; a set mixing the runs would texture a spline with another
+        run's faces."""
+        faces = ("back", "bottom", "front", "left", "right", "top")
+        runs = ("20260101-120000_iteration-099", "20260102-120000_iteration-099")
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            folder = Path(tmp_dir)
+            for run in runs:
+                self._touch(folder, f"shape_{run}.json")
+                self._touch(
+                    folder,
+                    *(f"{face}-bsdf-reflectance-data_{run}.exr" for face in faces),
+                )
+
+            discovered = SplineTexturePaths.discover_all(folder)
+
+            self.assertEqual(len(discovered), 2)
+            for textures, run in zip(discovered, runs):
+                for face in faces:
+                    self.assertEqual(
+                        getattr(textures, face),
+                        folder / f"{face}-bsdf-reflectance-data_{run}.exr",
+                    )
+
+    def test_invalid_spline_textures_with_unequal_face_counts(self):
+        """Pairing by sort order holds only when every face has one file per run. A
+        leftover `back` texture from an interrupted run shifts every `back` onto
+        the next run's other faces, so unequal counts must be refused, naming the
+        faces, rather than paired."""
+        faces = ("back", "bottom", "front", "left", "right", "top")
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            folder = Path(tmp_dir)
+            for run in ("run1", "run2"):
+                self._touch(folder, *(f"{face}_{run}.exr" for face in faces))
+            self._touch(folder, "back_run0_interrupted.exr")
+
+            with self.assertRaisesRegex(ValueError, "back"):
+                SplineTexturePaths.discover_all(folder)
+
+    def test_spline_textures_list_is_in_face_order(self):
+        """`as_list_str` feeds `render_eval_images.py --textures-paths`
+        positionally, so its order is back, bottom, front, left, right, top.
+        The file names sort in a different order, so a list sorted by name
+        rather than kept in face order fails here."""
+        textures = SplineTexturePaths(
+            back=Path("z_back.exr"),
+            bottom=Path("m_bottom.exr"),
+            front=Path("a_front.exr"),
+            left=Path("y_left.exr"),
+            right=Path("b_right.exr"),
+            top=Path("n_top.exr"),
+        )
+
+        self.assertEqual(
+            textures.as_list_str(),
+            [
+                "z_back.exr",
+                "m_bottom.exr",
+                "a_front.exr",
+                "y_left.exr",
+                "b_right.exr",
+                "n_top.exr",
+            ],
+        )
+
+    # prepare_metrics_output_folder
 
     def test_metrics_output_folder_refuses_an_earlier_run_s_metrics(self):
-        """A driver reads back whatever metrics file the per-scene script left in the
-        folder, and cannot tell this run's from the last one's. Re-running into a
+        """The aggregation reads back whatever metrics file the per-scene script left
+        in the folder, and cannot tell this run's from the last one's. Re-running into a
         populated output root used to aggregate the stale numbers while this run's
         renders failed, so the folder must be refused - naming the file, and leaving
         it in place."""
@@ -440,7 +513,7 @@ class TestScriptInputDiscovery(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp_dir:
             folder = Path(tmp_dir) / "scene_0"
             folder.mkdir()
-            _touch(folder, "eval_shape.json")
+            self._touch(folder, "eval_shape.json")
 
             with self.assertRaises(FileExistsError) as context:
                 prepare_metrics_output_folder(
@@ -460,12 +533,12 @@ class TestScriptInputDiscovery(unittest.TestCase):
 
             self.assertTrue(fresh.is_dir())
 
-            _touch(fresh, "eval_images.png", "rendered_images.png")
+            self._touch(fresh, "eval_images.png", "rendered_images.png")
             prepare_metrics_output_folder(fresh, "eval_nvs.json")
 
             self.assertTrue((fresh / "eval_images.png").exists())
 
-    # -- rename_dataset ----------------------------------------------------------
+    # rename_dataset
 
     def test_rename_dataset_refuses_an_already_renamed_dataset(self):
         """Running twice used to re-scan the prefixed names, reshuffle the split
@@ -474,7 +547,7 @@ class TestScriptInputDiscovery(unittest.TestCase):
         as it stands."""
         with tempfile.TemporaryDirectory() as tmp_dir:
             dataset_path = Path(tmp_dir) / "dataset"
-            _build_vggt_dataset(dataset_path, frame_count=5)
+            self._build_vggt_dataset(dataset_path, frame_count=5)
             params = RenameDatasetParams(dataset_path=dataset_path)
 
             rename_dataset(params=params)
@@ -501,7 +574,7 @@ class TestScriptInputDiscovery(unittest.TestCase):
         new names."""
         with tempfile.TemporaryDirectory() as tmp_dir:
             dataset_path = Path(tmp_dir) / "dataset"
-            _build_vggt_dataset(dataset_path, frame_count=5)
+            self._build_vggt_dataset(dataset_path, frame_count=5)
 
             rename_dataset(params=RenameDatasetParams(dataset_path=dataset_path))
 
@@ -522,7 +595,3 @@ class TestScriptInputDiscovery(unittest.TestCase):
                 self.assertIn(depth_path.name, depth_names)
                 self.assertTrue((dataset_path / image_path).exists())
                 self.assertTrue((dataset_path / depth_path).exists())
-
-
-if __name__ == "__main__":
-    unittest.main()

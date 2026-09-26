@@ -91,21 +91,38 @@ The script calculates Chamfer distance between the optimized spline and the orig
 
     ```bash
     # evaluation on PLY meshes
-    python3 rebel_shape/scripts/evaluation/eval_all_ply_large_steps.py \
-        --scenes-names armadillo bunny car_1 car_24 spot suzanne
+    python3 main_scripts/evaluation/eval_all_ply_large_steps.py \
+        --scenes-names ARMADILLO BUNNY CAR_1 CAR_24 SPOT SUZANNE
     
     # evaluation on buildnet3d scenes
-    python3 rebel_shape/scripts/evaluation/eval_all_buildnet3d_large_steps.py \
-        --scenes-ids 1 2 3 4 \
+    python3 main_scripts/evaluation/eval_all_buildnet3d_large_steps.py \
+        --scenes-ids SCENE_1 SCENE_2 SCENE_3 SCENE_4 \
         --environment-map-path ./data/textures/checkerboard_lighter.exr
 
     # evaluation on real scenes
-    python3 rebel_shape/scripts/evaluation/eval_all_real_large_steps.py \
-        --scenes-names extracted-buildingA-spring extracted-car extracted-woodshed-sun extracted_heater_water_kettle
+    python3 main_scripts/evaluation/eval_all_real_large_steps.py \
+        --scenes-names BUILDINGA_SPRING CAR WOODSHED_SUN HEATER_WATER_KETTLE
     ```
 
     It evaluates the reconstruction on PLY meshes, buildnet3d scenes and real scenes.
 
-    These three drivers score the Large Steps baseline. Each has a counterpart without the `_large_steps` suffix — `eval_all_ply.py`, `eval_all_buildnet3d.py`, `eval_all_real.py` — taking the same arguments and scoring our own reconstructions.
+    These three drivers score the Large Steps baseline. Each has a counterpart without the `_large_steps` suffix (`eval_all_ply.py`, `eval_all_buildnet3d.py`, `eval_all_real.py`, also under `main_scripts/evaluation/`) taking the same arguments and scoring our own reconstructions. They spawn the single-target scripts on this page, then [`aggregate_metrics.py`](#aggregating-metrics) once per scene to write that scene's metrics file. Every computation, the aggregation included, stays in `rebel_shape/scripts/evaluation/`: the library provides the evaluation, and `main_scripts/` owns the list of targets, sweeps it, and does no arithmetic on what comes back.
 
     A driver writes into the folder named by `--output-folder-name`, and refuses to start if that folder already holds the metrics files it is about to write. Give each run a fresh name rather than clearing the old folder by hand, so a partial previous run cannot be mistaken for a complete one.
+
+## Aggregating metrics
+
+`aggregate_metrics.py` averages the metrics of several evaluated reconstructions into one file:
+
+```bash
+python3 rebel_shape/scripts/evaluation/aggregate_metrics.py \
+    --metrics-folders /metrics/of/reconstruction_0 /metrics/of/reconstruction_1 ... \
+    --metrics-file-names eval_nvs.json eval_shape.json \
+    --output-file-path /where/to/store/the/mean.json
+```
+
+Each folder in `--metrics-folders` is the output of one of the scripts above for one reconstruction. The files named by `--metrics-file-names` are read from every folder and merged, then each metric is averaged over the folders. With a single folder the metrics are written through unchanged, which is how the `_large_steps` drivers record their one reconstruction per scene.
+
+The script refuses rather than write a mean that would mislead: an empty folder list, a folder missing one of the files, two files reporting the same metric, or folders that do not all report the same metrics.
+
+`SplineTexturePaths` (`spline_texture_paths.py`) finds the six cube-face textures of every spline reconstruction in a folder, paired by sort order; the drivers use it to build the `--textures-paths` of `render_eval_images.py`.

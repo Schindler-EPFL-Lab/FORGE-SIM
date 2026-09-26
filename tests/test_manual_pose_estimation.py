@@ -231,7 +231,7 @@ class TestManualPoseEstimation(unittest.TestCase):
         """
         Centering must be based on the bbox, not the vertex centroid, so the
         result is invariant to tessellation density. Stress this by stacking
-        many duplicate vertices on one bbox face — a centroid-based
+        many duplicate vertices on one bbox face: a centroid-based
         implementation would shift the recentered origin toward those
         duplicates, and the originally-symmetric vertices would no longer all
         land on the unit sphere.

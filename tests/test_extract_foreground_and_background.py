@@ -160,7 +160,3 @@ class TestExtractForegroundAndBackground(unittest.TestCase):
 
         self.assertTrue(np.all(foreground == expected_foreground))
         self.assertTrue(np.all(background == expected_background))
-
-
-if __name__ == "__main__":
-    unittest.main()

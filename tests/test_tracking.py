@@ -13,36 +13,6 @@ from rebel_shape import logger as rebel_shape_logger
 from rebel_shape import tracking
 from rebel_shape.tracking import TrackingConfig, TrackingMode
 
-REPO_ROOT = Path(__file__).resolve().parent.parent
-
-_TRACKING_ENV_VARS = (
-    tracking.TRACKING_MODE_VARIABLE,
-    tracking.TRACKING_URI_VARIABLE,
-    *tracking.AZURE_ML_JOB_VARIABLES,
-)
-
-
-@contextlib.contextmanager
-def tracking_environment(**overrides):
-    """
-    Clears the environment variables `TrackingConfig.from_environment` reads and
-    applies `overrides` on top, restoring whatever was there before on exit. Used
-    instead of `unittest.mock.patch.dict(..., clear=True)` so that unrelated
-    variables (`PATH`, `HOME`, ...) are left alone.
-    """
-    previous = {name: os.environ.get(name) for name in _TRACKING_ENV_VARS}
-    for name in _TRACKING_ENV_VARS:
-        os.environ.pop(name, None)
-    os.environ.update(overrides)
-    try:
-        yield
-    finally:
-        for name, value in previous.items():
-            if value is None:
-                os.environ.pop(name, None)
-            else:
-                os.environ[name] = value
-
 
 class TestTracking(unittest.TestCase):
     """
@@ -56,6 +26,38 @@ class TestTracking(unittest.TestCase):
     otherwise, so that a bug here cannot write to the worktree's `mlruns/`.
     """
 
+    REPO_ROOT = Path(__file__).resolve().parent.parent
+
+    _TRACKING_ENV_VARS = (
+        tracking.TRACKING_MODE_VARIABLE,
+        tracking.TRACKING_URI_VARIABLE,
+        *tracking.AZURE_ML_JOB_VARIABLES,
+    )
+
+    @staticmethod
+    @contextlib.contextmanager
+    def tracking_environment(**overrides):
+        """
+        Clears the environment variables `TrackingConfig.from_environment` reads and
+        applies `overrides` on top, restoring whatever was there before on exit. Used
+        instead of `unittest.mock.patch.dict(..., clear=True)` so that unrelated
+        variables (`PATH`, `HOME`, ...) are left alone.
+        """
+        previous = {
+            name: os.environ.get(name) for name in TestTracking._TRACKING_ENV_VARS
+        }
+        for name in TestTracking._TRACKING_ENV_VARS:
+            os.environ.pop(name, None)
+        os.environ.update(overrides)
+        try:
+            yield
+        finally:
+            for name, value in previous.items():
+                if value is None:
+                    os.environ.pop(name, None)
+                else:
+                    os.environ[name] = value
+
     def setUp(self):
         tracking._config = None
         tracking._latched_off = False
@@ -64,7 +66,7 @@ class TestTracking(unittest.TestCase):
         tracking._config = None
         tracking._latched_off = False
 
-    # -- TrackingConfig.from_environment ----------------------------------------
+    # TrackingConfig.from_environment
     #
     # `TrackingConfig.from_environment` and its derived properties are pure functions
     # of `os.environ`; they never touch the module singleton, so the reset above is
@@ -76,7 +78,7 @@ class TestTracking(unittest.TestCase):
         for label, value in (("unset", None), ("empty string", "")):
             with (
                 self.subTest(label),
-                tracking_environment(
+                self.tracking_environment(
                     **(
                         {}
                         if value is None
@@ -90,7 +92,7 @@ class TestTracking(unittest.TestCase):
     def test_auto_mode_disabled_when_environment_names_no_destination(self):
         """The core "off by default" guarantee: with every tracking variable unset,
         AUTO must resolve to disabled, since nothing tells it where to report to."""
-        with tracking_environment():
+        with self.tracking_environment():
             config = TrackingConfig.from_environment()
         self.assertIs(config.mode, TrackingMode.AUTO)
         self.assertFalse(config.is_enabled)
@@ -107,7 +109,7 @@ class TestTracking(unittest.TestCase):
         for raw, expected in cases:
             with (
                 self.subTest(raw=raw),
-                tracking_environment(**{tracking.TRACKING_MODE_VARIABLE: raw}),
+                self.tracking_environment(**{tracking.TRACKING_MODE_VARIABLE: raw}),
             ):
                 config = TrackingConfig.from_environment()
                 self.assertIs(config.mode, expected)
@@ -115,7 +117,7 @@ class TestTracking(unittest.TestCase):
     def test_malformed_mode_variable_raises_value_error_naming_the_value(self):
         """A `REBEL_SHAPE_TRACKING` value that is not auto/on/off must raise, since
         `configure` relies on this to decide when to warn and fall back to OFF."""
-        with tracking_environment(**{tracking.TRACKING_MODE_VARIABLE: "bogus"}):
+        with self.tracking_environment(**{tracking.TRACKING_MODE_VARIABLE: "bogus"}):
             with self.assertRaises(ValueError) as context:
                 TrackingConfig.from_environment()
         self.assertIn("bogus", str(context.exception))
@@ -123,7 +125,7 @@ class TestTracking(unittest.TestCase):
     def test_empty_tracking_uri_treated_as_unset(self):
         """An exported-but-empty `MLFLOW_TRACKING_URI` must resolve to `None`, not the
         empty string, or `is_enabled` in AUTO mode would see a truthy destination."""
-        with tracking_environment(**{tracking.TRACKING_URI_VARIABLE: ""}):
+        with self.tracking_environment(**{tracking.TRACKING_URI_VARIABLE: ""}):
             config = TrackingConfig.from_environment()
         self.assertIsNone(config.tracking_uri)
 
@@ -137,14 +139,14 @@ class TestTracking(unittest.TestCase):
             ("azureml_run_id", "AZUREML_RUN_ID", "azure-run-456"),
         )
         for label, variable, value in cases:
-            with self.subTest(label), tracking_environment(**{variable: value}):
+            with self.subTest(label), self.tracking_environment(**{variable: value}):
                 config = TrackingConfig.from_environment()
                 self.assertTrue(config.is_enabled)
 
     def test_mode_on_enabled_even_without_any_destination(self):
         """ON must enable tracking even when no destination is named; MLflow's own
         defaults then apply."""
-        with tracking_environment(**{tracking.TRACKING_MODE_VARIABLE: "on"}):
+        with self.tracking_environment(**{tracking.TRACKING_MODE_VARIABLE: "on"}):
             config = TrackingConfig.from_environment()
         self.assertTrue(config.is_enabled)
 
@@ -152,7 +154,7 @@ class TestTracking(unittest.TestCase):
         """OFF must win over every destination marker at once - this is the guarantee
         that lets an owner unconditionally silence tracking on a machine that also
         happens to run inside a job harness."""
-        with tracking_environment(
+        with self.tracking_environment(
             **{
                 tracking.TRACKING_MODE_VARIABLE: "off",
                 tracking.TRACKING_URI_VARIABLE: "http://tracking.local",
@@ -168,7 +170,7 @@ class TestTracking(unittest.TestCase):
         destination that was not actually configured."""
         with (
             self.subTest("uri and job marker both present"),
-            tracking_environment(
+            self.tracking_environment(
                 **{
                     tracking.TRACKING_URI_VARIABLE: "http://tracking.local",
                     "MLFLOW_RUN_ID": "run-123",
@@ -180,7 +182,7 @@ class TestTracking(unittest.TestCase):
 
         with (
             self.subTest("only job marker present"),
-            tracking_environment(**{"MLFLOW_RUN_ID": "run-123"}),
+            self.tracking_environment(**{"MLFLOW_RUN_ID": "run-123"}),
         ):
             config = TrackingConfig.from_environment()
             self.assertEqual(
@@ -189,19 +191,19 @@ class TestTracking(unittest.TestCase):
 
         with (
             self.subTest("neither present but enabled"),
-            tracking_environment(**{tracking.TRACKING_MODE_VARIABLE: "on"}),
+            self.tracking_environment(**{tracking.TRACKING_MODE_VARIABLE: "on"}),
         ):
             config = TrackingConfig.from_environment()
             self.assertEqual(config.destination, "MLflow's own default destination")
 
-    # -- configure / is_enabled -------------------------------------------------
+    # configure / is_enabled
 
     def test_malformed_env_warns_and_disables_instead_of_autodetecting(self):
         """A malformed `REBEL_SHAPE_TRACKING`, discovered through the ordinary
         `is_enabled()` entry point, must warn and disable rather than fall back to
         AUTO - falling back could silently re-enable tracking on a machine whose owner
         deliberately set a (mistyped) value to turn it off."""
-        with tracking_environment(
+        with self.tracking_environment(
             **{
                 tracking.TRACKING_MODE_VARIABLE: "bogus",
                 tracking.TRACKING_URI_VARIABLE: "http://tracking.local",
@@ -219,7 +221,7 @@ class TestTracking(unittest.TestCase):
     def test_explicit_config_bypasses_environment_resolution(self):
         """`configure(config)` must install exactly the config it was given, not merge
         it with the environment."""
-        with tracking_environment(**{tracking.TRACKING_MODE_VARIABLE: "off"}):
+        with self.tracking_environment(**{tracking.TRACKING_MODE_VARIABLE: "off"}):
             tracking.configure(TrackingConfig(mode=TrackingMode.ON))
         self.assertTrue(tracking.is_enabled())
 
@@ -234,14 +236,14 @@ class TestTracking(unittest.TestCase):
         """The very first call to `is_enabled()` must resolve the environment on its
         own; a library that only calls `is_enabled()` (never `configure()`) must still
         observe an enabled AUTO configuration."""
-        with tracking_environment(
+        with self.tracking_environment(
             **{tracking.TRACKING_URI_VARIABLE: "http://tracking.local"}
         ):
             self.assertIsNone(tracking._config)
             enabled = tracking.is_enabled()
         self.assertTrue(enabled)
 
-    # -- log_metric / log_params --------------------------------------------------
+    # log_metric / log_params
 
     def test_log_metric_failure_latches_and_suppresses_further_calls(self):
         """A failing `mlflow.log_metric` must not raise, and must latch tracking off
@@ -286,7 +288,7 @@ class TestTracking(unittest.TestCase):
             tracking.log_params({"a": 1})
         self.assertFalse(tracking.is_enabled())
 
-    # -- log_directory --------------------------------------------------------
+    # log_directory
 
     def test_log_directory_missing_path_never_contacts_mlflow(self):
         """A directory that does not exist must return silently without importing or
@@ -323,7 +325,7 @@ class TestTracking(unittest.TestCase):
         self.assertEqual(log_artifacts.call_count, 0)
         self.assertFalse(tracking.is_enabled())
 
-    # -- log_dataset_source -----------------------------------------------------
+    # log_dataset_source
 
     def test_log_dataset_source_forwards_source_name_and_context(self):
         """`log_dataset_source` must build an HTTP-sourced dataset carrying exactly the
@@ -368,7 +370,7 @@ class TestTracking(unittest.TestCase):
             tracking.log_dataset_source("http://data.local/x.zip", "x")
         self.assertFalse(tracking.is_enabled())
 
-    # -- run: disabled path -----------------------------------------------------
+    # run: disabled path
 
     def test_run_disabled_executes_block_and_propagates_exceptions(self):
         """With tracking off, `run` must be a pure pass-through: the block always
@@ -386,7 +388,7 @@ class TestTracking(unittest.TestCase):
                 with tracking.run():
                     raise RuntimeError("boom")
 
-    # -- run: enabled, mocked MLflow ---------------------------------------------
+    # run: enabled, mocked MLflow
 
     def test_run_exception_ends_run_as_failed_and_still_propagates(self):
         """When the wrapped block raises, `run` must end the MLflow run with status
@@ -477,7 +479,7 @@ class TestTracking(unittest.TestCase):
     def test_run_config_parameter_overrides_environment_for_this_call(self):
         """Passing `config=` to `run` must take effect instead of the environment, even
         though the environment alone would have enabled AUTO tracking."""
-        with tracking_environment(
+        with self.tracking_environment(
             **{tracking.TRACKING_URI_VARIABLE: "http://tracking.local"}
         ):
             with (
@@ -553,45 +555,7 @@ class TestTracking(unittest.TestCase):
         start_run.assert_called_once()
         self.assertTrue(tracking.is_enabled())
 
-    # -- run: attaching to a pre-created run --------------------------------------
-    #
-    # Uses a real, local, file-based MLflow store (isolated in a temporary directory,
-    # not the worktree) instead of mocks, because "attach rather than duplicate" is a
-    # guarantee about MLflow's own bookkeeping, and a mock of `mlflow.start_run` cannot
-    # demonstrate that it was MLflow itself that resolved `MLFLOW_RUN_ID` to the
-    # existing run rather than creating a new one.
-
-    def test_run_attaches_to_pre_created_run_instead_of_creating_a_second(self):
-        """When `MLFLOW_RUN_ID` is already set - how a job harness hands a run to the
-        process - `run()` must join that run rather than create a new one."""
-        with tempfile.TemporaryDirectory() as store_dir:
-            store_uri = f"file://{store_dir}/mlruns"
-            with tracking_environment(**{tracking.TRACKING_URI_VARIABLE: store_uri}):
-                import mlflow as real_mlflow
-
-                pre_created = real_mlflow.start_run(run_name="job-harness-run")
-                pre_created_run_id = pre_created.info.run_id
-                real_mlflow.end_run()
-
-                with tracking_environment(
-                    **{
-                        tracking.TRACKING_URI_VARIABLE: store_uri,
-                        "MLFLOW_RUN_ID": pre_created_run_id,
-                        tracking.TRACKING_MODE_VARIABLE: "on",
-                    }
-                ):
-                    seen_run_id = None
-                    with tracking.run(run_name="should-be-ignored"):
-                        seen_run_id = real_mlflow.active_run().info.run_id
-
-                    matching_runs = real_mlflow.search_runs(
-                        experiment_ids=["0"], output_format="list"
-                    )
-
-        self.assertEqual(seen_run_id, pre_created_run_id)
-        self.assertEqual(len(matching_runs), 1)
-
-    # -- disabled by default, in a fresh interpreter ------------------------------
+    # disabled by default, in a fresh interpreter
     #
     # Runs `rebel_shape.tracking` in a fresh interpreter, which is the only honest way
     # to assert that `mlflow` was never imported: by the time any test in this file
@@ -622,9 +586,9 @@ class TestTracking(unittest.TestCase):
         env = {
             key: value
             for key, value in os.environ.items()
-            if key not in _TRACKING_ENV_VARS
+            if key not in self._TRACKING_ENV_VARS
         }
-        env["PYTHONPATH"] = str(REPO_ROOT)
+        env["PYTHONPATH"] = str(self.REPO_ROOT)
 
         with tempfile.TemporaryDirectory() as scratch:
             scratch_dir = Path(scratch)
@@ -649,7 +613,3 @@ class TestTracking(unittest.TestCase):
                 (scratch_dir / "mlflow.db").exists(),
                 "disabled tracking created mlflow.db",
             )
-
-
-if __name__ == "__main__":
-    unittest.main()

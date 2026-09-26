@@ -1,12 +1,12 @@
 name: DOLFINx cross-validation tests
 
-# The FEM solvers under `dolfinx/` are not part of the installable package and need
+# The FEM solvers under `fem/` are not part of the installable package and need
 # their own environment: DOLFINx is a conda-only ecosystem whose VTK requirements
 # conflict with the uv-managed one. They therefore cannot run in the main
 # `Python application` workflow, and until this job existed they ran nowhere
-# automatically -- only when someone remembered to invoke them locally.
+# automatically, only when someone remembered to invoke them locally.
 #
-# The environment is built from `dolfinx/environment.yml`, the same file the
+# The environment is built from `fem/environment.yml`, the same file the
 # README tells a developer to use, rather than from a hand-written dependency
 # list. That keeps CI honest in two ways: it exercises the environment people
 # actually run, and a change to `environment.yml` cannot silently diverge from
@@ -38,24 +38,23 @@ jobs:
         # Runs under plain bash: the conda environment does not exist yet, so the
         # `micromamba-shell` default cannot activate anything.
         #
-        # `llvm` backs Dr.Jit's LLVM variant -- `_spline_fixtures` calls
+        # `llvm` backs Dr.Jit's LLVM variant: `_spline_fixtures` calls
         # `mi.set_variant("llvm_ad_mono")`, which dlopens the system libLLVM. The
         # `Python application` workflow installs the same set for the same reason.
         #
-        # `libosmesa6` gives VTK a software OpenGL implementation. The runner has
-        # neither a GPU nor an X server, so without it PyVista's off-screen
-        # plotter finds no usable backend and the visualization test can only
-        # skip.
+        # `libgl1`, `libglu1-mesa` and `libxrender1` are what gmsh's FLTK-based
+        # GUI toolkit links against (`ldd libgmsh.so` pulls in libGL, libGLU and
+        # libXrender), even though the test suite never opens a gmsh window.
         shell: bash
         run: |
           sudo apt-get update && \
           sudo apt-get install -y llvm llvm-dev clang libclang-dev libgl1 \
-            libglu1-mesa libosmesa6 libxrender1
+            libglu1-mesa libxrender1
 
       - name: Create the DOLFINx environment
         uses: https://github.com/mamba-org/setup-micromamba@v2
         with:
-          environment-file: dolfinx/environment.yml
+          environment-file: fem/environment.yml
           # Solving fenics-dolfinx with PETSc, SLEPc and VTK is slow; the cache
           # key follows the env file, so it is only paid when that file changes.
           cache-environment: true
@@ -74,4 +73,4 @@ jobs:
         env:
           OMP_NUM_THREADS: 1
           PYTHONPATH: ${{ github.workspace }}
-        run: python -m unittest discover dolfinx/tests -v
+        run: python -m unittest discover fem/tests -v

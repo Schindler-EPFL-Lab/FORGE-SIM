@@ -270,7 +270,7 @@ class ReissnerMindlinModalProblem(IGAManifoldProblem):
         shear (default 5/6 for homogeneous cross-sections).
 
         `drilling_stiffness_factor` scales the objective drilling penalty as
-        ``drilling_stiffness_factor * G * h``. The objective formulation ties
+        `drilling_stiffness_factor * G * h`. The objective formulation ties
         the drilling rotation to the physical in-plane rotation from the
         displacement gradient, so this factor can be O(1) without affecting
         physical modes. Set to 0.0 to disable drilling stabilization entirely
@@ -383,7 +383,7 @@ class ReissnerMindlinModalProblem(IGAManifoldProblem):
         strain contributions from one DOF to another through the covariant
         elasticity tensor and the inverse metric tensor.
 
-        All assembly is performed in double precision (``mi.TensorXd``) to
+        All assembly is performed in double precision (`mi.TensorXd`) to
         preserve bending contributions in thin-shell configurations.
 
         Time complexity: O(n_patches * n_knot_spans * (6 * n_basis)^2 *
@@ -466,7 +466,7 @@ class ReissnerMindlinModalProblem(IGAManifoldProblem):
         The displacement-rotation cross terms are zero because the kinetic energy
         decomposes as T = T_translational + T_rotational with no coupling.
 
-        All assembly is performed in double precision (``mi.TensorXd``) to
+        All assembly is performed in double precision (`mi.TensorXd`) to
         maintain consistency with the stiffness assembly.
 
         Time complexity: O(n_patches * n_knot_spans * n_basis^2 *
@@ -526,9 +526,9 @@ class ReissnerMindlinModalProblem(IGAManifoldProblem):
         """
         Assembles the symmetrized global stiffness matrix in CSR format.
 
-        When ``max_batch_size`` is ``None``, this delegates to
-        ``assemble_local_stiffness_matrices`` followed by
-        ``assemble_global_matrix``. When ``max_batch_size`` is set, knot spans
+        When `max_batch_size` is `None`, this delegates to
+        `assemble_local_stiffness_matrices` followed by
+        `assemble_global_matrix`. When `max_batch_size` is set, knot spans
         are processed in batches and scattered directly into a global CSR
         accumulator, bounding peak memory to O(batch_size * n_dofs^2).
 
@@ -583,9 +583,9 @@ class ReissnerMindlinModalProblem(IGAManifoldProblem):
         """
         Assembles the symmetrized global mass matrix in CSR format.
 
-        When ``max_batch_size`` is ``None``, this delegates to
-        ``assemble_local_mass_matrices`` followed by
-        ``assemble_global_matrix``. When ``max_batch_size`` is set, knot spans
+        When `max_batch_size` is `None`, this delegates to
+        `assemble_local_mass_matrices` followed by
+        `assemble_global_matrix`. When `max_batch_size` is set, knot spans
         are processed in batches and scattered directly into a global CSR
         accumulator, bounding peak memory to O(batch_size * n_dofs^2).
 
@@ -757,29 +757,29 @@ class ReissnerMindlinModalProblem(IGAManifoldProblem):
     ) -> "mi.TensorXd":
         """
         Assembles local stiffness matrices for a single patch, or for a subset
-        of its knot spans when ``span_slice`` is provided.
+        of its knot spans when `span_slice` is provided.
 
         This method extracts the patch-local material properties, allocates the
         local matrix tensor, and iterates over quadrature points, delegating the
-        per-quadrature-point physics to ``_assemble_stiffness_contribution``.
+        per-quadrature-point physics to `_assemble_stiffness_contribution`.
 
-        All arithmetic is performed in double precision (``mi.TensorXd``) to
+        All arithmetic is performed in double precision (`mi.TensorXd`) to
         avoid float32 roundoff in thin-shell configurations where bending
         stiffness entries (proportional to h^3/12) are many orders of magnitude
         below membrane entries (proportional to h).
 
         :param patch: The IGA spline patch to assemble.
         :param mapping: Index mapping from patch-local to global control points,
-            of shape ``(n_control_points_patch,)``.
-        :param quadrature_points: List of ``(param_coords, scaled_weight)``
-            tuples from ``KnotSpanHandler.gl_coords_and_weights()``, covering
+            of shape `(n_control_points_patch,)`.
+        :param quadrature_points: List of `(param_coords, scaled_weight)`
+            tuples from `KnotSpanHandler.gl_coords_and_weights()`, covering
             all knot spans of the patch.
         :param span_slice: If given, only knot spans in this range are
             processed. The quadrature point tensors are sliced accordingly.
-            When ``None`` (default), all spans are assembled.
+            When `None` (default), all spans are assembled.
 
-        :returns: A double-precision tensor of shape ``(n_spans, n_dofs, n_dofs)``
-            containing the local stiffness matrices, where ``n_spans`` is either
+        :returns: A double-precision tensor of shape `(n_spans, n_dofs, n_dofs)`
+            containing the local stiffness matrices, where `n_spans` is either
             the total number of knot spans or the size of the slice.
         """
         interp_spline = patch.interpolating_spline
@@ -827,28 +827,28 @@ class ReissnerMindlinModalProblem(IGAManifoldProblem):
     ) -> "mi.TensorXd":
         """
         Assembles local mass matrices for a single patch, or for a subset of
-        its knot spans when ``span_slice`` is provided.
+        its knot spans when `span_slice` is provided.
 
         This method extracts the patch-local material properties, allocates the
         local matrix tensor, and iterates over quadrature points, delegating the
-        per-quadrature-point physics to ``_assemble_mass_contribution``.
+        per-quadrature-point physics to `_assemble_mass_contribution`.
 
-        All arithmetic is performed in double precision (``mi.TensorXd``) to
+        All arithmetic is performed in double precision (`mi.TensorXd`) to
         maintain consistency with the stiffness assembly and avoid float32
         roundoff in the rotational inertia terms (proportional to h^3/12).
 
         :param patch: The IGA spline patch to assemble.
         :param mapping: Index mapping from patch-local to global control points,
-            of shape ``(n_control_points_patch,)``.
-        :param quadrature_points: List of ``(param_coords, scaled_weight)``
-            tuples from ``KnotSpanHandler.gl_coords_and_weights()``, covering
+            of shape `(n_control_points_patch,)`.
+        :param quadrature_points: List of `(param_coords, scaled_weight)`
+            tuples from `KnotSpanHandler.gl_coords_and_weights()`, covering
             all knot spans of the patch.
         :param span_slice: If given, only knot spans in this range are
             processed. The quadrature point tensors are sliced accordingly.
-            When ``None`` (default), all spans are assembled.
+            When `None` (default), all spans are assembled.
 
-        :returns: A double-precision tensor of shape ``(n_spans, n_dofs, n_dofs)``
-            containing the local mass matrices, where ``n_spans`` is either the
+        :returns: A double-precision tensor of shape `(n_spans, n_dofs, n_dofs)`
+            containing the local mass matrices, where `n_spans` is either the
             total number of knot spans or the size of the slice.
         """
         interp_spline = patch.interpolating_spline
@@ -903,35 +903,35 @@ class ReissnerMindlinModalProblem(IGAManifoldProblem):
     ) -> None:
         """
         Accumulates the stiffness contribution from a single quadrature point
-        into ``local_matrices``.
+        into `local_matrices`.
 
         This is the core physics method for stiffness assembly. It evaluates
         basis functions, geometry, and material properties at the quadrature
         point, builds the 8 covariant strain arrays (membrane, bending, shear),
         contracts them through the elastic bilinear form, and adds the objective
         drilling penalty. The result is scattered row-by-row into
-        ``local_matrices`` via ``_scatter_values_to_local_matrices``.
+        `local_matrices` via `_scatter_values_to_local_matrices`.
 
         Basis function evaluations and geometric quantities are computed in
-        float32 by the spline methods and immediately cast to ``mi.TensorXd``.
+        float32 by the spline methods and immediately cast to `mi.TensorXd`.
         All subsequent arithmetic (strain construction, elastic contraction,
         drilling penalty) operates in double precision to avoid roundoff in
         thin-shell configurations.
 
         :param patch: The IGA spline patch providing geometry evaluation.
         :param patch_E: Young's modulus at the patch control points, of shape
-            ``(n_control_points_patch, 1)``. Double precision.
+            `(n_control_points_patch, 1)`. Double precision.
         :param patch_nu: Poisson's ratio at the patch control points, of shape
-            ``(n_control_points_patch, 1)``. Double precision.
+            `(n_control_points_patch, 1)`. Double precision.
         :param patch_h: Thickness at the patch control points, of shape
-            ``(n_control_points_patch, 1)``. Double precision.
+            `(n_control_points_patch, 1)`. Double precision.
         :param param_coords: Parametric coordinates of the quadrature point
-            for all knot spans being processed, of shape ``(n_spans, 2)``.
+            for all knot spans being processed, of shape `(n_spans, 2)`.
         :param scaled_weight: Quadrature weights scaled by the knot span area,
-            of shape ``(n_spans,)``.
+            of shape `(n_spans,)`.
         :param local_matrices: Double-precision accumulator tensor of shape
-            ``(n_spans, n_dofs, n_dofs)`` that is modified in-place.
-        :param n_dofs: Number of DOFs per knot span (``6 * n_basis``).
+            `(n_spans, n_dofs, n_dofs)` that is modified in-place.
+        :param n_dofs: Number of DOFs per knot span (`6 * n_basis`).
         """
         interp_spline = patch.interpolating_spline
         n_spans = param_coords.shape[0]
@@ -1191,31 +1191,31 @@ class ReissnerMindlinModalProblem(IGAManifoldProblem):
     ) -> None:
         """
         Accumulates the mass contribution from a single quadrature point into
-        ``local_matrices``.
+        `local_matrices`.
 
         This is the core physics method for mass assembly. It evaluates basis
         functions, geometry, and material properties at the quadrature point,
-        then assembles both the translational inertia (``rho * h * N_I N_J
-        delta_{ij}``) and the projected rotational inertia (``rho * h^3/12 *
-        N_I N_J (delta_{ij} - D_i D_j)``). The result is scattered row-by-row
-        into ``local_matrices`` via ``_scatter_values_to_local_matrices``.
+        then assembles both the translational inertia (`rho * h * N_I N_J
+        delta_{ij}`) and the projected rotational inertia (`rho * h^3/12 *
+        N_I N_J (delta_{ij} - D_i D_j)`). The result is scattered row-by-row
+        into `local_matrices` via `_scatter_values_to_local_matrices`.
 
         Basis function evaluations and geometric quantities are computed in
-        float32 by the spline methods and immediately cast to ``mi.TensorXd``.
+        float32 by the spline methods and immediately cast to `mi.TensorXd`.
         All subsequent arithmetic operates in double precision.
 
         :param patch: The IGA spline patch providing geometry evaluation.
         :param patch_rho: Density at the patch control points, of shape
-            ``(n_control_points_patch, 1)``. Double precision.
+            `(n_control_points_patch, 1)`. Double precision.
         :param patch_h: Thickness at the patch control points, of shape
-            ``(n_control_points_patch, 1)``. Double precision.
+            `(n_control_points_patch, 1)`. Double precision.
         :param param_coords: Parametric coordinates of the quadrature point
-            for all knot spans being processed, of shape ``(n_spans, 2)``.
+            for all knot spans being processed, of shape `(n_spans, 2)`.
         :param scaled_weight: Quadrature weights scaled by the knot span area,
-            of shape ``(n_spans,)``.
+            of shape `(n_spans,)`.
         :param local_matrices: Double-precision accumulator tensor of shape
-            ``(n_spans, n_dofs, n_dofs)`` that is modified in-place.
-        :param n_dofs: Number of DOFs per knot span (``6 * n_basis``).
+            `(n_spans, n_dofs, n_dofs)` that is modified in-place.
+        :param n_dofs: Number of DOFs per knot span (`6 * n_basis`).
         :param n_basis: Number of basis functions per knot span.
         """
         interp_spline = patch.interpolating_spline
@@ -1320,7 +1320,7 @@ class ReissnerMindlinModalProblem(IGAManifoldProblem):
         :param mapping: Index mapping from patch-local to global control points.
         :param ksh: The knot span handler for this patch.
 
-        :returns: An integer array of shape ``(n_knot_spans, n_dofs)`` mapping
+        :returns: An integer array of shape `(n_knot_spans, n_dofs)` mapping
             each local DOF slot to its global DOF index.
         """
         interp = patch.interpolating_spline
@@ -1353,9 +1353,9 @@ class ReissnerMindlinModalProblem(IGAManifoldProblem):
 
         :param K: The global sparse matrix accumulator (CSR format).
         :param local_mat: Double-precision local matrices for the batch, of
-            shape ``(batch_size, n_dofs, n_dofs)``.
+            shape `(batch_size, n_dofs, n_dofs)`.
         :param dof_map_batch: Global DOF indices for the batch, of shape
-            ``(batch_size, n_dofs)``.
+            `(batch_size, n_dofs)`.
         :param n_dofs: Number of DOFs per knot span.
         :param n_global_dofs: Total number of global DOFs.
 

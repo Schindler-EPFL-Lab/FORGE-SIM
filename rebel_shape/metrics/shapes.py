@@ -16,7 +16,7 @@ from rebel_shape.meshing.tessellated_spline_surface import TessellatedSplineSurf
 # The nerfstudio Z-up <-> Y-up convention: a +90 deg rotation about X, applied to
 # the reference mesh in the render frame (before tf_cameras). For the synthetic
 # BuildNet3D scenes this is the *exact* correction between the render-scale GT mesh
-# and the reconstruction (zero translation, unit scale) -- it reaches the same
+# and the reconstruction (zero translation, unit scale), it reaches the same
 # silhouette match as a full ICP fit, so no fitting is needed.
 NERFSTUDIO_AXIS_FIX: npt.NDArray[np.float64] = np.array(
     [
@@ -34,10 +34,10 @@ def global_mesh_to_open3d_mesh(
     """
     Builds an Open3D tensor triangle mesh from a global vertex/face buffer.
 
-    `global_vertices` is an ``(V, 3)`` position tensor and `global_faces` an
-    ``(F, 3)`` index tensor, as exposed by `CompositeMesh` (``global_vertices`` /
-    ``global_faces``), `TessellatedSplineSurface`, or `Mesh` (``vertices`` /
-    ``faces``).
+    `global_vertices` is an `(V, 3)` position tensor and `global_faces` an
+    `(F, 3)` index tensor, as exposed by `CompositeMesh` (`global_vertices` /
+    `global_faces`), `TessellatedSplineSurface`, or `Mesh` (`vertices` /
+    `faces`).
 
     :returns: the corresponding Open3D tensor triangle mesh.
     """
@@ -79,9 +79,9 @@ def calculate_metrics_shape_mesh(
     `predicted_mesh` is the reconstruction and `ground_truth_mesh` is the reference
     it is compared against. `n_sampled_points` points are sampled uniformly on each
     surface and the bidirectional Chamfer distance between the two point sets is
-    measured (in the meshes' shared units -- the lower the better).
+    measured (in the meshes' shared units; the lower the better).
 
-    :returns: A dict with the single key ``"chamfer_distance"``.
+    :returns: A dict with the single key `"chamfer_distance"`.
     """
 
     # calculate the metrics
@@ -101,15 +101,15 @@ def reference_to_scene_transform(
 ) -> npt.NDArray[np.float64]:
     """
     Returns the deterministic 4x4 transform taking a render-scale reference mesh
-    into the reconstruction (scene) frame: ``tf_cameras @ R_x(90 deg)``.
+    into the reconstruction (scene) frame: `tf_cameras @ R_x(90 deg)`.
 
     `scene_path` is the dataset directory holding `transforms.json` (the cameras
     `tf_cameras` is built from). `from_vggt` selects the VGGT pose loader instead
     of the ThermoScenes one. `align_cameras_xz` is the camera xz-plane alignment
     flag and must match the value the optimization used.
 
-    ``tf_cameras`` is the pose-loader transform applied to the cameras during
-    optimization, and ``R_x(90 deg)`` is the fixed nerfstudio Z-up/Y-up convention
+    `tf_cameras` is the pose-loader transform applied to the cameras during
+    optimization, and `R_x(90 deg)` is the fixed nerfstudio Z-up/Y-up convention
     rotation. No scale or translation is fitted. A Mitsuba variant must already be
     set by the caller.
 

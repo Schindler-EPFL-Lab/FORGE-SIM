@@ -127,8 +127,8 @@ class TestImageLossFunctions(unittest.TestCase):
         reshape. `compute_msssim` now crops both images to the largest
         compatible size and logs a warning instead of raising. A pair of
         *identical*, spatially-varying (non-constant) images is used so that
-        an inconsistent crop between the two images -- e.g. cropping rows off
-        one and columns off the other -- would show up as a nonzero loss;
+        an inconsistent crop between the two images (e.g. cropping rows off
+        one and columns off the other) would show up as a nonzero loss;
         with a shared, correct crop the loss must still be exactly the
         self-similarity value (~0), not merely "some finite number".
         """

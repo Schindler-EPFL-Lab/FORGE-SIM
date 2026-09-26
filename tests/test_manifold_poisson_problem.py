@@ -15,59 +15,60 @@ from rebel_shape.splines.bspline_patch import BSplinePatch
 from rebel_shape.splines.iga_spline_patch import IGASplinePatch
 
 
-def compute_and_print_symbolic_forcing_term() -> None:
-    """
-    Computes and prints the forcing term that has the solution
-        u_hat(u, v) = sin(pi * u) * sin(pi * v)
-    for a degree 2 Bezier patch with control points such that the middle control point
-    has coordinates (0.5, 0.5, 4.0).
-
-    The forcing term is computed symbolically using SymPy and is expected to be used
-    in the ManifoldPoissonProblem for testing purposes. Note that this function
-    is not part of the unit tests because it takes over 30 seconds to evaluate.
-    Nonetheless, it is provided as a reference to understand how the very long forcing
-    term from `test_poisson_manifold` was derived.
-    """
-    import sympy as sp
-
-    # Define symbols
-    u, v = sp.symbols("u v", real=True)
-
-    # Geometry when the middle control point of a degree 2 bezier patch has coordinate
-    # (0.5, 0.5, 4.0)
-    z = 16 * u * (1 - u) * v * (1 - v)
-    zu = sp.diff(z, u)
-    zv = sp.diff(z, v)
-
-    # Metric components
-    g11 = 1 + zu**2
-    g22 = 1 + zv**2
-    g12 = zu * zv
-    g = g11 * g22 - g12**2
-
-    # Inverse metric
-    g_inv_11 = g22 / g
-    g_inv_12 = -g12 / g
-    g_inv_22 = g11 / g
-
-    # Manufactured solution u_hat
-    u_hat = sp.sin(sp.pi * u) * sp.sin(sp.pi * v)
-    u_hat_u = sp.diff(u_hat, u)
-    u_hat_v = sp.diff(u_hat, v)
-
-    # Flux components q^1, q^2
-    sqrt_g = sp.sqrt(g)
-    q1 = sqrt_g * (g_inv_11 * u_hat_u + g_inv_12 * u_hat_v)
-    q2 = sqrt_g * (g_inv_12 * u_hat_u + g_inv_22 * u_hat_v)
-
-    # Compute the right-hand side f = -Δ_M u_hat
-    f_expr = -1 / sqrt_g * (sp.diff(q1, u) + sp.diff(q2, v))
-    f_simplified = sp.simplify(f_expr)
-
-    print(f_simplified)
-
-
 class TestManifoldPoissonProblem(unittest.TestCase):
+    @staticmethod
+    def compute_and_print_symbolic_forcing_term() -> None:
+        """
+        Computes and prints the forcing term that has the solution
+            u_hat(u, v) = sin(pi * u) * sin(pi * v)
+        for a degree 2 Bezier patch with control points such that the middle
+        control point has coordinates (0.5, 0.5, 4.0).
+
+        The forcing term is computed symbolically using SymPy and is expected
+        to be used in the ManifoldPoissonProblem for testing purposes. Note
+        that this function is not part of the unit tests because it takes
+        over 30 seconds to evaluate. Nonetheless, it is provided as a
+        reference to understand how the very long forcing term from
+        `test_poisson_manifold` was derived.
+        """
+        import sympy as sp
+
+        # Define symbols
+        u, v = sp.symbols("u v", real=True)
+
+        # Geometry when the middle control point of a degree 2 bezier patch has
+        # coordinate (0.5, 0.5, 4.0)
+        z = 16 * u * (1 - u) * v * (1 - v)
+        zu = sp.diff(z, u)
+        zv = sp.diff(z, v)
+
+        # Metric components
+        g11 = 1 + zu**2
+        g22 = 1 + zv**2
+        g12 = zu * zv
+        g = g11 * g22 - g12**2
+
+        # Inverse metric
+        g_inv_11 = g22 / g
+        g_inv_12 = -g12 / g
+        g_inv_22 = g11 / g
+
+        # Manufactured solution u_hat
+        u_hat = sp.sin(sp.pi * u) * sp.sin(sp.pi * v)
+        u_hat_u = sp.diff(u_hat, u)
+        u_hat_v = sp.diff(u_hat, v)
+
+        # Flux components q^1, q^2
+        sqrt_g = sp.sqrt(g)
+        q1 = sqrt_g * (g_inv_11 * u_hat_u + g_inv_12 * u_hat_v)
+        q2 = sqrt_g * (g_inv_12 * u_hat_u + g_inv_22 * u_hat_v)
+
+        # Compute the right-hand side f = -Δ_M u_hat
+        f_expr = -1 / sqrt_g * (sp.diff(q1, u) + sp.diff(q2, v))
+        f_simplified = sp.simplify(f_expr)
+
+        print(f_simplified)
+
     def setUp(self) -> None:
         mi.set_variant("llvm_ad_rgb")
 

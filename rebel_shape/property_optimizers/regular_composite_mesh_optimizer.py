@@ -25,7 +25,7 @@ class RegularCompositeMeshOptimizer(PropertyOptimizer):
     Mirrors `SplineOptimizer` (`rebel_shape/property_optimizers/spline_optimizer.py`)
     but operates directly on the composite mesh's global vertex buffer instead of
     spline control points. The `LaplacianParametrization` therefore lives in vertex
-    space — no spline indirection — and seam vertices are shared by construction
+    space (no spline indirection), and seam vertices are shared by construction
     because the `RegularCompositeMesh`'s `PatchManager` deduplicates them at
     patch boundaries. This eliminates the gradient-tearing failure mode that the
     single-mesh `MeshOptimizer` suffers from in the presence of UV seams.
@@ -55,7 +55,7 @@ class RegularCompositeMeshOptimizer(PropertyOptimizer):
         `optimization_events` collects per-iteration callbacks.
 
         `composite_mesh` is the `RegularCompositeMesh` to optimize. Every patch's
-        ``"<name>.vertex_positions"`` must be present in `scene_params`, otherwise
+        `"<name>.vertex_positions"` must be present in `scene_params`, otherwise
         the optimizer cannot push updated vertices to the scene.
 
         `shape_scheduler` controls the learning rate over iterations, and
@@ -68,7 +68,7 @@ class RegularCompositeMeshOptimizer(PropertyOptimizer):
         `mesh_save_interval` controls how often each patch is dumped to PLY
         during optimization. If `None`, patches are not saved.
 
-        :raises ValueError: If any patch's ``"<name>.vertex_positions"`` is not in
+        :raises ValueError: If any patch's `"<name>.vertex_positions"` is not in
             `scene_params`, `smoothing_strength` is negative, or
             `mesh_save_interval` is non-positive.
         """
@@ -237,7 +237,7 @@ class RegularCompositeMeshOptimizer(PropertyOptimizer):
         """
         Saves the composite mesh every `mesh_save_interval` iterations.
 
-        The full composite is written as a single jsonpickle ``.json`` (the
+        The full composite is written as a single jsonpickle `.json` (the
         mesh-side analog of the spline path's `TessellatedSplineSurface` JSON, so
         the topology can be reloaded with `RegularCompositeMesh.from_file` without
         re-stitching the per-patch PLYs), and each patch is additionally written to

@@ -24,7 +24,6 @@ from rebel_shape import logger, tracking
 from rebel_shape.meshing.tessellated_iga_spline_surface import (
     TessellatedIGASplineSurface,
 )
-from rebel_shape.scripts.configs.camera_ring_config import CameraRingConfig
 from rebel_shape.scripts.configs.thermal_material_config import ThermalMaterialConfig
 from rebel_shape.scripts.heat_simulation.heat_simulation_runner import (
     HeatSimulationRunner,
@@ -58,19 +57,6 @@ class HeatSimulationParameters(ReverseCli):
     save_interval: int = 50
     """Interval at which to save the simulation state."""
 
-    camera_config: CameraRingConfig = field(
-        default_factory=lambda: CameraRingConfig(
-            samples_per_pixel=4,
-            sensor_count=6,
-            sensor_resolution_height=480,
-            sensor_resolution_width=480,
-            sensor_fov=45.0,
-        )
-    )
-    """Camera configuration for rendering the scene during the simulation."""
-    texture_resolution: int = 512
-    """Resolution of the texture used for the thermal data"""
-
     concrete_config: ThermalMaterialConfig = field(
         default_factory=lambda: ThermalMaterialConfig(
             conductivity=2.0,
@@ -100,8 +86,9 @@ class HeatSimulationParameters(ReverseCli):
 
     use_gpu: bool = True
     """
-    Whether to use GPU for rendering or not. Note that the compute instance
-    must have GPU support for this to work. For local testing, set to False.
+    Whether to use the CUDA Mitsuba/Dr.Jit variant for tensor assembly. Note
+    that the compute instance must have GPU support for this to work. For
+    local testing, set to False.
     """
 
     def __post_init__(self):
@@ -114,8 +101,6 @@ class HeatSimulationParameters(ReverseCli):
             raise ValueError("`dt_over_t_relax` must be a positive real number!")
         if self.save_interval < 1:
             raise ValueError("`save_interval` must be a positive integer!")
-        if self.texture_resolution < 1:
-            raise ValueError("`texture_resolution` must be a positive integer!")
         if self.target_length_scale is not None and self.target_length_scale <= 0.0:
             raise ValueError("`target_length_scale` must be positive if provided.")
         if self.target_delta_temp is not None and self.target_delta_temp <= 0.0:
@@ -132,17 +117,13 @@ def simulate_heat_cn(params: HeatSimulationParameters) -> None:
     over a specified number of time steps. The simulation is based on the provided
     `params`, including the spline surface, material properties, and simulation
     parameters.
-
-    Every `params.save_interval` time steps, the current temperature field is rendered
-    using Mitsuba in monochromatic mode (having rgb visualization would be very nice)
-    and saved to the output folder.
     """
     if params.use_gpu:
         mi.set_variant("cuda_ad_rgb")
-        logger.info("Using the GPU for rendering and tensor assembly.")
+        logger.info("Using the GPU for tensor assembly.")
     else:
         mi.set_variant("llvm_ad_rgb")
-        logger.info("Using the CPU for rendering and tensor assembly.")
+        logger.info("Using the CPU for tensor assembly.")
 
     tessellated_iga_spline = TessellatedIGASplineSurface.from_file(
         composite_spline_surface_path=params.spline_path
@@ -172,8 +153,6 @@ def simulate_heat_cn(params: HeatSimulationParameters) -> None:
     heat_simulation_runner = HeatSimulationRunner(
         tessellated_iga_spline=tessellated_iga_spline,
         material_config=params.concrete_config,
-        camera_config=params.camera_config,
-        texture_resolution=params.texture_resolution,
     )
 
     if params.target_delta_temp is not None or params.heat_source != 0.0:
@@ -189,7 +168,6 @@ def simulate_heat_cn(params: HeatSimulationParameters) -> None:
     heat_simulation_runner.run_heat_simulation_with_xdmf(
         num_time_steps=params.num_time_steps,
         dt_over_t_relax=params.dt_over_t_relax,
-        output_folder=params.output_folder,
         xdmf_path=params.output_folder / "heat_simulation.xdmf",
         target_delta_temp=params.target_delta_temp,
         heat_source_material=params.concrete_config

@@ -9,7 +9,8 @@ Its main capabilities include:
 - Simplifies and streamlines the use of Mitsuba 3 for differentiable rendering and optimization tasks.
 - Provides building blocks for image based 3D reconstruction pipelines including optimizers, losses, and regularization terms
 - Supports both triangle mesh and spline based shape and texture optimization of multi-patch surfaces
-- Implements isogeometric analysis (IGA) tools for simulation tasks with the optimized spline surfaces
+- Implements isogeometric analysis (IGA) tools for simulation tasks with the optimized spline surfaces, covering both transient heat transport and Reissner-Mindlin shell modal analysis
+- Ships an independent DOLFINx finite-element implementation of the same two problems, so every IGA result can be cross-validated against a discretisation that shares no solver code with it
 - Facilitates data processing for both synthetic and real datasets, including compatibility with nerfstudio scenes.
 - Supplies scripts for data preprocessing, optimization, simulation, and Azure job management.
 
@@ -44,13 +45,9 @@ uv sync --all-extras --no-extra extraction
 
 `fast-cholesky` pulls in `scikit-sparse`, which lets the isogeometric modal and
 heat solvers factor with CHOLMOD's nested-dissection ordering instead of the
-default `cholespy` — roughly four times faster on the matrices these problems
-produce. It is genuinely optional: without it the solvers fall back automatically,
+default `cholespy` (roughly four times faster on the matrices these problems
+produce). It is genuinely optional: without it the solvers fall back automatically,
 and the two agree to about 2e-12, so results are unaffected.
-
-`remeshing` pulls in `gpytoolbox`, which prepares the ground-truth meshes the
-end-to-end verification measures against. It publishes no linux-aarch64 wheel, so
-add `--no-extra remeshing` on those machines.
 
 ### Quick-start
 
@@ -68,11 +65,14 @@ add `--no-extra remeshing` on those machines.
 
 3. Optimize the shape for simulation
 
-  Go to `rebel_shape/scripts` directory and run `optimize_suzanne_mesh.py` or `optimize_suzanne_spline.py` scripts.
+  For a synthetic warm-up on a known mesh, run `optimize_suzanne_mesh.py` or
+  `optimize_suzanne_spline_texture.py`. On a real dataset:
 
   ```bash
   python3 rebel_shape/scripts/optimize_thermoscenes_spline_manual_initial_pose.py --scene-path dataset-path --environment-map-path data/textures/checkerboard_lighter.exr --bbox-transforms-path bbox-path --use-gpu --shape-params.batch-size 200 --shape-params.learning-rate-start 0.5 --shape-params.learning-rate-end 1
   ```
+
+Run every script from the repository root: the package writes `outputs/rebel_shape.log` relative to the working directory on import, and the scripts resolve their local imports the same way.
 
 These scripts can be run locally on the CPU, but the default setting are tuned for GPU execution, so adjusting the parameters is necessary.
 Reducing the number of samples per pixel to 4-9 can yield reasonable execution time without compromising the optimization procedure.
@@ -90,14 +90,14 @@ Knot vectors can be changed and control points moved around to see how the resul
 Every script reports its parameters, per-iteration losses and output artifacts through
 `rebel_shape/tracking.py`, a thin seam over [MLflow](https://mlflow.org/). **Tracking is
 off unless the environment turns it on**, so the scripts run unchanged on a machine with
-no tracking infrastructure — nothing is written and no MLflow store is created.
+no tracking infrastructure: nothing is written and no MLflow store is created.
 
 Two environment variables control it:
 
 | variable | effect |
 |---|---|
 | `MLFLOW_TRACKING_URI` | Where runs go, e.g. `http://localhost:5000` for a local MLflow server. Setting it is what turns tracking on. |
-| `REBEL_SHAPE_TRACKING` | `auto` (default: on only if the environment names a destination), `on` (always attempt), `off` (never touch MLflow — the only way to say "off" on a machine that exports a tracking URI). |
+| `REBEL_SHAPE_TRACKING` | `auto` (default: on only if the environment names a destination), `on` (always attempt), `off` (never touch MLflow, the only way to say "off" on a machine that exports a tracking URI). |
 | `MLFLOW_EXPERIMENT_NAME` | Which MLflow experiment runs are created in. The seam never sets an experiment itself. |
 
 ```bash
@@ -126,7 +126,7 @@ disk but not recorded as an artifact.
 The project is structured as follows:
 
 ```
-rebel_shape/
+rebel-shape/
 ├── rebel_shape/            # Main package
 │   ├── plugin_wrappers/        # Wrappers around select Mitsuba plugins that are used in rebel_shape
 │   ├── scene_optimizers/       # Optimizers
@@ -138,12 +138,30 @@ rebel_shape/
 │   ├── property_optimizers/    # High-level specification of the optimization problem
 │   ├── data_processing/        # Functionality for preparing the data for optimization
 │   ├── isogeometric_analysis/  # Simulation functionality based on IGA
+│   ├── render/                 # Render orchestration
+│   ├── metrics/                # Novel-view-synthesis and shape metrics for evaluation
 │   ├── utils/                  # Miscallaneous utility functions
 │   ├── scripts/                # Scripts for running shape optimization and simulation
-│       ├── segmentation/           # Scripts for image segmentation
+│       ├── configs/                        # Reusable nested-dataclass configs shared by the scripts
+│       ├── segmentation/                   # Scripts for image segmentation
+│       ├── depth_estimation/               # Monocular depth estimation
+│       ├── heat_simulation/                # IGA transient heat entry points
+│       ├── reissner_mindlin_modal_analysis/    # IGA shell modal entry points
+│       ├── evaluation/                     # Per-dataset Chamfer and novel-view-synthesis evaluation
+│       ├── end_to_end/                     # The synthetic end-to-end validation, venv half
+├── fem/                    # Independent DOLFINx FEM implementations of the same problems, for cross-validation
+├── main_scripts/           # Drivers that span both Python environments and sweep the entry points across scenes
 ├── azure_scripts/          # Scripts to launch Azure jobs (execute code from rebel_shape/scripts)
+├── build_context/          # Docker build context for the Azure ML image
 ├── tests/                  # Unit tests
+├── data/                   # Meshes, splines, textures and bounding-box transforms
+└── docs/                   # Design and paper notes
 ```
+
+`fem/`, `main_scripts/` and the end-to-end experiment each carry their own README:
+[`fem/README.md`](./fem/README.md),
+[`main_scripts/README.md`](./main_scripts/README.md) and
+[`rebel_shape/scripts/end_to_end/README.md`](./rebel_shape/scripts/end_to_end/README.md).
 
 ### Plugin Wrappers
 
@@ -308,6 +326,28 @@ The Galerkin discretization method yields a system of equations that have to be 
 Fundamental building blocks for this process are provided, as well as basic building blocks for simulations on manifolds embedded in 3D space.
 The Poisson problem is meant to serve as an example of how to write an IGA assembly code, while the `HeatSimulation` is the more comprehensive IGA implementation of the heat transport problem.
 
+Two physical applications are built on those blocks: transient heat transport, and Reissner-Mindlin shell modal analysis.
+
+### Shell Modal Analysis
+
+The second application treats the optimized surface as a thin elastic shell and asks for its natural frequencies and mode shapes, i.e. the eigenpairs of `K φ = ω² M φ`.
+`ReissnerMindlinModalProblem` assembles the stiffness and mass matrices in a 6-DOF global Cartesian formulation (three displacements and three rotations per control point), splitting the stiffness into membrane, bending, transverse shear and drilling contributions.
+The drilling term is there because Reissner-Mindlin theory gives the rotation about the normal no stiffness of its own; a penalty ties it to the in-plane rotation extracted from the displacement gradient instead.
+That penalty is objective (it vanishes on rigid body motions), which is what leaves the six zero-frequency modes of a free-free shell intact.
+
+`ModalAnalysisSolver` performs the eigensolve.
+A closed surface has no boundary to pin, so instead of constraining degrees of freedom it adds a mass-proportional spectral shift to make `K` positive definite, factors with sparse Cholesky, runs shift-invert `eigsh`, and subtracts the shift afterwards.
+Nothing is pinned, so the degeneracy pattern of the spectrum survives, which matters, because on a sphere that pattern is exactly what tells you the answer is right.
+
+### FEM Cross-Validation
+
+`fem/` holds DOLFINx (FEniCSx) finite-element solvers for the same two problems.
+It exists to disagree: it shares the inputs of the IGA side (the spline classes, the material configs) but no solver code and no output-writing code, so agreement between the two is evidence for both discretisations while a disagreement localises the fault to one of them.
+Nothing under `rebel_shape/` imports it, and it is not a dependency of the installable package; DOLFINx is conda-only and its VTK requirements conflict with the main environment, so it runs in its own conda environment.
+The steel sphere is the shared anchor: the same benchmark both sides solve, pinned on the IGA side by `tests/test_steel_sphere_modal_analysis.py`.
+
+See [`fem/README.md`](./fem/README.md) for the environment, the layout and the entry points.
+
 ### Scripts
 
 There are two flavors of scripts: Azure scripts and "training" scripts.
@@ -321,6 +361,11 @@ These scripts can be executed locally or on Azure.
 These scripts can also be executed on Azure using the Azure scripts.
 Azure scripts are formally not part of the library and are thus situated outside, at the same level as unit tests.
 Each Azure script should have the same name as the script that it launches.
+
+Every one of these scripts is generic: it handles one scene at a time, takes its paths from the caller, and hardcodes no dataset.
+The list of scenes lives one level up, in `main_scripts/`, which sweeps the entry points across them and is the only place a single command may span both the uv and the conda environment.
+It does so by subprocess, which is why neither environment has to import the other's code.
+See [`main_scripts/README.md`](./main_scripts/README.md).
 
 ## Pipeline
 
@@ -371,7 +416,7 @@ The prompts used are:
 The quality of the final representation depends heavily on the initial pose and radius of the shape, so pose is determined before any shape/texture optimization runs.
 There are two ways to produce the `data/bbox_transforms/<name>.json` file consumed by the downstream scripts:
 
-1. The manual Blender workflow described in the [Manual Initialization Guide](./docs/manual_initialization/README.md) — recommended when the cameras are sparse or the object occupies only a small fraction of the frame, where automatic silhouette fitting can be unreliable.
+1. The manual Blender workflow described in the [Manual Initialization Guide](./docs/manual_initialization/README.md), recommended when the cameras are sparse or the object occupies only a small fraction of the frame, where automatic silhouette fitting can be unreliable.
 2. The automated [`optimize_thermoscenes_pose.py`](./rebel_shape/scripts/optimize_thermoscenes_pose.py) script, which fits a cubed-sphere B-spline proxy (diffuse albedo configurable via `--object-albedo`, default black) against the reference silhouettes on a constant-white background and writes the resulting TRS transform to `{bbox_transforms_dir}/{name}.json`.
    Uses L-BFGS by default; lower the learning rate or raise `object_albedo` if gradients are too strong for a given scene.
 
@@ -399,7 +444,7 @@ Spline-based optimization returns a .json file that is a [jsonpickle](https://js
 The tessellated spline surface typically contains a compact representation and a mesh representation can be obtained from it.
 
 The optimized mesh/spline is then provided as an input to inpainting script.
-It can either be stored as a data asset on Azure or put into the [optimized_scenes](data/optimized_scenes) folder.
+It can either be stored as a data asset on Azure or put into the [optimized_scenes](optimized_scenes) folder.
 The latter is a good solution for validating scripts and debugging purposes while the former is a more long term solution.
 
 ### Inpainting
@@ -407,14 +452,6 @@ The latter is a good solution for validating scripts and debugging purposes whil
 After the shape has been reconstructed from RGB images, the initial condition for thermal simulation are obtained from thermal images.
 This procedure is referred to as thermal inpainting.
 Since simulation is carried out with vertices (in case of FEM) and control points (in case of IGA), thermal information has to be directly projected onto vertices/control points.
-
-The first script takes as input just the spline surface obtained via thermal inpainting, while the second one also requires 6 masked facades.
-The facades are masked the same way as the ThermoScenes input data; it is accomplished by calling the [`segment_facade.py`](rebel_shape/scripts/segmentation/segment_facade.py) script with the path to the facade images.
-
-The numerical integration scheme is stable for all time step sizes [(Crank-Nicolson scheme)](https://en.wikipedia.org/wiki/Crank%E2%80%93Nicolson_method) and perfectly preserves the total energy if there are no sources or sinks.
-
-If non-linear terms (e.g. black-body radiation) are introduced, an iterative solve has to be performed at each step to ensure stability and accuracy.
-This can be done either via the [Newton–Raphson method](https://en.wikipedia.org/wiki/Newton%27s_method) or with a simple [fixed-point iteration](https://en.wikipedia.org/wiki/Fixed-point_iteration) scheme.
 
 Mitsuba supports vertex-based textures while for the spline-based representation the texture is generated by evaluating the spline basis function at each pixel.
 This difference again necessitates two different inpainting scripts.
@@ -433,16 +470,56 @@ The simulation is done using the isogeometric analysis (IGA) framework.
 
 Two heat simulation options are available at the time of writing:
 
-1. Heat simulation with a single material and no heat sources [(here)](rebel_shape/scripts/heat_simulation/run_heat_simulation.py)
-2. Heat simulation with two materials and no heat sources [(here)](rebel_shape/scripts/heat_simulation/run_heat_simulation_two_materials.py)
+1. Heat simulation with a single material and no heat sources [(here)](rebel_shape/scripts/heat_simulation/heat_simulation.py)
+2. Heat simulation with two materials and no heat sources [(here)](rebel_shape/scripts/heat_simulation/heat_simulation_two_materials.py)
+
+The runner beside them, `heat_simulation_runner.py`, is the shared library both entry points drive; it is not a CLI.
 
 The first script takes as input just the spline surface obtained via thermal inpainting, while the second one also requires 6 masked facades.
-The facades are masked the same way as the ThermoScenes input data; it is accomplished by calling the [`segment_facade.py`](rebel_shape/scripts/segmentation/segment_facade.py) script with the path to the facade images.
+The facades are masked the same way as the ThermoScenes input data, with the [`mask_with_sam3.py`](rebel_shape/scripts/segmentation/mask_with_sam3.py) script pointed at the facade images and run in the `--mask-mode union --is-mask` configuration described under Element segmentation above.
 
 The numerical integration scheme is stable for all time step sizes [(Crank-Nicolson scheme)](https://en.wikipedia.org/wiki/Crank%E2%80%93Nicolson_method) and perfectly preserves the total energy if there are no sources or sinks.
 
 If non-linear terms (e.g. black-body radiation) are introduced, an iterative solve has to be performed at each step to ensure stability and accuracy.
 This can be done either via the [Newton-Raphson method](https://en.wikipedia.org/wiki/Newton%27s_method) or with a simple [fixed-point iteration](https://en.wikipedia.org/wiki/Fixed-point_iteration) scheme.
+
+### Modal Analysis (IGA)
+
+The structural counterpart of the thermal simulation, run on the same recovered spline.
+It needs no inpainted field, only the geometry and a material, so it can be run directly on the output of shape optimization:
+
+```bash
+python rebel_shape/scripts/reissner_mindlin_modal_analysis/reissner_mindlin_modal_analysis.py --spline-path spline-path --output-folder outputs
+```
+
+The two-material variant beside it takes a `--facade-mask-path`, the same mask the two-material heat simulation uses, and `reissner_mindlin_modal_runner.py` is the shared library, not a CLI.
+Both write the frequencies alongside an eigenmode XDMF/HDF5 pair for ParaView.
+
+Resolution deserves attention here in a way it does not for the heat equation.
+A thin shell suffers membrane locking on a coarse basis, so an under-refined spline returns a spectrum that is systematically too stiff; a refinement sweep is the cheap way to see whether you are past it.
+`--h-refinement-factor` refines relative to whatever the spline arrived with; `--target-spans` overrides it and pins an absolute span count instead, which is what you want when comparing splines that were reconstructed at different base resolutions.
+That flag's help text records the study behind the recommended value.
+
+### Cross-Validating a Simulation
+
+Any IGA result can be checked against the DOLFINx implementation of the same problem in `fem/`.
+Give both sides the same parameters, then diff the two XDMF series:
+
+```bash
+conda run -n dolfinx-rebel-shape python fem/heat/heat_simulation_spline.py --help
+conda run -n dolfinx-rebel-shape python fem/compare_iga_fem.py --help
+```
+
+The shell equivalent is `fem/shells/shell_modal_analysis_spline.py`, and `main_scripts/compare_modal_fem_iga.py` runs that comparison across a whole set of scenes at once.
+
+## End-to-End Validation
+
+The pipeline above recovers a surface from images and then simulates on it, but on real data there is nothing to compare the result against.
+`rebel_shape/scripts/end_to_end/` closes that loop synthetically: it renders a multi-view dataset from a known mesh carrying known temperature and material fields, recovers the spline and the fields from those images alone, simulates on the recovery, and compares against a DOLFINx simulation on the original mesh.
+The two sides share nothing but the physics: a different geometry, a different solver, a different discretisation, and a different provenance for the fields.
+
+`main_scripts/run_pipeline.py` drives the whole thing across both environments, and `--dry-run` reports which stages would run and confirms each one's target resolves, without executing any of them.
+[`rebel_shape/scripts/end_to_end/README.md`](./rebel_shape/scripts/end_to_end/README.md) is the reproduction guide and explains what each reported number isolates.
 
 ## Evaluate
 

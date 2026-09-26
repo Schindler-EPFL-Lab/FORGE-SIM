@@ -13,8 +13,7 @@ from rebel_shape.splines.iga_spline_patch import IGASplinePatch
 
 
 class TestIGAManifoldProblem(unittest.TestCase):
-    @classmethod
-    def setUpClass(cls) -> None:
+    def setUp(self) -> None:
         mi.set_variant("llvm_ad_rgb")
 
         # Use BSplinePatch for testing, not mocks, too complex to mock properly
@@ -26,7 +25,7 @@ class TestIGAManifoldProblem(unittest.TestCase):
         patch_1.control_points = mi.TensorXf(
             patch_1.control_points.numpy() + np.array([0.5, 0.5, 0.0])
         )
-        cls.patch_1 = IGASplinePatch(
+        self.patch_1 = IGASplinePatch(
             spline_patch=patch_1, field_values=patch_1.control_points
         )
 
@@ -36,25 +35,25 @@ class TestIGAManifoldProblem(unittest.TestCase):
         patch_2.control_points = mi.TensorXf(
             patch_2.control_points.numpy() + np.array([1.5, 0.5, 0.0])
         )
-        cls.patch_2 = IGASplinePatch(
+        self.patch_2 = IGASplinePatch(
             spline_patch=patch_2, field_values=patch_2.control_points
         )
 
-        cls.composite_factory = CompositeIGASplineSurfaceFactory("test_composite")
-        cls.composite_factory.add_patch(cls.patch_1)
-        cls.composite_factory.add_patch(cls.patch_2)
+        self.composite_factory = CompositeIGASplineSurfaceFactory("test_composite")
+        self.composite_factory.add_patch(self.patch_1)
+        self.composite_factory.add_patch(self.patch_2)
 
-        cls.composite_factory.link_sides(
-            first_patch_name=cls.patch_1.name,
+        self.composite_factory.link_sides(
+            first_patch_name=self.patch_1.name,
             first_patch_side=Patch.Side.RIGHT,
-            second_patch_name=cls.patch_2.name,
+            second_patch_name=self.patch_2.name,
             second_patch_side=Patch.Side.LEFT,
         )
 
-        cls.patches = [cls.patch_1, cls.patch_2]
-        cls.connections = cls.composite_factory._connection_list
+        self.patches = [self.patch_1, self.patch_2]
+        self.connections = self.composite_factory._connection_list
 
-        cls.iga_surface = cls.composite_factory.build()
+        self.iga_surface = self.composite_factory.build()
 
     def test_concatenate_patch_local_matrices(self):
         """Test concatenation of local matrices from multiple patches."""

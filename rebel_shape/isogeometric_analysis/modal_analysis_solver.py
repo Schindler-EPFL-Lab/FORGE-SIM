@@ -21,10 +21,10 @@ class ModalAnalysisSolver:
     where K is the shell stiffness matrix and M is the consistent mass matrix.
 
     The solver uses a Cholesky-based shift-invert strategy: a mass-proportional
-    spectral shift ``epsilon`` is added to K to make it positive definite, then
+    spectral shift `epsilon` is added to K to make it positive definite, then
     a sparse Cholesky factorization (CHOLMOD via `scikit-sparse` when available,
     falling back to `cholespy`) provides the
-    shift-invert operator for ``scipy.sparse.linalg.eigsh``. The shift is
+    shift-invert operator for `scipy.sparse.linalg.eigsh`. The shift is
     subtracted from the eigenvalues after solving, so the eigenvectors and
     eigenvalues are exact (up to the shift being larger than the most negative
     eigenvalue).
@@ -56,8 +56,8 @@ class ModalAnalysisSolver:
         """
         Assemble global stiffness and mass matrices for the modal problem.
 
-        Delegates to the modal problem's ``assemble_global_stiffness_matrix``
-        and ``assemble_global_mass_matrix`` methods, which handle both standard
+        Delegates to the modal problem's `assemble_global_stiffness_matrix`
+        and `assemble_global_mass_matrix` methods, which handle both standard
         and batched assembly internally.
 
         :returns: A tuple containing the global stiffness matrix and global
@@ -90,7 +90,7 @@ class ModalAnalysisSolver:
         """
         Solve the generalized eigenvalue problem and return eigenpairs.
 
-        The solver adds a mass-proportional spectral shift ``epsilon`` to the
+        The solver adds a mass-proportional spectral shift `epsilon` to the
         stiffness matrix to make it positive definite, then uses a sparse
         Cholesky factorization (CHOLMOD) for the shift-invert operator. The
         shift is subtracted from the eigenvalues after solving, so the
@@ -101,18 +101,18 @@ class ModalAnalysisSolver:
         :param num_modes: Number of eigenmodes to compute.
         :param solver_tolerance: Convergence tolerance for the iterative
             eigensolver.
-        :param max_iterations: Maximum Arnoldi iterations. ``None`` uses
+        :param max_iterations: Maximum Arnoldi iterations. `None` uses
             scipy default.
-        :param spectral_shift: The mass-proportional shift ``epsilon`` added
+        :param spectral_shift: The mass-proportional shift `epsilon` added
             to K to make it positive definite:
-            ``K_reg = K + epsilon * M``. Must be larger than the magnitude
+            `K_reg = K + epsilon * M`. Must be larger than the magnitude
             of any negative eigenvalue but small relative to the first
-            elastic eigenvalue. If ``None``, a heuristic based on the
+            elastic eigenvalue. If `None`, a heuristic based on the
             diagonal norms of K and M is used.
 
-        :returns: A tuple of ``(eigenvalues, eigenvectors)`` where
-            eigenvalues is a sorted array of shape ``(num_modes,)`` and
-            eigenvectors has shape ``(n_dofs, num_modes)``.
+        :returns: A tuple of `(eigenvalues, eigenvectors)` where
+            eigenvalues is a sorted array of shape `(num_modes,)` and
+            eigenvectors has shape `(n_dofs, num_modes)`.
         """
         if num_modes < 1:
             raise ValueError("`num_modes` must be a positive integer.")
@@ -230,7 +230,7 @@ class ModalAnalysisSolver:
         absolute error from perfect orthogonality (deviation from diagonal).
 
         :param eigenvectors: A matrix of eigenvectors with shape
-            ``(n_dofs, n_modes)`` where each column is an eigenvector.
+            `(n_dofs, n_modes)` where each column is an eigenvector.
 
         :returns: A symmetric matrix of orthogonality errors where
             off-diagonal elements show the deviation from perfect

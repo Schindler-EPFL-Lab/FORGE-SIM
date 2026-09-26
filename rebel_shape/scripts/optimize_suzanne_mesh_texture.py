@@ -6,7 +6,7 @@ This script is currently set up to test the new 6-patch composite-mesh path: it
 initializes the source mesh as a cubed sphere whose six faces share topology via
 `PatchManager`, each with its own texture, mirroring the spline cubed-sphere
 setup in `optimize_suzanne_spline_texture.py`. The original single-PLY +
-`MeshTextureOptimizer` path is replaced for the duration of this test — revert
+`MeshTextureOptimizer` path is replaced for the duration of this test; revert
 the optimizer swap to compare against the old behavior.
 """
 

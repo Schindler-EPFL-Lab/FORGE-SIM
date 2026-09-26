@@ -113,7 +113,7 @@ def render_cameras(params: CameraViewerParams) -> None:
     negative angle = up).
 
     The distance of the cameras to the barycenter is given by `params.radial_distance`,
-    or — when `params.auto_radial_distance` is True — computed from the spread of the
+    or, when `params.auto_radial_distance` is True, computed from the spread of the
     scene cameras as `max_offset * params.auto_radial_distance_factor`.
     Resolution is `params.sensor_resolution_width` x `params.sensor_resolution_height`
     and the width of the shot is controlled by `params.sensor_fov`.

@@ -79,6 +79,14 @@ class IGAXDMFExporter:
         # the XDMF DataItems below declare `Precision="8"` to match.
         self._vertices = self._tessellation.global_vertices.numpy().astype(np.float64)
         self._faces = self._tessellation.global_faces.numpy().astype(np.int32)
+        # Per-vertex normals from the spline (analytic, averaged at shared vertices and
+        # renormalized). Written as a "Normals" node attribute so ParaView shades the
+        # surface smoothly without a Generate-Surface-Normals filter, even at coarse
+        # tessellation, and so downstream consumers (e.g. inverse rendering) get the
+        # true surface normals. Static geometry, so written once.
+        self._normals = self._tessellation.global_vertex_normals.numpy().astype(
+            np.float64
+        )
 
         logger.info(
             f"Created XDMF exporter with {self._vertices.shape[0]} vertices, "
@@ -103,6 +111,7 @@ class IGAXDMFExporter:
         mesh_group = self._h5_file.create_group("Mesh")
         mesh_group.create_dataset("Vertices", data=self._vertices)
         mesh_group.create_dataset("Topology", data=self._faces)
+        mesh_group.create_dataset("Normals", data=self._normals)
 
         # Create group for function data
         self._h5_file.create_group("Function")
@@ -180,10 +189,10 @@ class IGAXDMFExporter:
         """Writes the XDMF metadata file.
 
         HDF5 dataset references must appear on the same line as the enclosing
-        ``<DataItem>`` tags: strict XDMF readers (notably ParaView's
-        ``Xdmf3ReaderS``/``Xdmf3ReaderT``) treat any whitespace inside the
+        `<DataItem>` tags: strict XDMF readers (notably ParaView's
+        `Xdmf3ReaderS`/`Xdmf3ReaderT`) treat any whitespace inside the
         element's text content as part of the path and fail to open the
-        dataset. ``Precision="8"`` is set on every floating-point DataItem
+        dataset. `Precision="8"` is set on every floating-point DataItem
         because the HDF5 datasets are written as float64.
         """
         n_vertices = self._vertices.shape[0]
@@ -223,6 +232,16 @@ class IGAXDMFExporter:
                         f"{h5_filename}:/Mesh/Vertices</DataItem>"
                     ),
                     "        </Geometry>",
+                    (
+                        '        <Attribute Name="Normals" '
+                        'AttributeType="Vector" Center="Node">'
+                    ),
+                    (
+                        f'          <DataItem Dimensions="{n_vertices} 3" '
+                        f'NumberType="Float" Precision="8" Format="HDF">'
+                        f"{h5_filename}:/Mesh/Normals</DataItem>"
+                    ),
+                    "        </Attribute>",
                     (
                         '        <Attribute Name="Temperature" '
                         'AttributeType="Scalar" Center="Node">'

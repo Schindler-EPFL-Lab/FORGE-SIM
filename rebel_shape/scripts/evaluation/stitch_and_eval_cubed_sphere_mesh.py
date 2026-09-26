@@ -1,32 +1,32 @@
 """
 Stitch a 6-patch cubed-sphere mesh optimization (the per-patch PLYs dumped by
-``RegularCompositeMeshOptimizer.save_callback``) back into a single welded
+`RegularCompositeMeshOptimizer.save_callback`) back into a single welded
 surface, then evaluate its Chamfer distance against a reference mesh.
 
 Background
 ----------
-``optimize_thermoscenes_mesh_manual_initial_pose.py`` optimizes a 6-patch
-``RegularCompositeMesh`` cubed sphere but only saves one PLY *per patch*
-(``shape_left_*.ply`` ... ``shape_top_*.ply``) -- unlike the spline path it does
+`optimize_thermoscenes_mesh_manual_initial_pose.py` optimizes a 6-patch
+`RegularCompositeMesh` cubed sphere but only saves one PLY *per patch*
+(`shape_left_*.ply` ... `shape_top_*.ply`): unlike the spline path it does
 not jsonpickle the composite, so there is no single welded mesh. This script
 rebuilds it: the patches share seam vertices by position (they are averaged
 across patches during optimization), so welding coincident vertices reproduces
 the watertight composite surface as one global mesh.
 
 The optimized surface lives in Mitsuba *scene space*
-(``tf_cameras @ tf_bbox @ unit_cubed_sphere``). The reference is the render-scale
-BuildNet3D ground-truth mesh (e.g. ``BuildNet3D_meshes/buildingN/*.ply``), which
+(`tf_cameras @ tf_bbox @ unit_cubed_sphere`). The reference is the render-scale
+BuildNet3D ground-truth mesh (e.g. `BuildNet3D_meshes/buildingN/*.ply`), which
 is at the same scale as the reconstruction and differs from it by exactly the
 camera transform plus the fixed nerfstudio Z-up/Y-up convention rotation. The
 reference is therefore brought into the reconstruction frame deterministically
-with ``tf_cameras @ R_x(90 deg)`` -- no fitting -- and the Chamfer distance is
-measured there (the same frame convention as ``eval_buildnet3d.py``).
+with `tf_cameras @ R_x(90 deg)` (no fitting), and the Chamfer distance is
+measured there (the same frame convention as `eval_buildnet3d.py`).
 
-Outputs (written to ``output_dir``):
-  - ``<prefix>_stitched.ply``            welded full mesh, scene frame
-  - ``<reference_stem>_in_scene.ply``    reference brought into scene frame
-  - ``<prefix>_stitched_in_reference.ply`` reconstruction in the reference frame
-  - ``chamfer.json``                     Chamfer distance + the applied transform
+Outputs (written to `output_dir`):
+  - `<prefix>_stitched.ply`            welded full mesh, scene frame
+  - `<reference_stem>_in_scene.ply`    reference brought into scene frame
+  - `<prefix>_stitched_in_reference.ply` reconstruction in the reference frame
+  - `chamfer.json`                     Chamfer distance + the applied transform
 """
 
 import json
@@ -55,7 +55,7 @@ from rebel_shape.metrics.shapes import (
 )
 
 # Cube-face suffixes in the canonical patch order used by
-# ``RegularCompositeMesh.cubed_sphere``.
+# `RegularCompositeMesh.cubed_sphere`.
 CUBE_FACE_ORDER = ["left", "right", "back", "front", "bottom", "top"]
 
 
@@ -64,15 +64,15 @@ class StitchAndEvalParameters(ReverseCli):
     """Parameters for stitching the cubed-sphere patches and evaluating Chamfer."""
 
     patches_dir: Path
-    """Directory holding the per-patch PLYs (``<prefix>_<face>_*.ply``)."""
+    """Directory holding the per-patch PLYs (`<prefix>_<face>_*.ply`)."""
     reference_shape_path: Path
     """
     Path to the render-scale ground-truth mesh (e.g.
-    ``BuildNet3D_meshes/buildingN/House.ply``), NOT the ~7x scaled-up
-    ``dataset/building.ply``.
+    `BuildNet3D_meshes/buildingN/House.ply`), NOT the ~7x scaled-up
+    `dataset/building.ply`.
     """
     scene_path: Path
-    """Dataset directory containing ``transforms.json`` (used for ``tf_cameras``)."""
+    """Dataset directory containing `transforms.json` (used for `tf_cameras`)."""
     output_dir: Path = Path("./outputs/stitched_eval")
     """Where the stitched mesh, topology JSON, and metrics are written."""
     aligned_mesh_output_path: Path | None = None
@@ -119,7 +119,7 @@ def discover_patch_files(patches_dir: Path, prefix: str) -> dict[str, Path]:
     Returns one PLY per cube face, picking the highest-iteration file when several
     timestamps/iterations are present.
 
-    `patches_dir` is searched for files matching ``<prefix>_<face>_*.ply`` (one per
+    `patches_dir` is searched for files matching `<prefix>_<face>_*.ply` (one per
     cube face), where `prefix` is the composite mesh name.
 
     :returns: A mapping from each cube-face name to its chosen PLY path.
@@ -127,7 +127,7 @@ def discover_patch_files(patches_dir: Path, prefix: str) -> dict[str, Path]:
     """
 
     def iteration_of(path: Path) -> int:
-        """Trailing ``iteration-NNN`` number in `path`'s stem, or -1 if absent."""
+        """Trailing `iteration-NNN` number in `path`'s stem, or -1 if absent."""
         stem = path.stem
         marker = "iteration-"
         if marker in stem:
@@ -164,8 +164,8 @@ def stitch_patches(
     positions reconstructs the watertight composite; each welded vertex position
     is the mean of its merged duplicates.
 
-    :returns: A tuple of the welded vertices ``(V, 3)`` in the reconstruction
-        (scene) frame and the welded triangle indices ``(F, 3)``.
+    :returns: A tuple of the welded vertices `(V, 3)` in the reconstruction
+        (scene) frame and the welded triangle indices `(F, 3)`.
     """
     all_vertices: list[npt.NDArray[np.float64]] = []
     all_faces: list[npt.NDArray[np.int64]] = []
@@ -207,7 +207,7 @@ def stitch_and_eval(params: StitchAndEvalParameters) -> None:
     scene directory (for `tf_cameras`), and the output locations; see
     `StitchAndEvalParameters` for the per-field meaning. The Chamfer distance, the
     frame it was measured in, and the reference<->scene transforms are written to
-    ``chamfer.json`` in `params.output_dir`.
+    `chamfer.json` in `params.output_dir`.
     """
     mi.set_variant("llvm_ad_rgb")
     params.output_dir.mkdir(parents=True, exist_ok=True)
@@ -265,7 +265,7 @@ def stitch_and_eval(params: StitchAndEvalParameters) -> None:
     o3d.t.io.write_triangle_mesh(str(reference_in_scene_path), reference_tensor)
     logger.info(f"Saved reference in scene frame to {reference_in_scene_path}")
 
-    # The stitched mesh brought into the reference frame, for inspection -- it
+    # The stitched mesh brought into the reference frame, for inspection: it
     # should overlay `reference_shape_path` at matching scale.
     scene_to_reference = np.linalg.inv(reference_to_scene)
     stitched_in_reference = o3d.geometry.TriangleMesh(

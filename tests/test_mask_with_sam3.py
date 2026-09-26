@@ -143,7 +143,3 @@ class TestSam3ThermoScenes(unittest.TestCase):
             self.assertEqual(
                 updated_json["frames"][0]["file_path"], "images_sam3/frame_001.png"
             )
-
-
-if __name__ == "__main__":
-    unittest.main()

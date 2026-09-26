@@ -404,7 +404,7 @@ class PoseOptimizer(PropertyOptimizer):
 
         if np.allclose(coarse_losses, coarse_losses[0]):
             logger.warning(
-                "GSS coarse sweep produced a flat loss — no scale separates the "
+                "GSS coarse sweep produced a flat loss: no scale separates the "
                 "proxy from the background. Returning the midpoint of the bracket; "
                 "the camera configuration is likely degenerate."
             )

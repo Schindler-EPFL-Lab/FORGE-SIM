@@ -419,7 +419,7 @@ def optimize_thermoscenes_scene(params: ThermoSceneOptimizationParameters) -> No
     )
 
     # Save the final optimized state. The full composite is written as a single
-    # jsonpickle ``.json`` (reloadable with `RegularCompositeMesh.from_file` and the
+    # jsonpickle `.json` (reloadable with `RegularCompositeMesh.from_file` and the
     # idiomatic artifact for downstream evaluation), the welded global mesh is
     # written as one PLY (a single file for a quick Blender sanity check), and the
     # six per-patch PLYs are written alongside their optimized textures.

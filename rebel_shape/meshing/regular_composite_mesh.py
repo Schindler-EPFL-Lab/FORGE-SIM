@@ -37,7 +37,7 @@ class RegularCompositeMesh(CompositeMesh):
     """Array of `RegularMesh` instances that constitute the composite mesh."""
 
     _CUBE_FACE_TRANSFORMS: list[tuple[str, list[int], list[float], list[float]]] = [
-        # (suffix, axis_permutation, scale, translation) — copied verbatim from
+        # (suffix, axis_permutation, scale, translation): copied verbatim from
         # rebel_shape/splines/cube_initialization.py:unit_cube so the resulting
         # mesh patch layout (and therefore link_sides topology) matches the
         # spline cubed sphere exactly.
@@ -79,7 +79,7 @@ class RegularCompositeMesh(CompositeMesh):
         `path` is a JSON file previously written with `jsonpickle.encode` (e.g. by
         `RegularCompositeMeshOptimizer.save_callback`). This is the mesh-side analog
         of `TessellatedSplineSurface.from_file`. BSDF / texture information is not
-        preserved -- the patches and global mesh get default BSDFs. A Mitsuba
+        preserved: the patches and global mesh get default BSDFs. A Mitsuba
         variant must already be set by the caller.
 
         :returns: The decoded `RegularCompositeMesh`.
@@ -164,7 +164,7 @@ class RegularCompositeMesh(CompositeMesh):
 
         Operates in-place: the patch's vertex buffer is overwritten and Mitsuba's
         normal recomputation runs automatically (vertices setter calls
-        `_mesh_params.update()`). Texture coordinates are unchanged — they stay in
+        `_mesh_params.update()`). Texture coordinates are unchanged: they stay in
         the local `[0, 1]^2` patch frame, which is what `PatchManager` uses to
         determine side membership during linking.
         """
@@ -189,7 +189,7 @@ class RegularCompositeMesh(CompositeMesh):
         `subdivisions` cells per side. Faces are placed in their cube positions
         using the same axis permutations as the spline `unit_cube` (see
         `rebel_shape/splines/cube_initialization.py:145-176`) so the resulting
-        topology — and the `link_sides` connectivity — matches the spline cubed
+        topology, and the `link_sides` connectivity, matches the spline cubed
         sphere exactly. After building the composite, every global vertex is
         projected radially onto the sphere of given `radius`.
 

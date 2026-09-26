@@ -48,8 +48,8 @@ class SingleChannelImageSceneLoader:
         `True`. Each camera has `sensor_samples` for rays sampling.
 
         Every frame is required to carry a single-channel image. Set
-        `allow_missing_images` to `True` to instead skip -- with a warning naming the
-        frame -- the frames whose `image_key` is missing, blank, or refers to a file
+        `allow_missing_images` to `True` to instead skip, with a warning naming the
+        frame, the frames whose `image_key` is missing, blank, or refers to a file
         absent from `image_folder`; this shrinks the train/eval splits and is meant
         for VGGT-style datasets where only a subset of frames carry single-channel
         annotations.

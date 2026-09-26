@@ -82,13 +82,17 @@ extend-exclude = ["*.ipynb"]
 [tool.ruff.lint]
 # Enable Pyflakes (`F`) and a subset of the pycodestyle (`E`)  codes by default.
 # Unlike Flake8, Ruff doesn't enable pycodestyle warnings (`W`) or
-# McCabe complexity (`C901`) by default.
-select = ["E", "F"]
+# McCabe complexity (`C901`) by default. `I` sorts imports the isort way.
+select = ["E", "F", "I"]
 ignore = ["F722", "F821"]
 
 # Allow fix for all enabled rules (when `--fix`) is provided.
 fixable = ["ALL"]
 unfixable = []
+
+[tool.ruff.lint.isort]
+# The three top-level packages of this repository form one first-party group.
+known-first-party = ["fem", "main_scripts", "rebel_shape"]
 
 
 [tool.ruff.format]

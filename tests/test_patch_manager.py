@@ -42,10 +42,29 @@ class TestPatchManager(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        """Set up test patches and connections for the PatchManager."""
+        """Set up the Mitsuba variant and the plain patch-connection topology."""
         mi.set_variant("llvm_ad_rgb")
 
-        cls.patch1 = cls.TestPatch(
+        # Connections: patch1 connected to patch2 on the right side
+        connections1 = PatchManager.PatchConnections(right_mesh_index=1)
+        connections2 = PatchManager.PatchConnections(
+            left_mesh_index=0, top_mesh_index=2
+        )
+        # patch2 connected to patch3 on the top side
+        connections3 = PatchManager.PatchConnections(
+            bottom_mesh_index=1,
+        )
+        cls.connection_list = [connections1, connections2, connections3]
+
+    def setUp(self):
+        """
+        Builds the Mitsuba-backed patches and the manager fresh for each test.
+
+        `TestPatch` stores its `nodes` argument verbatim and `TestPatchManager`
+        inherits the `mi.TensorXf`-valued `_averaging_weights`, so neither the
+        patches nor the manager may be cached on the class.
+        """
+        self.patch1 = self.TestPatch(
             name="patch1",
             nodes=mi.TensorXf(
                 [
@@ -56,7 +75,7 @@ class TestPatchManager(unittest.TestCase):
                 ]
             ),
         )
-        cls.patch2 = cls.TestPatch(
+        self.patch2 = self.TestPatch(
             name="patch2",
             nodes=mi.TensorXf(
                 [
@@ -68,7 +87,7 @@ class TestPatchManager(unittest.TestCase):
             ),
         )
 
-        cls.patch3 = cls.TestPatch(
+        self.patch3 = self.TestPatch(
             name="patch3",
             nodes=mi.TensorXf(
                 [
@@ -80,23 +99,12 @@ class TestPatchManager(unittest.TestCase):
             ),
         )
 
-        # Connections: patch1 connected to patch2 on the right side
-        connections1 = PatchManager.PatchConnections(right_mesh_index=1)
-        connections2 = PatchManager.PatchConnections(
-            left_mesh_index=0, top_mesh_index=2
-        )
-        # patch2 connected to patch3 on the top side
-        connections3 = PatchManager.PatchConnections(
-            bottom_mesh_index=1,
-        )
+        self.patch_list = [self.patch1, self.patch2, self.patch3]
 
-        cls.patch_list = [cls.patch1, cls.patch2, cls.patch3]
-        cls.connection_list = [connections1, connections2, connections3]
-
-        cls.default_manager = cls.TestPatchManager(
+        self.default_manager = self.TestPatchManager(
             name="test_patch_manager",
-            patch_list=cls.patch_list,
-            connection_list=cls.connection_list,
+            patch_list=self.patch_list,
+            connection_list=self.connection_list,
         )
 
     def test_init(self):

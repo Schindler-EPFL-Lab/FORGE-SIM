@@ -17,72 +17,6 @@ from rebel_shape.data_processing.single_channel_scene_loader import (
 )
 from rebel_shape.plugin_wrappers.perspective_camera import PerspectiveCamera
 
-# A single frame's pose; only its shape matters for the tests below since none
-# of them exercise camera geometry.
-_IDENTITY_TRANSFORM = [
-    [1.0, 0.0, 0.0, 0.0],
-    [0.0, 1.0, 0.0, 0.0],
-    [0.0, 0.0, 1.0, 0.0],
-    [0.0, 0.0, 0.0, 1.0],
-]
-
-
-def _thermoscenes_transforms(frames: list) -> dict:
-    """Minimal ThermoScenes-format `transforms.json` payload wrapping `frames`."""
-    return {"w": 8, "h": 8, "fl_x": 6.0, "frames": frames}
-
-
-def _vggt_frame(file_path: str, translation_x: float, thermal_file_path) -> dict:
-    """
-    A single VGGT-format frame (`{"rgb": {...}}`). `thermal_file_path` is
-    included verbatim (including `""`) unless it is `None`, in which case the
-    key is omitted entirely -- mirroring the three ways a single-channel
-    reference can be absent.
-    """
-    rgb = {
-        "file_path": file_path,
-        "transform_matrix": [
-            [1.0, 0.0, 0.0, translation_x],
-            [0.0, 1.0, 0.0, 0.0],
-            [0.0, 0.0, 1.0, 0.0],
-        ],
-        "w": 8,
-        "h": 8,
-        "fovx": 50.0,
-    }
-    if thermal_file_path is not None:
-        rgb["thermal_file_path"] = thermal_file_path
-    return {"rgb": rgb}
-
-
-def _write_luminance_png(path: Path, byte_value: int) -> None:
-    """Writes an 8-bit single-channel PNG whose every pixel equals `byte_value`."""
-    array = np.full((8, 8), byte_value, dtype=np.uint8)
-    bitmap = mi.Bitmap(array, pixel_format=mi.Bitmap.PixelFormat.Y)
-    bitmap.write(str(path))
-
-
-def _copy_scene_in_pixel_format(
-    src_scene: Path, dst_scene: Path, pixel_format: "mi.Bitmap.PixelFormat"
-) -> None:
-    """
-    Copies `transforms.json` and `images/` from `src_scene` into `dst_scene`,
-    re-encoding every RGB image into `pixel_format` (everything else about the
-    scene -- poses, resolution -- stays identical).
-    """
-    dst_scene.mkdir(parents=True)
-    shutil.copy(src_scene / "transforms.json", dst_scene / "transforms.json")
-    dst_images = dst_scene / "images"
-    dst_images.mkdir()
-    for image_path in (src_scene / "images").iterdir():
-        bitmap = mi.Bitmap(str(image_path))
-        converted = bitmap.convert(
-            pixel_format=pixel_format,
-            component_format=mi.Struct.Type.UInt8,
-            srgb_gamma=True,
-        )
-        converted.write(str(dst_images / image_path.name))
-
 
 class TestScenesDataloaders(unittest.TestCase):
     """
@@ -93,6 +27,75 @@ class TestScenesDataloaders(unittest.TestCase):
     error on the plain ThermoScenes path, and linear (non-sRGB) decoding of
     single-channel images.
     """
+
+    # A single frame's pose; only its shape matters for the tests below since
+    # none of them exercise camera geometry.
+    _IDENTITY_TRANSFORM = [
+        [1.0, 0.0, 0.0, 0.0],
+        [0.0, 1.0, 0.0, 0.0],
+        [0.0, 0.0, 1.0, 0.0],
+        [0.0, 0.0, 0.0, 1.0],
+    ]
+
+    @staticmethod
+    def _thermoscenes_transforms(frames: list) -> dict:
+        """Minimal ThermoScenes-format `transforms.json` payload wrapping
+        `frames`."""
+        return {"w": 8, "h": 8, "fl_x": 6.0, "frames": frames}
+
+    @staticmethod
+    def _vggt_frame(file_path: str, translation_x: float, thermal_file_path) -> dict:
+        """
+        A single VGGT-format frame (`{"rgb": {...}}`). `thermal_file_path` is
+        included verbatim (including `""`) unless it is `None`, in which case
+        the key is omitted entirely, mirroring the three ways a
+        single-channel reference can be absent.
+        """
+        rgb = {
+            "file_path": file_path,
+            "transform_matrix": [
+                [1.0, 0.0, 0.0, translation_x],
+                [0.0, 1.0, 0.0, 0.0],
+                [0.0, 0.0, 1.0, 0.0],
+            ],
+            "w": 8,
+            "h": 8,
+            "fovx": 50.0,
+        }
+        if thermal_file_path is not None:
+            rgb["thermal_file_path"] = thermal_file_path
+        return {"rgb": rgb}
+
+    @staticmethod
+    def _write_luminance_png(path: Path, byte_value: int) -> None:
+        """Writes an 8-bit single-channel PNG whose every pixel equals
+        `byte_value`."""
+        array = np.full((8, 8), byte_value, dtype=np.uint8)
+        bitmap = mi.Bitmap(array, pixel_format=mi.Bitmap.PixelFormat.Y)
+        bitmap.write(str(path))
+
+    @staticmethod
+    def _copy_scene_in_pixel_format(
+        src_scene: Path, dst_scene: Path, pixel_format: "mi.Bitmap.PixelFormat"
+    ) -> None:
+        """
+        Copies `transforms.json` and `images/` from `src_scene` into
+        `dst_scene`, re-encoding every RGB image into `pixel_format`
+        (everything else about the scene, such as poses and resolution, stays
+        identical).
+        """
+        dst_scene.mkdir(parents=True)
+        shutil.copy(src_scene / "transforms.json", dst_scene / "transforms.json")
+        dst_images = dst_scene / "images"
+        dst_images.mkdir()
+        for image_path in (src_scene / "images").iterdir():
+            bitmap = mi.Bitmap(str(image_path))
+            converted = bitmap.convert(
+                pixel_format=pixel_format,
+                component_format=mi.Struct.Type.UInt8,
+                srgb_gamma=True,
+            )
+            converted.write(str(dst_images / image_path.name))
 
     @classmethod
     def setUpClass(cls):
@@ -197,14 +200,14 @@ class TestScenesDataloaders(unittest.TestCase):
             self.assertEqual(camera.mitsuba_dict["film"]["height"], 640)
             self.assertEqual(camera.mitsuba_dict["film"]["pixel_format"], "luminance")
 
-    # -- TestMissingAlphaFailsLoud (merged) -----------------------------------
+    # TestMissingAlphaFailsLoud (merged)
     #
     # The alpha channel of the RGB images *is* the object mask. `Bitmap.convert()`
     # synthesizes an opaque alpha for a source that has none, so a source without
-    # a mask used to be silently accepted -- and, through the silhouette loader,
+    # a mask used to be silently accepted, and, through the silhouette loader,
     # produced a solid all-black frame instead of a real silhouette. Both loaders
     # must now raise instead of degrading silently. Reuses `dataset_path` above
-    # as the intact (alpha-carrying) reference scene -- the two fixtures were
+    # as the intact (alpha-carrying) reference scene: the two fixtures were
     # identical.
 
     def test_image_scene_loader_raises_when_rgb_has_no_alpha(self):
@@ -212,7 +215,7 @@ class TestScenesDataloaders(unittest.TestCase):
         from `ImageSceneLoader`, not silently synthesize an opaque mask."""
         with tempfile.TemporaryDirectory() as tmp_dir:
             scene_path = Path(tmp_dir) / "scene"
-            _copy_scene_in_pixel_format(
+            self._copy_scene_in_pixel_format(
                 self.dataset_path, scene_path, mi.Bitmap.PixelFormat.RGB
             )
 
@@ -225,7 +228,7 @@ class TestScenesDataloaders(unittest.TestCase):
         became solid black."""
         with tempfile.TemporaryDirectory() as tmp_dir:
             scene_path = Path(tmp_dir) / "scene"
-            _copy_scene_in_pixel_format(
+            self._copy_scene_in_pixel_format(
                 self.dataset_path, scene_path, mi.Bitmap.PixelFormat.RGB
             )
 
@@ -240,7 +243,7 @@ class TestScenesDataloaders(unittest.TestCase):
         and the message must name the pixel format that was actually found."""
         with tempfile.TemporaryDirectory() as tmp_dir:
             scene_path = Path(tmp_dir) / "scene"
-            _copy_scene_in_pixel_format(
+            self._copy_scene_in_pixel_format(
                 self.dataset_path, scene_path, mi.Bitmap.PixelFormat.YA
             )
 
@@ -261,7 +264,7 @@ class TestScenesDataloaders(unittest.TestCase):
             self.assertAlmostEqual(float(silhouette.min()), 0.0, places=5)
             self.assertAlmostEqual(float(silhouette.max()), 1.0, places=5)
 
-    # -- TestSingleChannelAllowMissingImages (merged) -------------------------
+    # TestSingleChannelAllowMissingImages (merged)
     #
     # `allow_missing_images` is the switch between two contracts on
     # `SingleChannelImageSceneLoader`: ThermoScenes datasets are assumed complete,
@@ -277,10 +280,10 @@ class TestScenesDataloaders(unittest.TestCase):
             scene_path = Path(tmp_dir)
             frame = {
                 "file_path": "images/frame_train_000.png",
-                "transform_matrix": _IDENTITY_TRANSFORM,
+                "transform_matrix": self._IDENTITY_TRANSFORM,
             }
             (scene_path / "transforms.json").write_text(
-                json.dumps(_thermoscenes_transforms([frame]))
+                json.dumps(self._thermoscenes_transforms([frame]))
             )
 
             with self.assertRaises(KeyError):
@@ -293,11 +296,11 @@ class TestScenesDataloaders(unittest.TestCase):
             scene_path = Path(tmp_dir)
             frame = {
                 "file_path": "images/frame_train_000.png",
-                "transform_matrix": _IDENTITY_TRANSFORM,
+                "transform_matrix": self._IDENTITY_TRANSFORM,
                 "thermal_file_path": "",
             }
             (scene_path / "transforms.json").write_text(
-                json.dumps(_thermoscenes_transforms([frame]))
+                json.dumps(self._thermoscenes_transforms([frame]))
             )
 
             with self.assertRaises(RuntimeError):
@@ -311,11 +314,11 @@ class TestScenesDataloaders(unittest.TestCase):
             (scene_path / "thermal").mkdir()
             frame = {
                 "file_path": "images/frame_train_000.png",
-                "transform_matrix": _IDENTITY_TRANSFORM,
+                "transform_matrix": self._IDENTITY_TRANSFORM,
                 "thermal_file_path": "thermal/does_not_exist.PNG",
             }
             (scene_path / "transforms.json").write_text(
-                json.dumps(_thermoscenes_transforms([frame]))
+                json.dumps(self._thermoscenes_transforms([frame]))
             )
 
             with self.assertRaises(RuntimeError):
@@ -323,7 +326,7 @@ class TestScenesDataloaders(unittest.TestCase):
 
     def test_thermal_scene_vggt_allow_missing_images_skips_broken_frames(self):
         """The same two gaps above (a dangling reference and a blank entry)
-        must instead be skipped -- with a logged warning -- via the VGGT
+        must instead be skipped, with a logged warning, via the VGGT
         (`allow_missing_images=True`) path, yielding a strictly smaller image
         count than an otherwise-identical intact scene's."""
         with tempfile.TemporaryDirectory() as tmp_dir:
@@ -332,12 +335,12 @@ class TestScenesDataloaders(unittest.TestCase):
             intact_thermal_dir = intact_scene / "thermal"
             intact_thermal_dir.mkdir()
             for name in ("t0.png", "t1.png", "t2.png"):
-                _write_luminance_png(intact_thermal_dir / name, byte_value=128)
+                self._write_luminance_png(intact_thermal_dir / name, byte_value=128)
 
             intact_frames = [
-                _vggt_frame("images/train_000.png", 0.0, "thermal/t0.png"),
-                _vggt_frame("images/train_001.png", 1.0, "thermal/t1.png"),
-                _vggt_frame("images/eval_000.png", 2.0, "thermal/t2.png"),
+                self._vggt_frame("images/train_000.png", 0.0, "thermal/t0.png"),
+                self._vggt_frame("images/train_001.png", 1.0, "thermal/t1.png"),
+                self._vggt_frame("images/eval_000.png", 2.0, "thermal/t2.png"),
             ]
             (intact_scene / "transforms.json").write_text(
                 json.dumps({"frames": intact_frames})
@@ -355,14 +358,14 @@ class TestScenesDataloaders(unittest.TestCase):
             broken_scene.mkdir()
             broken_thermal_dir = broken_scene / "thermal"
             broken_thermal_dir.mkdir()
-            _write_luminance_png(broken_thermal_dir / "t0.png", byte_value=128)
+            self._write_luminance_png(broken_thermal_dir / "t0.png", byte_value=128)
 
             broken_frames = [
-                _vggt_frame("images/train_000.png", 0.0, "thermal/t0.png"),
+                self._vggt_frame("images/train_000.png", 0.0, "thermal/t0.png"),
                 # Dangling reference: never written to disk.
-                _vggt_frame("images/train_001.png", 1.0, "thermal/missing.png"),
+                self._vggt_frame("images/train_001.png", 1.0, "thermal/missing.png"),
                 # Blank entry.
-                _vggt_frame("images/eval_000.png", 2.0, ""),
+                self._vggt_frame("images/eval_000.png", 2.0, ""),
             ]
             (broken_scene / "transforms.json").write_text(
                 json.dumps({"frames": broken_frames})
@@ -388,7 +391,7 @@ class TestScenesDataloaders(unittest.TestCase):
                 captured.output,
             )
 
-    # -- TestSingleChannelLinearDecode (merged) --------------------------------
+    # TestSingleChannelLinearDecode (merged)
     #
     # Regression test for commit 89331d6 ("Fix Spurious sRGB Conversion"):
     # Mitsuba auto-tags an 8-bit PNG/JPEG source as sRGB purely from its bit
@@ -404,22 +407,18 @@ class TestScenesDataloaders(unittest.TestCase):
             scene_path = Path(tmp_dir)
             thermal_dir = scene_path / "thermal"
             thermal_dir.mkdir()
-            _write_luminance_png(thermal_dir / "t0.PNG", byte_value=128)
+            self._write_luminance_png(thermal_dir / "t0.PNG", byte_value=128)
 
             frame = {
                 "file_path": "images/frame_train_000.png",
-                "transform_matrix": _IDENTITY_TRANSFORM,
+                "transform_matrix": self._IDENTITY_TRANSFORM,
                 "thermal_file_path": "thermal/t0.PNG",
             }
             (scene_path / "transforms.json").write_text(
-                json.dumps(_thermoscenes_transforms([frame]))
+                json.dumps(self._thermoscenes_transforms([frame]))
             )
 
             loader = SingleChannelImageSceneLoader.thermal_scene(scene_path)
             value = loader.train_images[0].image.numpy()
 
             np.testing.assert_allclose(value, 128.0 / 255.0, rtol=0, atol=1e-4)
-
-
-if __name__ == "__main__":
-    unittest.main()

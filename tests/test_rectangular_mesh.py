@@ -23,11 +23,19 @@ class TestRectangularMesh(unittest.TestCase):
             [[0.0, 0.0], [1.0, 0.0], [0.0, 1.0], [1.0, 1.0]], dtype=np.float64
         )
 
-        cls.mesh = RectangularMesh(
+    def setUp(self):
+        """
+        Build the mesh per test rather than caching it on the class.
+
+        `RectangularMesh` wraps an `mi.Mesh`, and a Mitsuba object held on the class
+        outlives the test that built it; that has been observed to abort unrelated
+        tests inside Dr.Jit's thread pool. Only the plain numpy inputs are shared.
+        """
+        self.mesh = RectangularMesh(
             mesh_name="test_mesh",
-            vertices=cls.vertices,
-            faces=cls.faces,
-            texture_coordinates=cls.texture_coordinates,
+            vertices=self.vertices,
+            faces=self.faces,
+            texture_coordinates=self.texture_coordinates,
         )
 
     def test_initialization(self):

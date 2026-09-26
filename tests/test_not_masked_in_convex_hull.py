@@ -80,7 +80,3 @@ class TestNotMaskedInConvexHull(unittest.TestCase):
 
         result = _not_masked_in_convex_hull(mask)
         self.assertTrue(np.all(expected_result == result))
-
-
-if __name__ == "__main__":
-    unittest.main()

@@ -2,17 +2,17 @@
 Deterministic Chamfer evaluation of a spline ("ours") reconstruction against the
 render-scale BuildNet3D ground-truth mesh.
 
-Spline counterpart of ``stitch_and_eval_cubed_sphere_mesh.py``: the optimized
-spline (a jsonpickled ``TessellatedSplineSurface``) is tessellated into its
-scene-frame global mesh, the reference (e.g. ``BuildNet3D_meshes/buildingN/*.ply``,
-at render scale -- NOT the ~7x scaled ``dataset/building.ply``) is brought into
-that frame with the deterministic ``tf_cameras @ R_x(90 deg)`` transform (no
-fitting), and the Chamfer distance is measured there (the ``eval_buildnet3d.py``
+Spline counterpart of `stitch_and_eval_cubed_sphere_mesh.py`: the optimized
+spline (a jsonpickled `TessellatedSplineSurface`) is tessellated into its
+scene-frame global mesh, the reference (e.g. `BuildNet3D_meshes/buildingN/*.ply`,
+at render scale, NOT the ~7x scaled `dataset/building.ply`) is brought into
+that frame with the deterministic `tf_cameras @ R_x(90 deg)` transform (no
+fitting), and the Chamfer distance is measured there (the `eval_buildnet3d.py`
 frame convention).
 
 This is torch-free (no novel-view-synthesis metrics) and applies the full
-``tf_cameras @ R_x(90 deg)`` transform, whereas ``eval_buildnet3d.py`` applies
-only ``tf_cameras`` to the reference (``eval_buildnet3d.py:175-178``).
+`tf_cameras @ R_x(90 deg)` transform, whereas `eval_buildnet3d.py` applies
+only `tf_cameras` to the reference (`eval_buildnet3d.py:175-178`).
 """
 
 import json
@@ -45,15 +45,15 @@ class EvalSplineChamferParameters(ReverseCli):
     """Parameters for the deterministic spline Chamfer evaluation."""
 
     spline_path: Path
-    """Path to the optimized spline (jsonpickled ``TessellatedSplineSurface``)."""
+    """Path to the optimized spline (jsonpickled `TessellatedSplineSurface`)."""
     reference_shape_path: Path
     """
     Path to the render-scale ground-truth mesh (e.g.
-    ``BuildNet3D_meshes/buildingN/House.ply``), NOT the ~7x scaled-up
-    ``dataset/building.ply``.
+    `BuildNet3D_meshes/buildingN/House.ply`), NOT the ~7x scaled-up
+    `dataset/building.ply`.
     """
     scene_path: Path
-    """Dataset directory containing ``transforms.json`` (used for ``tf_cameras``)."""
+    """Dataset directory containing `transforms.json` (used for `tf_cameras`)."""
     output_file_path: Path = Path("./outputs/eval_spline_chamfer.json")
     """Where the metric is written (parent directory created if needed)."""
 

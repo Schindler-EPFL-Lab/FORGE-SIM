@@ -27,17 +27,16 @@ from rebel_shape.plugin_wrappers.diffuse_bsdf import DiffuseBSDF
 from rebel_shape.plugin_wrappers.sampler import Sampler
 from rebel_shape.render.render import Render
 
-
 CUBE_FACE_NAMES = ("left", "right", "back", "front", "bottom", "top")
 """
 Patch-name suffixes of a cubed-sphere composite, as produced by
-`RegularCompositeMesh.cubed_sphere`. A patch is named ``<composite name>_<face>``.
+`RegularCompositeMesh.cubed_sphere`. A patch is named `<composite name>_<face>`.
 """
 
 
 def _iteration_rank(path: Path) -> int:
     """
-    Ordering key over the saves of one patch: the trailing ``iteration-NNN`` number in
+    Ordering key over the saves of one patch: the trailing `iteration-NNN` number in
     `path`'s stem, or `sys.maxsize` for a stem that carries none.
 
     The optimization scripts write their numbered checkpoints during the run and the
@@ -59,15 +58,15 @@ def _iteration_rank(path: Path) -> int:
 
 def face_key(stem: str) -> str | None:
     """
-    The ``<composite name>_<face>`` prefix of `stem`, or `None` if it names no cube
+    The `<composite name>_<face>` prefix of `stem`, or `None` if it names no cube
     face.
 
     Public because it is also how a caller tells a key `discover_mesh_textures`
     returned apart: one that answers non-`None` came from the per-face layout, and so
     names a single patch rather than a whole surface.
 
-    Anchoring on the face name is what tells a patch save (``shape_left.ply``, or
-    ``shape_left_<timestamp>_iteration-<N>.ply``) apart from the welded global mesh
+    Anchoring on the face name is what tells a patch save (`shape_left.ply`, or
+    `shape_left_<timestamp>_iteration-<N>.ply`) apart from the welded global mesh
     that the optimization scripts write alongside them, which carries no face name and
     must not enter the scene as a seventh patch.
 
@@ -119,20 +118,20 @@ def _single_mesh_textures(
     mesh rather than the patches of a composite, keyed by that mesh's stem.
 
     A run that optimized a single mesh names neither file after a cube face, and the
-    recorded runs name the pair in unrelated styles -- ``thermoscene_shape.ply`` with
-    ``thermoscene_rgb_texture.exr``, ``lion_thermoscene_shape.ply`` with
-    ``lion_thermoscene_rgb_texture.exr``, ``shape_<timestamp>_iteration-<N>.ply`` with
-    ``shape-bsdf-reflectance-data_<timestamp>_iteration-<N>.exr``. No name relation
+    recorded runs name the pair in unrelated styles: `thermoscene_shape.ply` with
+    `thermoscene_rgb_texture.exr`, `lion_thermoscene_shape.ply` with
+    `lion_thermoscene_rgb_texture.exr`, `shape_<timestamp>_iteration-<N>.ply` with
+    `shape-bsdf-reflectance-data_<timestamp>_iteration-<N>.exr`. No name relation
     holds across all of them, so being the only candidate is the whole of the evidence
     that the two belong together. That is why a second mesh or a second texture is an
     error here rather than something to rank by recency: with nothing to match on, a
     choice between two would be a guess.
 
-    `meshes` are the directory's ``.ply`` files (none of which names a cube face) and
-    `textures` its ``.exr`` files.
+    `meshes` are the directory's `.ply` files (none of which names a cube face) and
+    `textures` its `.exr` files.
 
-    :returns: A one-entry mapping from the mesh's stem to its ``(mesh path, texture
-        path or None)``.
+    :returns: A one-entry mapping from the mesh's stem to its `(mesh path, texture
+        path or None)`.
     :raises FileNotFoundError: If `meshes` is empty.
     :raises ValueError: If `meshes` holds more than one mesh, or `textures` more than
         one texture.
@@ -140,8 +139,8 @@ def _single_mesh_textures(
     if not meshes:
         raise FileNotFoundError(
             f"No mesh found in {result_path}. It must hold either the patch meshes of "
-            f"a composite -- PLY files named <composite name>_<face>[_<timestamp>_"
-            f"iteration-<N>].ply, with <face> one of {', '.join(CUBE_FACE_NAMES)} -- "
+            f"a composite: PLY files named <composite name>_<face>[_<timestamp>_"
+            f"iteration-<N>].ply, with <face> one of {', '.join(CUBE_FACE_NAMES)}, "
             f"or a single whole-surface PLY."
         )
     if len(meshes) > 1:
@@ -178,28 +177,28 @@ def discover_mesh_textures(result_path: Path) -> dict[str, tuple[Path, Path | No
     Pairs every optimized mesh in `result_path` with its optimized texture.
 
     Two result layouts are recognised, and which one applies is decided by whether any
-    ``.ply`` in the directory carries a cube-face token.
+    `.ply` in the directory carries a cube-face token.
 
-    In the **per-face composite** layout, patch meshes are the ``.ply`` files whose
-    name carries such a token, and each is keyed by its ``<composite name>_<face>``
+    In the **per-face composite** layout, patch meshes are the `.ply` files whose
+    name carries such a token, and each is keyed by its `<composite name>_<face>`
     prefix; the welded global mesh, which names no face, is skipped. Where a patch has
     both numbered checkpoints and a final save, the latest one wins (see
-    `_iteration_rank`). A patch's texture is the latest ``.exr`` whose name starts with
-    the same key -- both ``<key>_texture.exr`` and the
-    ``<key>-bsdf-reflectance-data_<timestamp>_iteration-<N>.exr`` written during the
-    run -- or `None` when the run saved no texture for it.
+    `_iteration_rank`). A patch's texture is the latest `.exr` whose name starts with
+    the same key (both `<key>_texture.exr` and the
+    `<key>-bsdf-reflectance-data_<timestamp>_iteration-<N>.exr` written during the
+    run), or `None` when the run saved no texture for it.
 
-    In the **single-mesh** layout, no ``.ply`` names a cube face and the directory
+    In the **single-mesh** layout, no `.ply` names a cube face and the directory
     holds one whole-surface mesh with at most one texture; see `_single_mesh_textures`
     for why uniqueness is the only pairing rule available there.
 
     Every choice is logged. `_iteration_rank`'s ordering only holds within one run, so
-    two runs of the same composite dumped into one directory cannot be told apart --
-    the older run's unnumbered save would outrank the newer run's checkpoints -- and
+    two runs of the same composite dumped into one directory cannot be told apart:
+    the older run's unnumbered save would outrank the newer run's checkpoints, and
     the log is what makes that visible after the fact.
 
-    :returns: A mapping from mesh key to its ``(mesh path, texture path or None)``.
-    :raises FileNotFoundError: If `result_path` is not a directory, or holds no ``.ply``
+    :returns: A mapping from mesh key to its `(mesh path, texture path or None)`.
+    :raises FileNotFoundError: If `result_path` is not a directory, or holds no `.ply`
         at all.
     :raises ValueError: If one cube face is claimed by two different composites, if a
         patch's latest mesh or texture cannot be singled out, or if the single-mesh

@@ -561,8 +561,8 @@ class TestBSplinePatch(unittest.TestCase):
         Together with `test_evaluate_normals_below_tolerance_uses_unit_z_fallback`
         this brackets the threshold's *magnitude*: `2 * ZERO_TOL ** 2` is six
         orders of magnitude below `ZERO_TOL`, so comparing against `ZERO_TOL`
-        itself -- the natural mix-up, since the cross product has units of
-        (length)^2 while `ZERO_TOL` is a length -- sends this case to the
+        itself (the natural mix-up, since the cross product has units of
+        (length)^2 while `ZERO_TOL` is a length) sends this case to the
         fallback and fails here. It does not pin the comparison as `>` rather
         than `>=`: those differ only for a magnitude bitwise equal to the
         threshold, which no float32 evaluation chain can be steered onto

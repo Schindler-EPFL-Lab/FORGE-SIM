@@ -578,7 +578,7 @@ class Mesh(MitsubaPlugin):
 
         If `save_name` is not provided, the `mesh_name` is used. The backend for
         saving the file is managed by Mitsuba. The resulting path is
-        ``output_dir/save_name.ply``.
+        `output_dir/save_name.ply`.
 
         :raises FileNotFoundError: If `output_dir` does not exist.
         :raises ValueError: If `output_dir` is not a directory.
@@ -604,7 +604,7 @@ class Mesh(MitsubaPlugin):
         actual mesh object. Alternatively, one could dump the mesh to a file and
         define the path in the dict, but this would complicate the implementation.
 
-        The mesh is inserted into the dict as ``{"mesh.name": mesh.mitsuba_dict}.``
+        The mesh is inserted into the dict as `{"mesh.name": mesh.mitsuba_dict}.`
 
         :returns: The Mitsuba mesh object to be put in the scene dict.
         """

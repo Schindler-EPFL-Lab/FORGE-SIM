@@ -327,8 +327,8 @@ class IGAManifoldProblem(IGAProblem):
          with each control point, which is necessary for correctly remapping local
          indices to global indices.
 
-        When ``double_precision`` is ``True``, the concatenated matrix tensor is
-        allocated as ``mi.TensorXd`` (float64) instead of ``mi.TensorXf`` (float32).
+        When `double_precision` is `True`, the concatenated matrix tensor is
+        allocated as `mi.TensorXd` (float64) instead of `mi.TensorXf` (float32).
         This is useful for problems where the local matrix entries span many orders of
         magnitude (e.g. thin-shell stiffness matrices with both membrane and bending
         contributions) and float32 accumulation would lose significant digits.
@@ -512,8 +512,8 @@ class IGAManifoldProblem(IGAProblem):
         only a transformation G^{-1} grad_param phi, where grad_param phi is given
         by `basis_derivative`.
 
-        Both single-precision (``mi.TensorXf``) and double-precision
-        (``mi.TensorXd``) inputs are accepted. The output tensor matches the
+        Both single-precision (`mi.TensorXf`) and double-precision
+        (`mi.TensorXd`) inputs are accepted. The output tensor matches the
         precision of `basis_derivative`.
 
         :returns: Transformed basis function derivatives with shape
@@ -611,10 +611,10 @@ class IGAManifoldProblem(IGAProblem):
         isogeometric analysis, where contributions from different quadrature points
         or basis functions are accumulated into the local stiffness or mass matrices.
 
-        Both ``local_matrices`` and ``values`` may be either single-precision
-        (``mi.TensorXf``) or double-precision (``mi.TensorXd``). The element type
-        of ``values`` must match the element type of ``local_matrices`` so that
-        ``dr.scatter_add`` operates on a consistent numeric type.
+        Both `local_matrices` and `values` may be either single-precision
+        (`mi.TensorXf`) or double-precision (`mi.TensorXd`). The element type
+        of `values` must match the element type of `local_matrices` so that
+        `dr.scatter_add` operates on a consistent numeric type.
 
         :raises ValueError: If the input shapes are incompatible or if the row index
             is out of bounds.

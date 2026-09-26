@@ -15,8 +15,8 @@ class TestRegularCompositeMesh(unittest.TestCase):
     Tests for `RegularCompositeMesh`: jsonpickle serialization round-trips
     (including the `from_file` convenience) that check the welded global mesh
     and per-patch side-index recomputation, plus the actual `cubed_sphere`
-    geometry -- vertex positions on the sphere of the given radius and
-    outward-pointing vertex normals -- which the serialization tests never
+    geometry (vertex positions on the sphere of the given radius and
+    outward-pointing vertex normals), which the serialization tests never
     inspect.
     """
 
@@ -78,7 +78,7 @@ class TestRegularCompositeMesh(unittest.TestCase):
         relative machine epsilon is ~1.2e-7; the normalize-and-rescale used to
         build the sphere accumulates only a handful of ULPs on top of that
         (empirically ~1e-7 relative here). `rtol=1e-4` is ~1000x looser than
-        that noise floor -- comfortable across platforms/build configs -- while
+        that noise floor (comfortable across platforms/build configs) while
         still ~4 orders of magnitude tighter than the defect this pins: an
         unprojected cube corner sits `sqrt(3)/1 ~= 1.73x` farther from the
         origin than a face center, a ~70% relative error.
@@ -122,7 +122,3 @@ class TestRegularCompositeMesh(unittest.TestCase):
         outward_alignment = np.sum(normals * radial_directions, axis=1)
 
         self.assertGreater(float(outward_alignment.min()), 0.95)
-
-
-if __name__ == "__main__":
-    unittest.main()

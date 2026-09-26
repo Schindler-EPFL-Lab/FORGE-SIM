@@ -18,8 +18,8 @@ Source pixel formats a scene image may have: three colour channels plus the alph
 channel that carries the object mask.
 
 `has_alpha()` alone is not enough, because it also holds for `PixelFormat.YA`. A
-grey+alpha source survives the conversion to RGBA -- the grey value is replicated into
-R, G and B -- and would then be optimized against as if it were a colour photograph.
+grey+alpha source survives the conversion to RGBA (the grey value is replicated into
+R, G and B) and would then be optimized against as if it were a colour photograph.
 """
 
 
@@ -99,7 +99,7 @@ class ImageSceneLoader:
             # The alpha channel carries the object mask. `convert()` synthesises an
             # opaque alpha for a source that has none and replicates a grey value into
             # R, G and B, so both an absent mask and a greyscale source can only be
-            # detected on the source bitmap -- the converted image always reports four
+            # detected on the source bitmap: the converted image always reports four
             # colour channels.
             image_bitmap = mi.Bitmap(str(image_rgb_path))
             if image_bitmap.pixel_format() not in _COLOUR_WITH_MASK_FORMATS:

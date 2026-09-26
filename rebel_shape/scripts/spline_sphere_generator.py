@@ -1,11 +1,10 @@
 from dataclasses import dataclass
 
-import numpy as np
-import mitsuba as mi
 import drjit as dr
-import tyro
 import jsonpickle
-
+import mitsuba as mi
+import numpy as np
+import tyro
 from dataclasses_reverse_cli.reverse_cli import ReverseCli
 
 from rebel_shape import logger
@@ -18,8 +17,8 @@ from rebel_shape.regularization.spline_curvature_loss import SplineCurvatureLoss
 from rebel_shape.regularization.spline_g1_loss import SplineG1Loss
 from rebel_shape.scene_optimizers.lbfgs import LBFGS
 from rebel_shape.splines.cube_initialization import (
-    unit_cube,
     _get_normalizing_tf_matrix,
+    unit_cube,
 )
 
 

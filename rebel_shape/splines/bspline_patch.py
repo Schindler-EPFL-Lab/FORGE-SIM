@@ -6,9 +6,9 @@ import mitsuba as mi
 import numpy as np
 import numpy.typing as npt
 from OCP.Geom import Geom_BSplineSurface
-from OCP.TColgp import TColgp_Array2OfPnt
-from OCP.TColStd import TColStd_Array1OfReal, TColStd_Array1OfInteger
 from OCP.gp import gp_Pnt
+from OCP.TColgp import TColgp_Array2OfPnt
+from OCP.TColStd import TColStd_Array1OfInteger, TColStd_Array1OfReal
 
 from rebel_shape import logger
 from rebel_shape.meshing.patch import Patch
@@ -417,8 +417,8 @@ class BSplinePatch(SplinePatch):
 
         The normal is calculated as the cross-product of the partial derivatives with
         respect to u and v parameters, normalized to unit length. Where that cross
-        product is numerically zero -- a degenerate point, at which the surface has no
-        normal -- the unit fallback `(0, 0, 1)` is returned for that point instead and
+        product is numerically zero (a degenerate point, at which the surface has no
+        normal) the unit fallback `(0, 0, 1)` is returned for that point instead and
         a warning naming how many points were affected is logged. Every returned row is
         therefore a unit vector, and never a NaN.
 
@@ -453,7 +453,7 @@ class BSplinePatch(SplinePatch):
         # For genuinely degenerate UV points (e.g. wherever du and dv are
         # colinear), the cross product is mathematically zero and the division
         # above would carry that zero through to the output. Emit a unit
-        # fallback `(0, 0, 1)` so the result is always normalized — and warn so
+        # fallback `(0, 0, 1)` so the result is always normalized, and warn so
         # the caller knows their parameterization or scale has a problem.
         n_degenerate = int(np.sum(magnitudes.numpy() <= cross_product_tol))
         if n_degenerate > 0:

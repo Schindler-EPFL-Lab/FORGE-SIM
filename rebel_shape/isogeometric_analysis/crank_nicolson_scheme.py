@@ -34,7 +34,7 @@ def compute_relaxation_time(
     and the slowest decay rate is `lambda_1 > 0`. The natural relaxation
     time is `T_relax = 1 / lambda_1`. This characterization automatically
     accounts for heterogeneous material properties, surface geometry, and
-    thickness variations -- it is what the dimensional estimate
+    thickness variations; it is what the dimensional estimate
     `L^2 / alpha` is trying to approximate.
 
     The eigsolve uses ARPACK shift-invert via `scipy.sparse.linalg.eigsh`
@@ -42,7 +42,7 @@ def compute_relaxation_time(
     (kernel = constants) and M is positive definite, so the shifted matrix
     `K - sigma * M = K + |sigma| M` is symmetric positive definite. We
     factor it once via `SparseCholeskySolver` and pass the resulting solver
-    as `OPinv` to ARPACK -- matching the direct-solver path used for the
+    as `OPinv` to ARPACK, matching the direct-solver path used for the
     Crank-Nicolson LHS in this file, and avoiding the LU factorization
     scipy would otherwise build internally. `sigma` is taken as a small
     fraction of the element-scale rate `Tr(K)/Tr(M)` so it sits just below
@@ -255,7 +255,7 @@ class CrankNicolsonScheme:
         stiffness K and mass M matrices. This couples the time step to the
         actual slowest decay mode of the discretized problem, so the
         Crank-Nicolson temporal error `~ (dt / T_relax)^2` becomes the
-        explicit accuracy knob -- independent of geometry, units, and
+        explicit accuracy knob, independent of geometry, units, and
         material heterogeneity. See `compute_relaxation_time` for details
         on the eigsolve.
 
@@ -596,9 +596,9 @@ class CrankNicolsonScheme:
 
         The assembled vector F is linear in the source field, so scaling
         by `factor` is equivalent to having assembled with
-        ``source_field *= factor``.  Both ``_global_vector`` (used in the
-        CN time loop) and ``HeatSimulation.source_term`` (used for
-        drift reporting via ``heat_generation_rate``) are updated.
+        `source_field *= factor`.  Both `_global_vector` (used in the
+        CN time loop) and `HeatSimulation.source_term` (used for
+        drift reporting via `heat_generation_rate`) are updated.
         """
         self._global_vector *= factor
         self._heat_simulation.source_term = self._heat_simulation.source_term * factor

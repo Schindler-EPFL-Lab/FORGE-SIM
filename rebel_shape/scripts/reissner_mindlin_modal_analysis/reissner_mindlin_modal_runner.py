@@ -31,7 +31,7 @@ def apply_h_refinement(
 
     The factor is `h_refinement_factor`, unless `target_spans` is given: that
     OVERRIDES it and is resolved against the loaded spline's own base span count
-    (``factor = round(target_spans / base_spans)``, at least 1), so a fixed
+    (`factor = round(target_spans / base_spans)`, at least 1), so a fixed
     effective resolution can be pinned across splines with different base spans.
     A resolved factor of 1 leaves the spline untouched.
 
@@ -75,7 +75,7 @@ def prepare_modal_geometry(
     optionally rescaled.
 
     Shared by every modal entry point so that the geometry handed to
-    `ReissnerMindlinModalRunner` is prepared identically -- otherwise the
+    `ReissnerMindlinModalRunner` is prepared identically, otherwise the
     resulting eigenfrequencies are not comparable between them.
 
     The steps, in order, are:
@@ -168,7 +168,7 @@ class ReissnerMindlinModalRunner:
         Initialize the modal analysis runner with a tessellated IGA spline
         surface and material properties.
 
-        Material properties are broadcast from the ``material_config`` to
+        Material properties are broadcast from the `material_config` to
         all control points as uniform fields.
 
         :param tessellated_iga_spline: The tessellated IGA spline surface to
@@ -212,34 +212,34 @@ class ReissnerMindlinModalRunner:
         This method creates a Reissner-Mindlin modal problem from the current
         material properties and geometry, solves the generalized eigenvalue
         problem to find natural frequencies and mode shapes, and saves the
-        results as a ``.npz`` file.
+        results as a `.npz` file.
 
         :param num_modes: Number of eigenmodes to compute.
         :param output_folder: Directory where results will be saved as
-            ``modal_analysis_results.npz``.
+            `modal_analysis_results.npz`.
         :param solver_tolerance: Convergence tolerance for the eigenvalue
             solver.
         :param max_iterations: Maximum iterations for the eigenvalue solver.
-            If ``None``, the solver default is used.
+            If `None`, the solver default is used.
         :param spectral_shift: Mass-proportional shift added to the stiffness
             matrix to make it positive definite for Cholesky factorization.
-            If ``None``, an automatic heuristic is used.
+            If `None`, an automatic heuristic is used.
         :param integration_order: Quadrature order for patch integration.
-            If ``None``, defaults to the modal problem heuristic
-            (``2 * degree + 1``).
+            If `None`, defaults to the modal problem heuristic
+            (`2 * degree + 1`).
         :param drilling_stiffness_factor: Scale factor for the objective
             drilling penalty.
         :param max_batch_size: Maximum number of knot spans to assemble at
             once. When set, assembly memory is bounded to
             O(max_batch_size * n_dofs_per_span^2). A value of 1024 is
-            recommended for large meshes (64x64+). When ``None``, all spans
+            recommended for large meshes (64x64+). When `None`, all spans
             are assembled at once.
 
-        :returns: A tuple of ``(eigenvalues, eigenvectors)`` where
+        :returns: A tuple of `(eigenvalues, eigenvectors)` where
             eigenvalues is sorted ascending and eigenvectors has shape
-            ``(n_dofs, n_modes)``.
+            `(n_dofs, n_modes)`.
 
-        :raises ValueError: If ``num_modes`` is less than 1, or if the computed
+        :raises ValueError: If `num_modes` is less than 1, or if the computed
             spectrum contains a significantly negative eigenvalue.
         """
         if num_modes < 1:
@@ -306,7 +306,6 @@ class ReissnerMindlinModalRunner:
         eigenvectors: np.ndarray,
         mode_indices: list[int],
         output_folder: Path,
-        scale_factor: float = 0.1,
     ) -> None:
         """
         Export eigenmodes to a temporal XDMF/HDF5 series for ParaView.
@@ -316,23 +315,17 @@ class ReissnerMindlinModalRunner:
 
         :param eigenvalues: Array of eigenvalues from modal analysis.
         :param eigenvectors: Eigenvector matrix with shape
-            ``(n_dofs, n_modes)``.
+            `(n_dofs, n_modes)`.
         :param mode_indices: List of mode indices to export (e.g.,
-            ``[0, 1, 2]``).
-        :param output_folder: Directory where ``eigenmodes.xdmf`` and
-            ``eigenmodes.h5`` will be saved.
-        :param scale_factor: Scaling factor for the displacement field when
-            deforming the mesh. The displacement is normalized to unit
-            magnitude, then scaled by
-            ``scale_factor * smallest_bbox_extent``.
+            `[0, 1, 2]`).
+        :param output_folder: Directory where `eigenmodes.xdmf` and
+            `eigenmodes.h5` will be saved.
 
-        :raises ValueError: If `scale_factor` is negative or if any mode index
-            is out of range.
+        :raises ValueError: If any mode index is out of range.
         """
         exporter = EigenmodeXDMFExporter(
             tessellated_iga_spline=self._tessellated_iga_spline,
             output_folder=output_folder,
-            scale_factor=scale_factor,
         )
         exporter.export_eigenmodes(
             eigenvalues=eigenvalues,
@@ -350,7 +343,7 @@ class ReissnerMindlinModalRunner:
         """
         Set a new Young's modulus field for heterogeneous materials.
 
-        :param new_youngs_modulus: Tensor with shape ``(n_control_points, 1)``.
+        :param new_youngs_modulus: Tensor with shape `(n_control_points, 1)`.
 
         :raises ValueError: If the shape does not match the existing field.
         """
@@ -370,7 +363,7 @@ class ReissnerMindlinModalRunner:
         """
         Set a new Poisson's ratio field for heterogeneous materials.
 
-        :param new_poisson_ratio: Tensor with shape ``(n_control_points, 1)``.
+        :param new_poisson_ratio: Tensor with shape `(n_control_points, 1)`.
 
         :raises ValueError: If the shape does not match the existing field.
         """
@@ -390,7 +383,7 @@ class ReissnerMindlinModalRunner:
         """
         Set a new density field for heterogeneous materials.
 
-        :param new_density: Tensor with shape ``(n_control_points, 1)``.
+        :param new_density: Tensor with shape `(n_control_points, 1)`.
 
         :raises ValueError: If the shape does not match the existing field.
         """
@@ -408,7 +401,7 @@ class ReissnerMindlinModalRunner:
         """
         Set a new thickness field for heterogeneous shells.
 
-        :param new_thickness: Tensor with shape ``(n_control_points, 1)``.
+        :param new_thickness: Tensor with shape `(n_control_points, 1)`.
 
         :raises ValueError: If the shape does not match the existing field.
         """

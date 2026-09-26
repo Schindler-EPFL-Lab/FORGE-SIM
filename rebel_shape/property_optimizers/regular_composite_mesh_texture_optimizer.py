@@ -25,9 +25,9 @@ class RegularCompositeMeshTextureOptimizer(PropertyOptimizer):
     Mesh-side analog of `SplineTextureOptimizer`
     (`rebel_shape/property_optimizers/spline_texture_optimizer.py`). Wraps a
     `RegularCompositeMeshOptimizer` for the shape and a `BitmapTextureOptimizer`
-    bound to one texture key per patch — exactly the per-patch texture pattern
+    bound to one texture key per patch, exactly the per-patch texture pattern
     used on the spline side at
-    `rebel_shape/property_optimizers/spline_texture_optimizer.py:115-119` — so
+    `rebel_shape/property_optimizers/spline_texture_optimizer.py:115-119`, so
     each cube face has its own independent texture map and no UV seams cross
     between patches.
 
@@ -53,7 +53,7 @@ class RegularCompositeMeshTextureOptimizer(PropertyOptimizer):
         """
         `composite_mesh` is the `RegularCompositeMesh` whose vertices and per-patch
         textures are optimized jointly. Each patch's
-        ``"<name>.bsdf.reflectance.data"`` must already be a `mi.TensorXf` in
+        `"<name>.bsdf.reflectance.data"` must already be a `mi.TensorXf` in
         `scene_params`, and the textures across patches must share the same
         resolution.
 
@@ -108,7 +108,7 @@ class RegularCompositeMeshTextureOptimizer(PropertyOptimizer):
         """
         Delegates to the shape optimizer's `h_refinement`. Textures are
         per-patch and live in the local `[0, 1]^2` UV frame, so they remain
-        valid after grid refinement — no texture update is required.
+        valid after grid refinement: no texture update is required.
 
         :raises ValueError: If `factor` is not a positive integer.
         """

@@ -105,7 +105,7 @@ class TessellatedSplineSurface:
         with open(composite_spline_surface_path, "r") as tessellated_spline_file:
             # A file can fail to yield a surface two ways: it is not valid JSON at
             # all, or it decodes into some other object. Both mean the same thing to
-            # a caller -- this path is not a saved surface -- so both raise the same
+            # a caller (this path is not a saved surface), so both raise the same
             # error rather than leaking `JSONDecodeError` from the decoder for one
             # of them and not the other.
             try:
@@ -237,7 +237,7 @@ class TessellatedSplineSurface:
         """
         The welded global tessellated `Mesh` (all patches merged at the seams).
 
-        Saving it (``global_mesh.save_to_ply(...)``) produces the full surface as a
+        Saving it (`global_mesh.save_to_ply(...)`) produces the full surface as a
         single watertight mesh, the mesh-side analog of the per-patch PLYs.
         """
         return self._tessellated_mesh.global_mesh
@@ -351,7 +351,7 @@ class TessellatedSplineSurface:
 
         The counterpart of `composite_spline`: this class holds the two halves of the
         dual spline/mesh representation, and this exposes the mesh half. Needed by
-        consumers that require the mesh's own patch topology -- notably
+        consumers that require the mesh's own patch topology, notably
         `patches_with_mapping`, to scatter per-patch values into global vertex order.
         """
         return self._tessellated_mesh
