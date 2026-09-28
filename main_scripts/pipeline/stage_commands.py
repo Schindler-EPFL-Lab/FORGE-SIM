@@ -2,9 +2,9 @@ import sys
 from pathlib import Path
 from typing import ClassVar
 
+from forge_sim.scripts.end_to_end.data_paths import REPO_ROOT
+from forge_sim.scripts.end_to_end.end_to_end_config import EndToEndConfig
 from main_scripts.pipeline.stage import Stage
-from rebel_shape.scripts.end_to_end.data_paths import REPO_ROOT
-from rebel_shape.scripts.end_to_end.end_to_end_config import EndToEndConfig
 
 
 class StageCommands:
@@ -21,7 +21,7 @@ class StageCommands:
     Directory holding every stage that runs under the conda interpreter: the two
     mesh-preparation stages and the two DOLFINx ground-truth drivers. They are
     invoked by path rather than as `-m` modules because the conda environment has
-    no `rebel_shape` installed.
+    no `forge_sim` installed.
     """
 
     def __init__(
@@ -43,9 +43,9 @@ class StageCommands:
         Command for a stage that runs as a module of the active .venv.
 
         `module` is the stage's `<subpackage>.<module>` path relative to
-        `rebel_shape.scripts.end_to_end`, which is where every stage lives.
+        `forge_sim.scripts.end_to_end`, which is where every stage lives.
         """
-        cmd = [sys.executable, "-m", f"rebel_shape.scripts.end_to_end.{module}"]
+        cmd = [sys.executable, "-m", f"forge_sim.scripts.end_to_end.{module}"]
         if not self._use_gpu:
             cmd.append("--no-use-gpu")
         return cmd + self._overrides

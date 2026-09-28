@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import ClassVar
 
 from fem.heat.snapshot_diagnostics import SnapshotDiagnostics
-from rebel_shape import logger
+from forge_sim import logger
 
 
 @dataclass(frozen=True, kw_only=True)

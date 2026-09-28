@@ -8,6 +8,7 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
+from forge_sim.scripts.configs.thermal_material_config import ThermalMaterialConfig
 from main_scripts.run_vggt_pipeline import (
     VGGTPipelineParameters,
     _detect_scenes,
@@ -21,7 +22,6 @@ from main_scripts.vggt_pipeline.inpaint_pass import InpaintPass
 from main_scripts.vggt_pipeline.pipeline_stage import PipelineStage
 from main_scripts.vggt_pipeline.pipeline_steps import PipelineSteps
 from main_scripts.vggt_pipeline.scene_pipeline_run import ScenePipelineRun
-from rebel_shape.scripts.configs.thermal_material_config import ThermalMaterialConfig
 
 
 class TestVGGTPipelineRunner(unittest.TestCase):
@@ -148,7 +148,7 @@ class TestVGGTPipelineRunner(unittest.TestCase):
         `ScenePipelineRun.move_inpaint_outputs`'s own `[dry-run] would move ...`
         line alike - is dropped here; see `_parse_command`.
         """
-        with self.assertLogs("rebel_shape", level="INFO") as captured:
+        with self.assertLogs("forge_sim", level="INFO") as captured:
             main(params)
 
         commands = []
@@ -168,7 +168,7 @@ class TestVGGTPipelineRunner(unittest.TestCase):
         carries on, so the only thing separating a run that lost two of eight scenes
         from one that succeeded is that final raise.
         """
-        with self.assertLogs("rebel_shape", level="INFO") as captured:
+        with self.assertLogs("forge_sim", level="INFO") as captured:
             with self.assertRaises(RuntimeError) as raised:
                 main(params)
         return str(raised.exception), [
@@ -187,7 +187,7 @@ class TestVGGTPipelineRunner(unittest.TestCase):
         directory of empty files.
         """
         with mock.patch.object(subprocess, "run") as spawn:
-            with self.assertLogs("rebel_shape", level="INFO") as captured:
+            with self.assertLogs("forge_sim", level="INFO") as captured:
                 main(params)
 
         spawn.assert_not_called()
@@ -268,7 +268,7 @@ class TestVGGTPipelineRunner(unittest.TestCase):
                     [
                         self._INTERPRETER,
                         "-m",
-                        "rebel_shape.scripts.reissner_mindlin_modal_analysis"
+                        "forge_sim.scripts.reissner_mindlin_modal_analysis"
                         ".reissner_mindlin_modal_analysis",
                         "--spline-path",
                         str(reconstruction.resolve()),
@@ -319,7 +319,7 @@ class TestVGGTPipelineRunner(unittest.TestCase):
                     [
                         self._INTERPRETER,
                         "-m",
-                        "rebel_shape.scripts.heat_simulation"
+                        "forge_sim.scripts.heat_simulation"
                         ".heat_simulation_two_materials",
                         "--spline-path",
                         str(heat_dir / "inpainted_thermal_data.json"),
@@ -464,7 +464,7 @@ class TestVGGTPipelineRunner(unittest.TestCase):
                     command = commands[0]
                     self.assertEqual(
                         command[2],
-                        "rebel_shape.scripts.heat_simulation"
+                        "forge_sim.scripts.heat_simulation"
                         ".heat_simulation_two_materials",
                     )
                     for flag, expected in zip(
@@ -554,7 +554,7 @@ class TestVGGTPipelineRunner(unittest.TestCase):
             self.assertEqual(len(commands), 1)
             self.assertEqual(
                 commands[0][2],
-                "rebel_shape.scripts.heat_simulation.heat_simulation",
+                "forge_sim.scripts.heat_simulation.heat_simulation",
             )
             self.assertNotIn("--facade-mask-path", commands[0])
             self.assertNotIn("--glass-config.conductivity", commands[0])
@@ -576,7 +576,7 @@ class TestVGGTPipelineRunner(unittest.TestCase):
             heat_dir = dataset_root / "car" / "heat_simulation"
             dataset_dir = dataset_root / "car" / "dataset"
 
-            with self.assertLogs("rebel_shape", level="INFO") as captured:
+            with self.assertLogs("forge_sim", level="INFO") as captured:
                 main(
                     VGGTPipelineParameters(
                         dataset_root=dataset_root,
@@ -597,7 +597,7 @@ class TestVGGTPipelineRunner(unittest.TestCase):
                 return [
                     self._INTERPRETER,
                     "-m",
-                    "rebel_shape.scripts.inpaint_data_spline",
+                    "forge_sim.scripts.inpaint_data_spline",
                     "--thermoscenes-scene-path",
                     str(dataset_dir.resolve()),
                     "--inpainting-images-type",
@@ -651,7 +651,7 @@ class TestVGGTPipelineRunner(unittest.TestCase):
             ):
                 (pass_dir / name).write_text(name)
 
-            with self.assertLogs("rebel_shape", level="INFO") as captured:
+            with self.assertLogs("forge_sim", level="INFO") as captured:
                 ScenePipelineRun.move_inpaint_outputs(
                     pass_dir, heat_sim_dir, InpaintPass.WINDOWS, dry_run=False
                 )
@@ -960,7 +960,7 @@ class TestVGGTPipelineRunner(unittest.TestCase):
             self.assertEqual(len(commands), 1)
             self.assertEqual(
                 commands[0][2],
-                "rebel_shape.scripts.heat_simulation.heat_simulation",
+                "forge_sim.scripts.heat_simulation.heat_simulation",
             )
             self.assertEqual(
                 commands[0][-3:], ["--target-delta-temp", "12.5", "--use-gpu"]
@@ -981,7 +981,7 @@ class TestVGGTPipelineRunner(unittest.TestCase):
 
             # Empty `scenes` auto-detects: an unregistered scene is no longer
             # expressible through the typed field.
-            with self.assertLogs("rebel_shape", level="INFO") as captured:
+            with self.assertLogs("forge_sim", level="INFO") as captured:
                 main(
                     VGGTPipelineParameters(
                         dataset_root=dataset_root,
@@ -1003,7 +1003,7 @@ class TestVGGTPipelineRunner(unittest.TestCase):
                     [
                         self._INTERPRETER,
                         "-m",
-                        "rebel_shape.scripts.heat_simulation.heat_simulation",
+                        "forge_sim.scripts.heat_simulation.heat_simulation",
                         "--spline-path",
                         str(heat_dir / "inpainted_thermal_data.json"),
                         "--output-folder",
@@ -1099,9 +1099,10 @@ class TestVGGTPipelineRunner(unittest.TestCase):
         what makes the recorded runs comparable to the IGA reference in the first
         place.
         """
-        for scene_name, profile in (
-            VGGTSceneThermalProfile.VGGT_SCENE_THERMAL_PROFILES.items()
-        ):
+        for (
+            scene_name,
+            profile,
+        ) in VGGTSceneThermalProfile.VGGT_SCENE_THERMAL_PROFILES.items():
             with self.subTest(scene=scene_name):
                 if profile.is_two_material:
                     self.assertIsNotNone(profile.window_target_delta_temp)
@@ -1231,7 +1232,7 @@ class TestVGGTPipelineRunner(unittest.TestCase):
             )
             modal_dir = dataset_root / "buildnet-4" / "buildnet-4" / "modal_analysis"
 
-            with self.assertLogs("rebel_shape", level="INFO") as captured:
+            with self.assertLogs("forge_sim", level="INFO") as captured:
                 main(
                     VGGTPipelineParameters(
                         dataset_root=dataset_root,
@@ -1253,7 +1254,7 @@ class TestVGGTPipelineRunner(unittest.TestCase):
                     [
                         self._INTERPRETER,
                         "-m",
-                        "rebel_shape.scripts.reissner_mindlin_modal_analysis"
+                        "forge_sim.scripts.reissner_mindlin_modal_analysis"
                         ".reissner_mindlin_modal_analysis",
                         "--spline-path",
                         str(reconstruction.resolve()),
@@ -1495,7 +1496,7 @@ class TestVGGTPipelineRunner(unittest.TestCase):
             self.assertEqual(len(commands), 1)
             self.assertEqual(
                 commands[0][2],
-                "rebel_shape.scripts.heat_simulation.heat_simulation_two_materials",
+                "forge_sim.scripts.heat_simulation.heat_simulation_two_materials",
             )
 
     def test_mask_fix_command_targets_the_scene_s_dataset_directory(self):
@@ -1524,7 +1525,7 @@ class TestVGGTPipelineRunner(unittest.TestCase):
                     [
                         self._INTERPRETER,
                         "-m",
-                        "rebel_shape.scripts.fix_vggt_thermal_paths",
+                        "forge_sim.scripts.fix_vggt_thermal_paths",
                         "--scene-path",
                         str((dataset_root / "car" / "dataset").resolve()),
                         "--thermal-folder",
@@ -1581,9 +1582,7 @@ class TestVGGTPipelineRunner(unittest.TestCase):
         VGGT layout nests the reference under `frame["rgb"]`; the ThermoScenes layout
         puts it directly on the frame, so both shapes are checked for each spelling.
         """
-        two_material = (
-            "rebel_shape.scripts.heat_simulation.heat_simulation_two_materials"
-        )
+        two_material = "forge_sim.scripts.heat_simulation.heat_simulation_two_materials"
         spellings = ("windows_mask_file_path", "masks_facade", "masks_facades")
 
         for key in spellings:
@@ -1643,7 +1642,7 @@ class TestVGGTPipelineRunner(unittest.TestCase):
 
             self.assertEqual(
                 commands[0][2],
-                "rebel_shape.scripts.heat_simulation.heat_simulation_two_materials",
+                "forge_sim.scripts.heat_simulation.heat_simulation_two_materials",
             )
 
     def test_an_unreadable_transforms_json_reads_as_no_facade_mask(self):
@@ -1672,7 +1671,7 @@ class TestVGGTPipelineRunner(unittest.TestCase):
 
                     self.assertEqual(
                         commands[0][2],
-                        "rebel_shape.scripts.heat_simulation.heat_simulation",
+                        "forge_sim.scripts.heat_simulation.heat_simulation",
                     )
 
     def test_scenes_are_auto_detected_by_their_reconstruction(self):

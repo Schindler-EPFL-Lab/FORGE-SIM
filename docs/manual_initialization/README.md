@@ -1,4 +1,4 @@
-# Manual initialization for rebel-shape
+# Manual initialization for forge-sim
 
 The method developed in this repository starts from an initial shape (a cubed-sphere in most cases) that is optimized to represent an object.
 The initial pose and radius of the initial shape has a large impact on the quality on the final representation.

@@ -6,8 +6,8 @@ import drjit as dr
 import mitsuba as mi
 import numpy as np
 
-from rebel_shape.meshing.patch import Patch
-from rebel_shape.meshing.patch_manager import PatchManager
+from forge_sim.meshing.patch import Patch
+from forge_sim.meshing.patch_manager import PatchManager
 
 
 class TestPatchManager(unittest.TestCase):

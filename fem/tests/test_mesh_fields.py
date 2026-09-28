@@ -3,7 +3,7 @@ from pathlib import Path
 from unittest import mock
 
 # Imported for its module-level side effect: `_fem_fixtures` puts the
-# repository root on `sys.path`, so `fem` and `rebel_shape` resolve.
+# repository root on `sys.path`, so `fem` and `forge_sim` resolve.
 import _fem_fixtures  # noqa: F401
 import numpy as np
 import numpy.typing as npt
@@ -11,9 +11,9 @@ from numpy.testing import assert_allclose, assert_array_equal
 
 from fem.meshprep import mesh_repair, p2_geometry, reference_surface
 from fem.meshprep.repaired_mesh import RepairedMesh
-from rebel_shape.scripts.end_to_end.dataset import synthetic_fields
-from rebel_shape.scripts.end_to_end.dataset.mesh_arrays import MeshArrays
-from rebel_shape.scripts.end_to_end.heat.thermal_sim_config import ThermalSimConfig
+from forge_sim.scripts.end_to_end.dataset import synthetic_fields
+from forge_sim.scripts.end_to_end.dataset.mesh_arrays import MeshArrays
+from forge_sim.scripts.end_to_end.heat.thermal_sim_config import ThermalSimConfig
 
 try:
     import open3d as _open3d  # noqa: F401
@@ -32,7 +32,7 @@ class TestMeshFields(unittest.TestCase):
     """
     Characterization of `fem.meshprep` (topology, welding, reference-surface
     transfer, P2 edge geometry) and of the synthetic ground-truth fields in
-    `rebel_shape.scripts.end_to_end.dataset.synthetic_fields`.
+    `forge_sim.scripts.end_to_end.dataset.synthetic_fields`.
 
     These pin what the two modules actually do, not a claim that every
     pinned choice is the "right" one.

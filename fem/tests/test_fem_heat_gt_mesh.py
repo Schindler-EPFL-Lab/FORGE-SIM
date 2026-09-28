@@ -5,8 +5,8 @@ from pathlib import Path
 from _fem_fixtures import ACTIVE, PASSIVE, write_fixture_npz
 
 from fem.end_to_end.heat_gt.fem_heat_gt_mesh import FEMHeatGTMeshParameters
-from rebel_shape.scripts.configs.thermal_material_config import ThermalMaterialConfig
-from rebel_shape.scripts.end_to_end.heat.thermal_sim_config import ThermalSimConfig
+from forge_sim.scripts.configs.thermal_material_config import ThermalMaterialConfig
+from forge_sim.scripts.end_to_end.heat.thermal_sim_config import ThermalSimConfig
 
 
 class TestParameterValidation(unittest.TestCase):

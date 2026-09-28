@@ -16,7 +16,7 @@ class VGGTScene(Enum):
     of them rather than in three places at once. `value` is the on-disk / JSON
     identity string this project used before this type existed, and does not move.
 
-    It lives in `main_scripts/`, not `rebel_shape/` or `fem/`: the set of
+    It lives in `main_scripts/`, not `forge_sim/` or `fem/`: the set of
     published scenes is a dataset registry, which is `main_scripts`' own subject
     (`CLAUDE.md` SS3). Neither solver library needs to know a scene's identity to
     run a comparison for it; only the driver that resolves which scenes exist and

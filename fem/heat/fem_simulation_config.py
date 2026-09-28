@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 
-from rebel_shape.scripts.configs.thermal_material_config import ThermalMaterialConfig
+from forge_sim.scripts.configs.thermal_material_config import ThermalMaterialConfig
 
 
 @dataclass(kw_only=True)

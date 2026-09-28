@@ -11,6 +11,31 @@ import numpy as np
 from fem.end_to_end.modal_comparison.spline_modal_comparison_report import (
     SplineModalComparisonReport,
 )
+from forge_sim.scripts.configs.thermal_material_config import ThermalMaterialConfig
+
+# `_require_matching_source_region` is private, but it is the whole of the guard and
+# its public caller needs both solvers' XDMF series and a stage directory to run.
+from forge_sim.scripts.end_to_end.end_to_end_config import EndToEndConfig
+from forge_sim.scripts.end_to_end.heat.compare_heat import (
+    _require_matching_source_region,
+    run_heat_comparison,
+)
+from forge_sim.scripts.end_to_end.heat.heat_comparison_report import (
+    HeatComparisonReport,
+)
+from forge_sim.scripts.end_to_end.heat.heat_energy_log import HeatEnergyLog
+from forge_sim.scripts.end_to_end.heat.iga_heat_report import IGAHeatReport
+from forge_sim.scripts.end_to_end.heat.thermal_sim_config import ThermalSimConfig
+from forge_sim.scripts.end_to_end.metrics.recorded_runs_parameters import (
+    RecordedRunsParameters,
+)
+from forge_sim.scripts.end_to_end.modal.align_modal_xdmf import (
+    AlignModalXdmfParameters,
+)
+from forge_sim.scripts.end_to_end.modal.modal_comparison_report import (
+    ModalComparisonReport,
+)
+from forge_sim.scripts.end_to_end.modal.modal_frequencies import modal_frequencies
 
 # The comparison itself needs DOLFINx (`fem.end_to_end.modal_comparison.
 # SceneModalComparison`, which this environment does not carry), but the scene
@@ -32,31 +57,6 @@ from main_scripts.scenes.e2e_scene_profile import E2ESceneProfile
 from main_scripts.scenes.vggt_scene import VGGTScene
 from main_scripts.scenes.vggt_scene_profile import VGGTSceneProfile
 from main_scripts.scenes.vggt_scene_thermal_profile import VGGTSceneThermalProfile
-from rebel_shape.scripts.configs.thermal_material_config import ThermalMaterialConfig
-
-# `_require_matching_source_region` is private, but it is the whole of the guard and
-# its public caller needs both solvers' XDMF series and a stage directory to run.
-from rebel_shape.scripts.end_to_end.end_to_end_config import EndToEndConfig
-from rebel_shape.scripts.end_to_end.heat.compare_heat import (
-    _require_matching_source_region,
-    run_heat_comparison,
-)
-from rebel_shape.scripts.end_to_end.heat.heat_comparison_report import (
-    HeatComparisonReport,
-)
-from rebel_shape.scripts.end_to_end.heat.heat_energy_log import HeatEnergyLog
-from rebel_shape.scripts.end_to_end.heat.iga_heat_report import IGAHeatReport
-from rebel_shape.scripts.end_to_end.heat.thermal_sim_config import ThermalSimConfig
-from rebel_shape.scripts.end_to_end.metrics.recorded_runs_parameters import (
-    RecordedRunsParameters,
-)
-from rebel_shape.scripts.end_to_end.modal.align_modal_xdmf import (
-    AlignModalXdmfParameters,
-)
-from rebel_shape.scripts.end_to_end.modal.modal_comparison_report import (
-    ModalComparisonReport,
-)
-from rebel_shape.scripts.end_to_end.modal.modal_frequencies import modal_frequencies
 
 
 class TestEndToEndReports(unittest.TestCase):
@@ -476,7 +476,7 @@ class TestEndToEndReports(unittest.TestCase):
         cannot say what it integrated, so the comparison proceeds and says so. Failing
         here instead would make every archived run unreadable by the current stage.
         """
-        with self.assertLogs("rebel_shape", level="WARNING") as captured:
+        with self.assertLogs("forge_sim", level="WARNING") as captured:
             _require_matching_source_region(
                 self._log_with_region(None),
                 self._log_with_region(ThermalSimConfig.HeatSourceRegion.STEEL),

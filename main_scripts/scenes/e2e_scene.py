@@ -10,7 +10,7 @@ class E2EScene(Enum):
     experiment rather than a new member.
 
     It lives in `main_scripts/`, not in either library: enumerating the datasets an
-    experiment ran on is the driver's subject, and `rebel_shape` and `fem` provide the
+    experiment ran on is the driver's subject, and `forge_sim` and `fem` provide the
     machinery for one target at a time without naming any (`CLAUDE.md` SS3).
 
     tyro renders a `--scenes` argument by member NAME, so a command line spells

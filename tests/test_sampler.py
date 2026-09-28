@@ -1,6 +1,6 @@
 import unittest
 
-from rebel_shape.plugin_wrappers.sampler import Sampler
+from forge_sim.plugin_wrappers.sampler import Sampler
 
 
 class TestSampler(unittest.TestCase):

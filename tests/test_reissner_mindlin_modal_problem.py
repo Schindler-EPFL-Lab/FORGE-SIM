@@ -4,19 +4,19 @@ import drjit as dr
 import mitsuba as mi
 import numpy as np
 
-from rebel_shape.isogeometric_analysis.modal_analysis_solver import ModalAnalysisSolver
-from rebel_shape.isogeometric_analysis.reissner_mindlin_modal_problem import (
+from forge_sim.isogeometric_analysis.modal_analysis_solver import ModalAnalysisSolver
+from forge_sim.isogeometric_analysis.reissner_mindlin_modal_problem import (
     ReissnerMindlinModalProblem,
 )
-from rebel_shape.meshing.composite_iga_spline_surface_factory import (
+from forge_sim.meshing.composite_iga_spline_surface_factory import (
     CompositeIGASplineSurfaceFactory,
 )
-from rebel_shape.meshing.tessellated_iga_spline_surface import (
+from forge_sim.meshing.tessellated_iga_spline_surface import (
     TessellatedIGASplineSurface,
 )
-from rebel_shape.splines.bspline_patch import BSplinePatch
-from rebel_shape.splines.cube_initialization import cubed_sphere
-from rebel_shape.splines.iga_spline_patch import IGASplinePatch
+from forge_sim.splines.bspline_patch import BSplinePatch
+from forge_sim.splines.cube_initialization import cubed_sphere
+from forge_sim.splines.iga_spline_patch import IGASplinePatch
 
 
 class TestReissnerMindlinModalProblem(unittest.TestCase):

@@ -5,7 +5,7 @@ import numpy as np
 
 SCIKIT_IMAGE = True
 try:
-    from rebel_shape.scripts.segmentation.extract_foreground_and_background import (  # noqa: E501
+    from forge_sim.scripts.segmentation.extract_foreground_and_background import (  # noqa: E501
         extract_foreground_and_background,
     )
 except ImportError:

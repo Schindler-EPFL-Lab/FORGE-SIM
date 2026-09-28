@@ -5,7 +5,7 @@ import drjit as dr
 import mitsuba as mi
 import numpy as np
 
-from rebel_shape.plugin_wrappers.diffuse_bsdf import DiffuseBSDF
+from forge_sim.plugin_wrappers.diffuse_bsdf import DiffuseBSDF
 
 
 class TestDiffuseBSDF(unittest.TestCase):

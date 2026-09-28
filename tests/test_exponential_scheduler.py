@@ -1,6 +1,6 @@
 import unittest
 
-from rebel_shape.schedulers.exponential_scheduler import ExponentialScheduler
+from forge_sim.schedulers.exponential_scheduler import ExponentialScheduler
 
 
 class TestExponentialScheduler(unittest.TestCase):

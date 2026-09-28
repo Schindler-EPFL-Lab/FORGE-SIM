@@ -68,7 +68,7 @@ jobs:
       - name: Run the DOLFINx tests
         # Single-threaded so the MUMPS factorization is deterministic: with
         # threading its summation order varies and results drift by around 1e-15.
-        # `PYTHONPATH` puts the checkout first so `rebel_shape` and the modules
+        # `PYTHONPATH` puts the checkout first so `forge_sim` and the modules
         # under test resolve from here, matching how the scripts are run.
         env:
           OMP_NUM_THREADS: 1

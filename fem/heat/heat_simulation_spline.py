@@ -1,7 +1,7 @@
 """
 DOLFINx FEM heat simulation on a tessellated spline surface (single material).
 
-This is the FEM counterpart to `rebel_shape.scripts.heat_simulation.heat_simulation`
+This is the FEM counterpart to `forge_sim.scripts.heat_simulation.heat_simulation`
 (the IGA single-material runner). It loads an IGA spline surface, tessellates it
 into a P1 triangle mesh, projects the temperature field onto the mesh, and solves
 the transient heat equation with DOLFINx using Crank-Nicolson time integration.
@@ -21,14 +21,14 @@ from pathlib import Path
 import mitsuba as mi
 import tyro
 
-# Repository root: makes `rebel_shape` and this script's own `fem` package
+# Repository root: makes `forge_sim` and this script's own `fem` package
 # importable when it is run by path rather than as `python -m`.
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from fem.fem_field_data import FEMFieldData
 from fem.heat.spline_heat_simulation import SplineHeatSimulationParameters
 from fem.spline_to_fem_projector import SplineToFEMProjector
-from rebel_shape.scripts.configs.thermal_material_config import ThermalMaterialConfig
+from forge_sim.scripts.configs.thermal_material_config import ThermalMaterialConfig
 
 
 @dataclass(kw_only=True)

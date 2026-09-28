@@ -2,7 +2,7 @@
 DOLFINx FEM heat simulation on a tessellated spline surface (two materials).
 
 This is the FEM counterpart to
-`rebel_shape.scripts.heat_simulation.heat_simulation_two_materials` (the IGA
+`forge_sim.scripts.heat_simulation.heat_simulation_two_materials` (the IGA
 two-material runner). A facade mask spline selects between a base material
 (concrete) and windows (glass): the mask is thresholded at the control points and
 the per-material properties are interpolated by the spline basis onto the mesh,
@@ -23,14 +23,14 @@ from pathlib import Path
 import mitsuba as mi
 import tyro
 
-# Repository root: makes `rebel_shape` and this script's own `fem` package
+# Repository root: makes `forge_sim` and this script's own `fem` package
 # importable when it is run by path rather than as `python -m`.
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from fem.fem_field_data import FEMFieldData
 from fem.heat.spline_heat_simulation import SplineHeatSimulationParameters
 from fem.spline_to_fem_projector import SplineToFEMProjector
-from rebel_shape.scripts.configs.thermal_material_config import ThermalMaterialConfig
+from forge_sim.scripts.configs.thermal_material_config import ThermalMaterialConfig
 
 
 @dataclass(kw_only=True)

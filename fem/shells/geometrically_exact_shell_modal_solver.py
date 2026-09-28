@@ -9,7 +9,7 @@ from fem.shells.geometrically_exact_shell_problem import GeometricallyExactShell
 from fem.shells.modal_result import ModalResult
 from fem.shells.rigid_body_mode import RigidBodyMode
 from fem.shells.rigid_body_mode_energy import RigidBodyModeEnergy
-from rebel_shape import logger
+from forge_sim import logger
 
 
 class GeometricallyExactShellModalSolver:
@@ -30,7 +30,7 @@ class GeometricallyExactShellModalSolver:
     :meth:`_spectral_shift`) so that `K + epsilon*M` is invertible despite
     the six-dimensional rigid-body nullspace of the bare `K`, and subtract it
     from the eigenvalues afterwards, mirroring the IGA
-    `rebel_shape.isogeometric_analysis.modal_analysis_solver.ModalAnalysisSolver`.
+    `forge_sim.isogeometric_analysis.modal_analysis_solver.ModalAnalysisSolver`.
     `rigid_body_energies` is a diagnostic alongside the two solves: the
     Rayleigh quotient of each of the six analytic rigid-body fields, which
     isolates the formulation's rigid-body invariance from the eigensolver.

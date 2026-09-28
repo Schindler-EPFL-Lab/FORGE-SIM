@@ -1,17 +1,17 @@
 # `fem/`: FEM cross-validation reference
 
 DOLFINx (FEniCSx) finite-element solvers that mirror the isogeometric (IGA)
-solvers in `rebel_shape/isogeometric_analysis/`. Their purpose is **validation**:
+solvers in `forge_sim/isogeometric_analysis/`. Their purpose is **validation**:
 the same physical problem is solved on the same geometry by two independent
 discretisations, and the answers are compared. A disagreement points at a bug in
 one of them; agreement is evidence for both.
 
 ## This is not part of the installable package
 
-`fem/` is deliberately outside `rebel_shape/`:
+`fem/` is deliberately outside `forge_sim/`:
 
 - `pyproject.toml` declares **no** DOLFINx dependency, and nothing in
-  `rebel_shape/` imports from this directory.
+  `forge_sim/` imports from this directory.
 - No test in `tests/` covers it, and `python -m unittest discover tests` never
   touches it.
 - It needs its **own conda environment**: DOLFINx is a conda-only ecosystem
@@ -25,23 +25,23 @@ library code that is imported by the rest of the project.
 ## Environment
 
 ```bash
-conda env create -f fem/environment.yml   # creates `dolfinx-rebel-shape`
-conda activate dolfinx-rebel-shape
+conda env create -f fem/environment.yml   # creates `dolfinx-forge-sim`
+conda activate dolfinx-forge-sim
 ```
 
 The environment pins `fenics-dolfinx`, `petsc4py`, `slepc4py`, `mpi4py` and
-`gmsh`, plus the core rebel-shape pip dependencies needed to load and
+`gmsh`, plus the core forge-sim pip dependencies needed to load and
 tessellate B-spline surfaces. SLEPc is required: the normalised-time-step path
 and the modal solvers use it for shift-invert eigensolves. PETSc must carry
 **MUMPS**: both the per-step Crank-Nicolson solve and the relaxation eigensolve
 factorise with it and have no fallback, and a PETSc without it is rejected at
 solver construction.
 
-Run every script **from the repository root**, so that `rebel_shape` resolves and
-so that `rebel_shape/__init__.py` can create `outputs/rebel_shape.log`:
+Run every script **from the repository root**, so that `forge_sim` resolves and
+so that `forge_sim/__init__.py` can create `outputs/forge_sim.log`:
 
 ```bash
-conda run -n dolfinx-rebel-shape python fem/heat/heat_simulation_spline.py --help
+conda run -n dolfinx-forge-sim python fem/heat/heat_simulation_spline.py --help
 ```
 
 ## Layout
@@ -64,7 +64,7 @@ moving a module between subpackages fail loudly rather than silently resolving t
 | `fem/tests/` | The whole suite, deliberately **flat**: `unittest` dropped namespace-package discovery in 3.11, so a subdirectory without `__init__.py` would run a subset while reporting green. |
 
 `fem/end_to_end/` follows the same domain-first grouping as
-[`rebel_shape/scripts/end_to_end/`](../rebel_shape/scripts/end_to_end/), so the two halves
+[`forge_sim/scripts/end_to_end/`](../forge_sim/scripts/end_to_end/), so the two halves
 of a stage read as the pair they are. The four stage directories each hold a thin entry
 script, a `*_runner.py` carrying its length, and the report record it returns; the two
 comparison directories hold one scene's comparison and the CLI over it.
@@ -85,7 +85,7 @@ submodule.
 ## Tests
 
 ```bash
-conda run -n dolfinx-rebel-shape python -m unittest discover fem/tests
+conda run -n dolfinx-forge-sim python -m unittest discover fem/tests
 ```
 
 They live here rather than in the repository's top-level `tests/` because that
@@ -111,7 +111,7 @@ the six zero-energy rigid-body modes (`K φ = 0` exactly, at any geometry order)
 agreement of the three integration schemes, the drilling guards, the B-bar block
 algebra, the spline → curved-mesh conformity, and the on-disk eigenmode format,
 which is additionally confirmed against a recorded run when
-`REBEL_SHAPE_RECORDED_RUNS` points at one.
+`FORGE_SIM_RECORDED_RUNS` points at one.
 
 `test_crank_nicolson_characterization.py` additionally runs one small
 reference scenario (a uniform material, a spatially uniform source, a
@@ -129,14 +129,14 @@ up to 7.2e-16 without it, because MUMPS' threaded factorization varies its
 summation order. So when comparing runs before and after a change, set:
 
 ```bash
-OMP_NUM_THREADS=1 conda run -n dolfinx-rebel-shape python fem/<script>.py ...
+OMP_NUM_THREADS=1 conda run -n dolfinx-forge-sim python fem/<script>.py ...
 ```
 
 and expect exact equality. Without it, allow ~1e-15 relative.
 
 ## Heat equation (transient)
 
-The FEM counterpart of `rebel_shape/scripts/heat_simulation/`. The parameters are
+The FEM counterpart of `forge_sim/scripts/heat_simulation/`. The parameters are
 deliberately the same on both sides (`dt_over_t_relax` or an explicit time step,
 `target_delta_temp` source auto-scaling, `target_length_scale` geometry rescaling,
 and the shared `ThermalMaterialConfig`), so a given configuration resolves to a
@@ -172,9 +172,9 @@ series itself records. Give both runs the same `save_interval` and
 since fields at different instants cannot be compared.
 
 ```bash
-python rebel_shape/scripts/heat_simulation/heat_simulation.py --help          # IGA
-conda run -n dolfinx-rebel-shape python fem/heat/heat_simulation_spline.py --help  # FEM
-conda run -n dolfinx-rebel-shape python fem/compare_iga_fem.py --help         # diff
+python forge_sim/scripts/heat_simulation/heat_simulation.py --help          # IGA
+conda run -n dolfinx-forge-sim python fem/heat/heat_simulation_spline.py --help  # FEM
+conda run -n dolfinx-forge-sim python fem/compare_iga_fem.py --help         # diff
 ```
 
 ### A deliberate approximation
@@ -189,7 +189,7 @@ not "fix" it.
 
 The Reissner-Mindlin shell solvers belong to the shell workstream and arrive with
 it rather than with the heat pipeline. They validate the IGA modal spectrum in
-`rebel_shape/isogeometric_analysis/reissner_mindlin_modal_problem.py`.
+`forge_sim/isogeometric_analysis/reissner_mindlin_modal_problem.py`.
 
 | File | Role |
 |---|---|

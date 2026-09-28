@@ -6,9 +6,9 @@ import mitsuba as mi
 import numpy as np
 from OCP.Geom import Geom_BSplineSurface
 
-from rebel_shape import logger as rebel_shape_logger
-from rebel_shape.splines.bspline import BSpline
-from rebel_shape.splines.bspline_patch import BSplinePatch
+from forge_sim import logger as forge_sim_logger
+from forge_sim.splines.bspline import BSpline
+from forge_sim.splines.bspline_patch import BSplinePatch
 
 
 class TestBSplinePatch(unittest.TestCase):
@@ -543,7 +543,7 @@ class TestBSplinePatch(unittest.TestCase):
         patch = self._tilted_plane_patch(scale=1e-7)
         uv = mi.TensorXf(np.array([[0.5, 0.5]]))
 
-        with self.assertLogs(rebel_shape_logger, level="WARNING") as captured:
+        with self.assertLogs(forge_sim_logger, level="WARNING") as captured:
             normals = patch.evaluate_normals(parametric_coords=uv)
 
         np.testing.assert_array_equal(normals.numpy(), np.array([[0.0, 0.0, 1.0]]))
@@ -574,7 +574,7 @@ class TestBSplinePatch(unittest.TestCase):
         patch = self._tilted_plane_patch(scale=scale)
         uv = mi.TensorXf(np.array([[0.5, 0.5]]))
 
-        with self.assertNoLogs(rebel_shape_logger, level="WARNING"):
+        with self.assertNoLogs(forge_sim_logger, level="WARNING"):
             normals = patch.evaluate_normals(parametric_coords=uv)
 
         normal = normals.numpy()[0]

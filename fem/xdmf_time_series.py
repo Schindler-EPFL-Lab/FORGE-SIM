@@ -16,7 +16,7 @@ class XDMFTimeSeries:
     hold between calls.
 
     The layout is deliberately minimal and shared with the IGA exporter
-    (`rebel_shape.isogeometric_analysis.iga_xdmf_exporter`), so ParaView and
+    (`forge_sim.isogeometric_analysis.iga_xdmf_exporter`), so ParaView and
     `compare_iga_fem` can read IGA and FEM output through the same code path::
 
         <name>.h5    Mesh/Vertices     (n_vertices, 3) float64

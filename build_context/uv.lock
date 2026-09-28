@@ -5410,7 +5410,7 @@ wheels = [
 ]
 
 [[package]]
-name = "rebel-shape"
+name = "forge-sim"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [

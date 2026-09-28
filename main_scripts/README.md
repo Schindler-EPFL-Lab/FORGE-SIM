@@ -1,6 +1,6 @@
 # `main_scripts/`: cross-environment drivers
 
-`rebel_shape` and `fem` are libraries. They provide generic functionality driven by a CLI,
+`forge_sim` and `fem` are libraries. They provide generic functionality driven by a CLI,
 for one scene at a time, with the caller supplying its own paths. They enumerate no
 datasets and hardcode no scene. `main_scripts` is the other half: it holds the list of
 scenes, sweeps the library entry points across them, and records the results. It carries
@@ -8,13 +8,13 @@ no logic of its own past the scenes; the moment something computes or compares a
 it belongs to the package that owns the physics.
 
 It is also the only place a single command may span both Python environments: the uv
-`.venv` (Mitsuba, IGA) and the conda `dolfinx-rebel-shape` environment (FEM). It does so
+`.venv` (Mitsuba, IGA) and the conda `dolfinx-forge-sim` environment (FEM). It does so
 by subprocess, never by import, which is what lets the two sides stay independent.
 `conda_python.py` is the single home for resolving the DOLFINx interpreter: from
-`--conda-python` where a driver offers it, otherwise from the `REBEL_SHAPE_DOLFINX_PYTHON`
+`--conda-python` where a driver offers it, otherwise from the `FORGE_SIM_DOLFINX_PYTHON`
 environment variable.
 
-The dependency runs one way. Nothing in `rebel_shape/` or `fem/` imports `main_scripts`;
+The dependency runs one way. Nothing in `forge_sim/` or `fem/` imports `main_scripts`;
 the only imports of it are the tests that exercise its own modules.
 
 Run every command from the repository root.
@@ -27,7 +27,7 @@ Run every command from the repository root.
 | `run_vggt_pipeline.py` | Post-processing over the real VGGT-reconstructed scenes: mask fix, inpainting, heat, modal. Everything it spawns stays inside the venv. |
 | `compare_all_scenes.py` | The batch heat comparison, IGA against DOLFINx on the same geometry, scene by scene. |
 | `compare_modal_fem_iga.py` | The batch modal comparison, on the very spline the IGA modal step used. |
-| `evaluation/eval_all_*.py` | Batch Chamfer and novel-view-synthesis evaluation over the PLY, BuildNet3D and real-scene sets, each with a `_large_steps` variant for the mesh baseline. Each spawns the per-reconstruction scripts under `rebel_shape/scripts/evaluation/`, then that directory's `aggregate_metrics.py` once per scene to write the scene's metrics file; the drivers hold the scene lists and never read a metric themselves. See [`rebel_shape/scripts/evaluation/README.md`](../rebel_shape/scripts/evaluation/README.md) for what the scripts underneath measure. |
+| `evaluation/eval_all_*.py` | Batch Chamfer and novel-view-synthesis evaluation over the PLY, BuildNet3D and real-scene sets, each with a `_large_steps` variant for the mesh baseline. Each spawns the per-reconstruction scripts under `forge_sim/scripts/evaluation/`, then that directory's `aggregate_metrics.py` once per scene to write the scene's metrics file; the drivers hold the scene lists and never read a metric themselves. See [`forge_sim/scripts/evaluation/README.md`](../forge_sim/scripts/evaluation/README.md) for what the scripts underneath measure. |
 
 Both comparison drivers do the same thing: resolve a scene's profile and paths, then spawn
 the matching script under `fem/end_to_end/` with the conda interpreter. The solve, the diff
@@ -62,5 +62,5 @@ way to see how the two environments are stitched together.
 
 `--name`, `--mesh-path`, `--prebuilt-spline-path` and `--output-root` move together and are
 forwarded to every stage; they are how a run is pointed at a different target.
-[`rebel_shape/scripts/end_to_end/README.md`](../rebel_shape/scripts/end_to_end/README.md)
+[`forge_sim/scripts/end_to_end/README.md`](../forge_sim/scripts/end_to_end/README.md)
 covers the stages themselves and what each one deposits.

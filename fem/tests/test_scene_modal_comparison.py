@@ -15,8 +15,8 @@ class TestSortedFrequencies(unittest.TestCase):
     `SceneModalComparison.run` needs a recorded dataset and a real DOLFINx solve,
     so it is not exercised here; `sorted_frequencies` is the one piece of the
     class checkable without one. Its counterpart, `modal_frequencies`
-    (`rebel_shape.scripts.end_to_end.modal.modal_frequencies`), is a plain
-    `rebel_shape` function with no DOLFINx dependency and stays tested in
+    (`forge_sim.scripts.end_to_end.modal.modal_frequencies`), is a plain
+    `forge_sim` function with no DOLFINx dependency and stays tested in
     `tests/test_end_to_end_reports.py`; the two are exercised side by side there
     against ascending-versus-stored order, which is the contract that separates
     them and needs both readers on the same fixture to see.

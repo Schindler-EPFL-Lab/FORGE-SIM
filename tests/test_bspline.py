@@ -4,7 +4,7 @@ import drjit as dr
 import mitsuba as mi
 import numpy as np
 
-from rebel_shape.splines.bspline import BSpline
+from forge_sim.splines.bspline import BSpline
 
 
 class TestBSpline(unittest.TestCase):

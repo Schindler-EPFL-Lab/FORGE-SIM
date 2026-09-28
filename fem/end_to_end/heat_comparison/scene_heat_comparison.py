@@ -19,7 +19,7 @@ from fem.heat.fem_simulation_config import FEMSimulationConfig
 from fem.matching_snapshots_guard import MatchingSnapshotsGuard
 from fem.spline_to_fem_projector import SplineToFEMProjector
 from fem.xdmf_time_series import XDMFTimeSeries
-from rebel_shape import logger
+from forge_sim import logger
 
 
 class SceneHeatComparison:

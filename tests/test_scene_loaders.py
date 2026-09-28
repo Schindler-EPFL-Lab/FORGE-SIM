@@ -8,14 +8,14 @@ from pathlib import Path
 import mitsuba as mi
 import numpy as np
 
-from rebel_shape import logger as rebel_shape_logger
-from rebel_shape.data_processing.image_scene_loader import ImageSceneLoader
-from rebel_shape.data_processing.pose_scene_loader import PoseSceneLoader
-from rebel_shape.data_processing.silhouette_scene_loader import SilhouetteSceneLoader
-from rebel_shape.data_processing.single_channel_scene_loader import (
+from forge_sim import logger as forge_sim_logger
+from forge_sim.data_processing.image_scene_loader import ImageSceneLoader
+from forge_sim.data_processing.pose_scene_loader import PoseSceneLoader
+from forge_sim.data_processing.silhouette_scene_loader import SilhouetteSceneLoader
+from forge_sim.data_processing.single_channel_scene_loader import (
     SingleChannelImageSceneLoader,
 )
-from rebel_shape.plugin_wrappers.perspective_camera import PerspectiveCamera
+from forge_sim.plugin_wrappers.perspective_camera import PerspectiveCamera
 
 
 class TestScenesDataloaders(unittest.TestCase):
@@ -371,7 +371,7 @@ class TestScenesDataloaders(unittest.TestCase):
                 json.dumps({"frames": broken_frames})
             )
 
-            with self.assertLogs(rebel_shape_logger, level="WARNING") as captured:
+            with self.assertLogs(forge_sim_logger, level="WARNING") as captured:
                 broken_loader = SingleChannelImageSceneLoader.thermal_scene_vggt(
                     broken_scene
                 )

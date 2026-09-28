@@ -5,7 +5,7 @@ from pathlib import Path
 
 import mitsuba as mi
 
-from rebel_shape.data_processing.vggt_pose_scene_loader import VGGTPoseSceneLoader
+from forge_sim.data_processing.vggt_pose_scene_loader import VGGTPoseSceneLoader
 
 
 class TestVGGTPoseSceneLoader(unittest.TestCase):

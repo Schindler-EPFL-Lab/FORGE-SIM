@@ -4,10 +4,10 @@ import drjit as dr
 import mitsuba as mi
 import numpy as np
 
-from rebel_shape.meshing.composite_mesh_factory import CompositeMeshFactory
-from rebel_shape.meshing.mesh import Mesh
-from rebel_shape.meshing.patch import Patch
-from rebel_shape.meshing.rectangular_mesh import RectangularMesh
+from forge_sim.meshing.composite_mesh_factory import CompositeMeshFactory
+from forge_sim.meshing.mesh import Mesh
+from forge_sim.meshing.patch import Patch
+from forge_sim.meshing.rectangular_mesh import RectangularMesh
 
 
 class TestCompositeMesh(unittest.TestCase):

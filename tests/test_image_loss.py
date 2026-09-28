@@ -4,11 +4,11 @@ from pathlib import Path
 import mitsuba as mi
 import numpy as np
 
-from rebel_shape import logger as rebel_shape_logger
-from rebel_shape.loss_evaluators.image_loss_l1 import ImageLossL1
-from rebel_shape.loss_evaluators.image_loss_l2 import ImageLossL2
-from rebel_shape.loss_evaluators.image_loss_msssim import ImageLossMSSSIM
-from rebel_shape.loss_evaluators.image_loss_ssim import ImageLossSSIM
+from forge_sim import logger as forge_sim_logger
+from forge_sim.loss_evaluators.image_loss_l1 import ImageLossL1
+from forge_sim.loss_evaluators.image_loss_l2 import ImageLossL2
+from forge_sim.loss_evaluators.image_loss_msssim import ImageLossMSSSIM
+from forge_sim.loss_evaluators.image_loss_ssim import ImageLossSSIM
 
 
 class TestImageLossFunctions(unittest.TestCase):
@@ -143,7 +143,7 @@ class TestImageLossFunctions(unittest.TestCase):
             k1=0.01, k2=0.03, dynamic_range=1.0, weights=[0.5, 0.5]
         )
 
-        with self.assertLogs(rebel_shape_logger, level="WARNING") as captured:
+        with self.assertLogs(forge_sim_logger, level="WARNING") as captured:
             loss = msssim_loss.evaluate(gradient_image, gradient_image)
 
         self.assertTrue(

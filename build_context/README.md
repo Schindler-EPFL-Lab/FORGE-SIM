@@ -1,6 +1,6 @@
 # Build context
 
-The Docker build context for the `rebel-shape` Azure ML environment, which is the image
+The Docker build context for the `forge-sim` Azure ML environment, which is the image
 every job in `azure_scripts/` runs in. It starts from a CUDA 12.6 base, installs the build
 toolchain that Dr.Jit and SuiteSparse need, and then resolves the Python dependencies with
 `uv sync --frozen` and the `azure`, `foreground-background` and `fast-cholesky` extras.

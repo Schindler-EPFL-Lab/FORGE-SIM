@@ -6,8 +6,8 @@ import drjit as dr
 import mitsuba as mi
 import numpy as np
 
-from rebel_shape.meshing.mesh import Mesh
-from rebel_shape.plugin_wrappers.diffuse_bsdf import DiffuseBSDF
+from forge_sim.meshing.mesh import Mesh
+from forge_sim.plugin_wrappers.diffuse_bsdf import DiffuseBSDF
 
 
 class TestMesh(unittest.TestCase):

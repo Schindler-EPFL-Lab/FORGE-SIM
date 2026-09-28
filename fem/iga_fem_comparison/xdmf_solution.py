@@ -6,7 +6,7 @@ import h5py
 import numpy as np
 import numpy.typing as npt
 
-from rebel_shape import logger
+from forge_sim import logger
 
 
 @dataclass(frozen=True, kw_only=True)

@@ -16,14 +16,14 @@ import drjit as dr
 import mitsuba as mi
 import numpy as np
 
-from rebel_shape.isogeometric_analysis.modal_analysis_solver import ModalAnalysisSolver
-from rebel_shape.isogeometric_analysis.reissner_mindlin_modal_problem import (
+from forge_sim.isogeometric_analysis.modal_analysis_solver import ModalAnalysisSolver
+from forge_sim.isogeometric_analysis.reissner_mindlin_modal_problem import (
     ReissnerMindlinModalProblem,
 )
-from rebel_shape.meshing.tessellated_iga_spline_surface import (
+from forge_sim.meshing.tessellated_iga_spline_surface import (
     TessellatedIGASplineSurface,
 )
-from rebel_shape.meshing.tessellated_spline_surface import TessellatedSplineSurface
+from forge_sim.meshing.tessellated_spline_surface import TessellatedSplineSurface
 
 
 class TestSteelSphereModalAnalysis(unittest.TestCase):

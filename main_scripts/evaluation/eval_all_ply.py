@@ -1,6 +1,6 @@
 """
 Batch PLY-mesh Chamfer evaluation of splines reconstructed by the proposed
-rebel-shape method, across the PLY reference scenes.
+forge-sim method, across the PLY reference scenes.
 
 `--scenes-names` takes `PlyScene` members; tyro renders them by member NAME, not
 by value, so a command line spells `--scenes-names ARMADILLO` where it used to
@@ -18,11 +18,11 @@ from dataclasses_reverse_cli.reverse_cli import ReverseCli
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
+from forge_sim import logger  # noqa: E402
 from main_scripts.evaluation.eval_all_common import (  # noqa: E402
     prepare_metrics_output_folder,
 )
 from main_scripts.evaluation.ply_scene import PlyScene  # noqa: E402
-from rebel_shape import logger  # noqa: E402
 
 
 @dataclass(kw_only=True)
@@ -30,9 +30,9 @@ class EvalAllPlyParameters(ReverseCli):
     """
     Which PLY scenes to evaluate, and where their reconstructions live.
 
-    For each scene, spawns `rebel_shape/scripts/evaluation/eval_ply.py` once per
+    For each scene, spawns `forge_sim/scripts/evaluation/eval_ply.py` once per
     reconstructed spline under `validation_inputs_root`/splines/<scene>/, then
-    `rebel_shape/scripts/evaluation/aggregate_metrics.py` once to average the
+    `forge_sim/scripts/evaluation/aggregate_metrics.py` once to average the
     per-spline metrics into that scene's mean.
     """
 
@@ -92,7 +92,7 @@ def main(params: EvalAllPlyParameters) -> None:
 
             cmd = [
                 "python3",
-                "rebel_shape/scripts/evaluation/eval_ply.py",
+                "forge_sim/scripts/evaluation/eval_ply.py",
                 "--reference-shape-path",
                 str(reference_shape_path),
                 "--spline-path",
@@ -105,7 +105,7 @@ def main(params: EvalAllPlyParameters) -> None:
 
         cmd = [
             "python3",
-            "rebel_shape/scripts/evaluation/aggregate_metrics.py",
+            "forge_sim/scripts/evaluation/aggregate_metrics.py",
             "--metrics-folders",
             *map(str, output_folders),
             "--metrics-file-names",

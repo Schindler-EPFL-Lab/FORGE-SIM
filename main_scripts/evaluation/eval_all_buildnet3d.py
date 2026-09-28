@@ -1,6 +1,6 @@
 """
 Batch novel-view-synthesis and Chamfer evaluation of splines reconstructed by
-the proposed rebel-shape method, across the BuildNet3D scenes.
+the proposed forge-sim method, across the BuildNet3D scenes.
 
 `--scenes-ids` takes `BuildNet3DSceneID` members; tyro renders them by member
 NAME, not by value, so a command line spells `--scenes-ids SCENE_1` where it
@@ -17,6 +17,10 @@ from dataclasses_reverse_cli.reverse_cli import ReverseCli
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
+from forge_sim import logger  # noqa: E402
+from forge_sim.scripts.evaluation.spline_texture_paths import (  # noqa: E402
+    SplineTexturePaths,
+)
 from main_scripts.evaluation.buildnet3d_scene_id import (  # noqa: E402
     BuildNet3DSceneID,
 )
@@ -26,10 +30,6 @@ from main_scripts.evaluation.buildnet3d_scene_target import (  # noqa: E402
 from main_scripts.evaluation.eval_all_common import (  # noqa: E402
     prepare_metrics_output_folder,
 )
-from rebel_shape import logger  # noqa: E402
-from rebel_shape.scripts.evaluation.spline_texture_paths import (  # noqa: E402
-    SplineTexturePaths,
-)
 
 
 @dataclass(kw_only=True)
@@ -37,10 +37,10 @@ class EvalAllBuildNet3DParameters(ReverseCli):
     """
     Which BuildNet3D scenes to evaluate, and at what environment map.
 
-    For each scene, spawns `rebel_shape/scripts/render_eval_images.py` then
-    `rebel_shape/scripts/evaluation/eval_buildnet3d.py` once per reconstructed
+    For each scene, spawns `forge_sim/scripts/render_eval_images.py` then
+    `forge_sim/scripts/evaluation/eval_buildnet3d.py` once per reconstructed
     spline under `validation_inputs_root`/splines/<scene>/, then
-    `rebel_shape/scripts/evaluation/aggregate_metrics.py` once to average the
+    `forge_sim/scripts/evaluation/aggregate_metrics.py` once to average the
     per-spline metrics into that scene's mean.
     """
 
@@ -141,7 +141,7 @@ def main(params: EvalAllBuildNet3DParameters) -> None:
 
             cmd = [
                 "python3",
-                "rebel_shape/scripts/render_eval_images.py",
+                "forge_sim/scripts/render_eval_images.py",
                 "--scene-path",
                 str(thermoscenes_path),
                 "--environment-map-path",
@@ -159,7 +159,7 @@ def main(params: EvalAllBuildNet3DParameters) -> None:
 
             cmd = [
                 "python3",
-                "rebel_shape/scripts/evaluation/eval_buildnet3d.py",
+                "forge_sim/scripts/evaluation/eval_buildnet3d.py",
                 "--thermoscenes-scene-path",
                 str(thermoscenes_path),
                 "--environment-map-path",
@@ -178,7 +178,7 @@ def main(params: EvalAllBuildNet3DParameters) -> None:
 
         cmd = [
             "python3",
-            "rebel_shape/scripts/evaluation/aggregate_metrics.py",
+            "forge_sim/scripts/evaluation/aggregate_metrics.py",
             "--metrics-folders",
             *map(str, output_folders),
             "--metrics-file-names",

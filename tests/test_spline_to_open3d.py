@@ -2,7 +2,7 @@ try:
     OPEN3D_IMPORTED = True
     import open3d as o3d
 
-    from rebel_shape.metrics.shapes import tessellated_spline_to_open3d_mesh
+    from forge_sim.metrics.shapes import tessellated_spline_to_open3d_mesh
 except ImportError:
     OPEN3D_IMPORTED = False
 
@@ -11,12 +11,12 @@ import unittest
 import mitsuba as mi
 import numpy as np
 
-from rebel_shape.meshing.composite_spline_surface_factory import (
+from forge_sim.meshing.composite_spline_surface_factory import (
     CompositeSplineSurfaceFactory,
 )
-from rebel_shape.meshing.patch import Patch
-from rebel_shape.meshing.tessellated_spline_surface import TessellatedSplineSurface
-from rebel_shape.splines.bspline_patch import BSplinePatch
+from forge_sim.meshing.patch import Patch
+from forge_sim.meshing.tessellated_spline_surface import TessellatedSplineSurface
+from forge_sim.splines.bspline_patch import BSplinePatch
 
 
 @unittest.skipUnless(OPEN3D_IMPORTED, "open3d is not installed.")

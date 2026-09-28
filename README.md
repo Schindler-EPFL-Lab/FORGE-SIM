@@ -1,6 +1,6 @@
-# Rebel Shape
+# Forge Sim
 
-Rebel shape is a library for spline-based shape and texture optimization as well as simulation based on Isogeometric
+Forge Sim is a library for spline-based shape and texture optimization as well as simulation based on Isogeometric
 Analysis (IGA).
 It builds on top of the Mitsuba 3 differentiable renderer and Dr.Jit Automatic Differentiation framework.
 
@@ -26,7 +26,7 @@ The `extraction` and `fast-cholesky` extras cannot share an environment, because
 SAM 3 requires `numpy<2` while `scikit-sparse` requires `numpy>2`. Every install
 drops one of the two, so a bare `--all-extras` fails.
 
-Running the following commands at the top directory of rebel-shape installs the
+Running the following commands at the top directory of forge-sim installs the
 project with the reconstruction extras, which is what the quick-start below uses:
 
 ```bash
@@ -54,13 +54,13 @@ and the two agree to about 2e-12, so results are unaffected.
 1. Extract object with SAM3
 
     ```bash
-    python rebel_shape/scripts/segmentation/mask_with_sam3.py --sam3-checkpoint-dir model/sam3/ --text-prompt PROMPT --scene-dir  dataset-path
+    python forge_sim/scripts/segmentation/mask_with_sam3.py --sam3-checkpoint-dir model/sam3/ --text-prompt PROMPT --scene-dir  dataset-path
     ```
 
 2. Optimize the initial pose:
 
     ```bash
-    python rebel_shape/scripts/optimize_thermoscenes_pose.py --scene-path dataset-path --name output-name
+    python forge_sim/scripts/optimize_thermoscenes_pose.py --scene-path dataset-path --name output-name
     ```
 
 3. Optimize the shape for simulation
@@ -69,10 +69,10 @@ and the two agree to about 2e-12, so results are unaffected.
   `optimize_suzanne_spline_texture.py`. On a real dataset:
 
   ```bash
-  python3 rebel_shape/scripts/optimize_thermoscenes_spline_manual_initial_pose.py --scene-path dataset-path --environment-map-path data/textures/checkerboard_lighter.exr --bbox-transforms-path bbox-path --use-gpu --shape-params.batch-size 200 --shape-params.learning-rate-start 0.5 --shape-params.learning-rate-end 1
+  python3 forge_sim/scripts/optimize_thermoscenes_spline_manual_initial_pose.py --scene-path dataset-path --environment-map-path data/textures/checkerboard_lighter.exr --bbox-transforms-path bbox-path --use-gpu --shape-params.batch-size 200 --shape-params.learning-rate-start 0.5 --shape-params.learning-rate-end 1
   ```
 
-Run every script from the repository root: the package writes `outputs/rebel_shape.log` relative to the working directory on import, and the scripts resolve their local imports the same way.
+Run every script from the repository root: the package writes `outputs/forge_sim.log` relative to the working directory on import, and the scripts resolve their local imports the same way.
 
 These scripts can be run locally on the CPU, but the default setting are tuned for GPU execution, so adjusting the parameters is necessary.
 Reducing the number of samples per pixel to 4-9 can yield reasonable execution time without compromising the optimization procedure.
@@ -88,7 +88,7 @@ Knot vectors can be changed and control points moved around to see how the resul
 ### Experiment tracking
 
 Every script reports its parameters, per-iteration losses and output artifacts through
-`rebel_shape/tracking.py`, a thin seam over [MLflow](https://mlflow.org/). **Tracking is
+`forge_sim/tracking.py`, a thin seam over [MLflow](https://mlflow.org/). **Tracking is
 off unless the environment turns it on**, so the scripts run unchanged on a machine with
 no tracking infrastructure: nothing is written and no MLflow store is created.
 
@@ -97,16 +97,16 @@ Two environment variables control it:
 | variable | effect |
 |---|---|
 | `MLFLOW_TRACKING_URI` | Where runs go, e.g. `http://localhost:5000` for a local MLflow server. Setting it is what turns tracking on. |
-| `REBEL_SHAPE_TRACKING` | `auto` (default: on only if the environment names a destination), `on` (always attempt), `off` (never touch MLflow, the only way to say "off" on a machine that exports a tracking URI). |
+| `FORGE_SIM_TRACKING` | `auto` (default: on only if the environment names a destination), `on` (always attempt), `off` (never touch MLflow, the only way to say "off" on a machine that exports a tracking URI). |
 | `MLFLOW_EXPERIMENT_NAME` | Which MLflow experiment runs are created in. The seam never sets an experiment itself. |
 
 ```bash
 # Record to a local MLflow server.
 MLFLOW_TRACKING_URI=http://localhost:5000 MLFLOW_EXPERIMENT_NAME="Spline optimization" \
-    python rebel_shape/scripts/optimize_ply_spline.py
+    python forge_sim/scripts/optimize_ply_spline.py
 
 # Run the test suite with tracking off even though a URI is exported.
-REBEL_SHAPE_TRACKING=off python -m unittest discover tests
+FORGE_SIM_TRACKING=off python -m unittest discover tests
 ```
 
 The seam never configures MLflow in code, because `mlflow.set_tracking_uri()` overwrites
@@ -126,9 +126,9 @@ disk but not recorded as an artifact.
 The project is structured as follows:
 
 ```
-rebel-shape/
-├── rebel_shape/            # Main package
-│   ├── plugin_wrappers/        # Wrappers around select Mitsuba plugins that are used in rebel_shape
+forge-sim/
+├── forge_sim/            # Main package
+│   ├── plugin_wrappers/        # Wrappers around select Mitsuba plugins that are used in forge_sim
 │   ├── scene_optimizers/       # Optimizers
 │   ├── loss_evaluators/        # Image loss functions that are the primary optimization targets
 │   ├── regularization/         # Regularization penalty terms
@@ -151,7 +151,7 @@ rebel-shape/
 │       ├── end_to_end/                     # The synthetic end-to-end validation, venv half
 ├── fem/                    # Independent DOLFINx FEM implementations of the same problems, for cross-validation
 ├── main_scripts/           # Drivers that span both Python environments and sweep the entry points across scenes
-├── azure_scripts/          # Scripts to launch Azure jobs (execute code from rebel_shape/scripts)
+├── azure_scripts/          # Scripts to launch Azure jobs (execute code from forge_sim/scripts)
 ├── build_context/          # Docker build context for the Azure ML image
 ├── tests/                  # Unit tests
 ├── data/                   # Meshes, splines, textures and bounding-box transforms
@@ -161,7 +161,7 @@ rebel-shape/
 `fem/`, `main_scripts/` and the end-to-end experiment each carry their own README:
 [`fem/README.md`](./fem/README.md),
 [`main_scripts/README.md`](./main_scripts/README.md) and
-[`rebel_shape/scripts/end_to_end/README.md`](./rebel_shape/scripts/end_to_end/README.md).
+[`forge_sim/scripts/end_to_end/README.md`](./forge_sim/scripts/end_to_end/README.md).
 
 ### Plugin Wrappers
 
@@ -241,7 +241,7 @@ This is an unfortunate consequence of shape-radiance (texture) ambiguity.
 
 ### B-Splines
 
-B-splines are the fundamental primitive of the rebel-shape library, used for both optimization and simulation.
+B-splines are the fundamental primitive of the forge-sim library, used for both optimization and simulation.
 
 Unlike triangular meshes, spline surfaces are smooth, assuming the degree of the spline is greater than 2.
 Higher smoothness comes from basis functions are more spread out in space, as well as more basis functions influencing the value at a particular point.
@@ -300,7 +300,7 @@ In general, the optimization proceeds for a predefined number of steps with each
 Multiple `PropertyOptimizers` can easily be composed and the combined properties optimized using the same interface.
 In this case the update order for the parameters is determined by the `SceneOptimizer` that is attached to the main optimization loop.
 
-A script to render camera poses for visualization and debugging purposes is provided in `rebel_shape/scripts`.
+A script to render camera poses for visualization and debugging purposes is provided in `forge_sim/scripts`.
 
 ### Data Processing
 
@@ -343,7 +343,7 @@ Nothing is pinned, so the degeneracy pattern of the spectrum survives, which mat
 
 `fem/` holds DOLFINx (FEniCSx) finite-element solvers for the same two problems.
 It exists to disagree: it shares the inputs of the IGA side (the spline classes, the material configs) but no solver code and no output-writing code, so agreement between the two is evidence for both discretisations while a disagreement localises the fault to one of them.
-Nothing under `rebel_shape/` imports it, and it is not a dependency of the installable package; DOLFINx is conda-only and its VTK requirements conflict with the main environment, so it runs in its own conda environment.
+Nothing under `forge_sim/` imports it, and it is not a dependency of the installable package; DOLFINx is conda-only and its VTK requirements conflict with the main environment, so it runs in its own conda environment.
 The steel sphere is the shared anchor: the same benchmark both sides solve, pinned on the IGA side by `tests/test_steel_sphere_modal_analysis.py`.
 
 See [`fem/README.md`](./fem/README.md) for the environment, the layout and the entry points.
@@ -373,16 +373,16 @@ See [`main_scripts/README.md`](./main_scripts/README.md).
 
 The first step is preparing the data and making sure that its format is compatible with the provided data loader for the [ThermoScenes dataset](https://zenodo.org/records/10835108).
 In case the data is not directly compatible with this format it is recommended to introduce a conversion script.
-For a practical example, see the [`buildnet_to_thermoscenes.py`](./rebel_shape/scripts/buildnet_to_thermoscenes.py) script that converts the [BuildNet3D dataset](https://zenodo.org/records/15075790) to a ThermoScenes compatible dataset.
+For a practical example, see the [`buildnet_to_thermoscenes.py`](./forge_sim/scripts/buildnet_to_thermoscenes.py) script that converts the [BuildNet3D dataset](https://zenodo.org/records/15075790) to a ThermoScenes compatible dataset.
 
 The baseline ThermoScenes datasets are not yet ready for optimization - the object that should be reconstructed needs to be masked.
 We use [Segment Anything Model 3 (SAM 3)](https://github.com/facebookresearch/sam3) to generate precise masks using textual prompts.
 
-This is done in the [`mask_with_sam3.py`](./rebel_shape/scripts/segmentation/mask_with_sam3.py) script.
+This is done in the [`mask_with_sam3.py`](./forge_sim/scripts/segmentation/mask_with_sam3.py) script.
 At the time of writing, this part is expected to be done locally and there is no Azure script.
 
 ```bash
-python ./rebel_shape/scripts/segmentation/mask_with_sam3.py --scene-dir dataset-path --sam3-checkpoint-dir model/sam3/ --text-prompt PROMPT
+python ./forge_sim/scripts/segmentation/mask_with_sam3.py --scene-dir dataset-path --sam3-checkpoint-dir model/sam3/ --text-prompt PROMPT
 ```
 
 The prompts used are:
@@ -401,7 +401,7 @@ Windows can be segmented from the images using SAM3.
 FOr example for Building A Spring:
 
 ```bash
-python rebel_shape/scripts/segmentation/mask_with_sam3.py --sam3-checkpoint-dir model/sam3/ --text-prompt PROMPT --output-folder "masks_facade" --output_frame_name masks_facade --mask-mode union --is-mask --scene-dir  dataset-path
+python forge_sim/scripts/segmentation/mask_with_sam3.py --sam3-checkpoint-dir model/sam3/ --text-prompt PROMPT --output-folder "masks_facade" --output_frame_name masks_facade --mask-mode union --is-mask --scene-dir  dataset-path
 ```
 
 It is important that `--mask-mode union` to be able to segment multiple instances per images.
@@ -417,7 +417,7 @@ The quality of the final representation depends heavily on the initial pose and 
 There are two ways to produce the `data/bbox_transforms/<name>.json` file consumed by the downstream scripts:
 
 1. The manual Blender workflow described in the [Manual Initialization Guide](./docs/manual_initialization/README.md), recommended when the cameras are sparse or the object occupies only a small fraction of the frame, where automatic silhouette fitting can be unreliable.
-2. The automated [`optimize_thermoscenes_pose.py`](./rebel_shape/scripts/optimize_thermoscenes_pose.py) script, which fits a cubed-sphere B-spline proxy (diffuse albedo configurable via `--object-albedo`, default black) against the reference silhouettes on a constant-white background and writes the resulting TRS transform to `{bbox_transforms_dir}/{name}.json`.
+2. The automated [`optimize_thermoscenes_pose.py`](./forge_sim/scripts/optimize_thermoscenes_pose.py) script, which fits a cubed-sphere B-spline proxy (diffuse albedo configurable via `--object-albedo`, default black) against the reference silhouettes on a constant-white background and writes the resulting TRS transform to `{bbox_transforms_dir}/{name}.json`.
    Uses L-BFGS by default; lower the learning rate or raise `object_albedo` if gradients are too strong for a given scene.
 
 The produced JSON file is the only artifact of this stage and is schema-compatible between both paths, so the downstream `_manual_initial_pose` scripts do not care which method produced it.
@@ -470,13 +470,13 @@ The simulation is done using the isogeometric analysis (IGA) framework.
 
 Two heat simulation options are available at the time of writing:
 
-1. Heat simulation with a single material and no heat sources [(here)](rebel_shape/scripts/heat_simulation/heat_simulation.py)
-2. Heat simulation with two materials and no heat sources [(here)](rebel_shape/scripts/heat_simulation/heat_simulation_two_materials.py)
+1. Heat simulation with a single material and no heat sources [(here)](forge_sim/scripts/heat_simulation/heat_simulation.py)
+2. Heat simulation with two materials and no heat sources [(here)](forge_sim/scripts/heat_simulation/heat_simulation_two_materials.py)
 
 The runner beside them, `heat_simulation_runner.py`, is the shared library both entry points drive; it is not a CLI.
 
 The first script takes as input just the spline surface obtained via thermal inpainting, while the second one also requires 6 masked facades.
-The facades are masked the same way as the ThermoScenes input data, with the [`mask_with_sam3.py`](rebel_shape/scripts/segmentation/mask_with_sam3.py) script pointed at the facade images and run in the `--mask-mode union --is-mask` configuration described under Element segmentation above.
+The facades are masked the same way as the ThermoScenes input data, with the [`mask_with_sam3.py`](forge_sim/scripts/segmentation/mask_with_sam3.py) script pointed at the facade images and run in the `--mask-mode union --is-mask` configuration described under Element segmentation above.
 
 The numerical integration scheme is stable for all time step sizes [(Crank-Nicolson scheme)](https://en.wikipedia.org/wiki/Crank%E2%80%93Nicolson_method) and perfectly preserves the total energy if there are no sources or sinks.
 
@@ -489,7 +489,7 @@ The structural counterpart of the thermal simulation, run on the same recovered 
 It needs no inpainted field, only the geometry and a material, so it can be run directly on the output of shape optimization:
 
 ```bash
-python rebel_shape/scripts/reissner_mindlin_modal_analysis/reissner_mindlin_modal_analysis.py --spline-path spline-path --output-folder outputs
+python forge_sim/scripts/reissner_mindlin_modal_analysis/reissner_mindlin_modal_analysis.py --spline-path spline-path --output-folder outputs
 ```
 
 The two-material variant beside it takes a `--facade-mask-path`, the same mask the two-material heat simulation uses, and `reissner_mindlin_modal_runner.py` is the shared library, not a CLI.
@@ -506,8 +506,8 @@ Any IGA result can be checked against the DOLFINx implementation of the same pro
 Give both sides the same parameters, then diff the two XDMF series:
 
 ```bash
-conda run -n dolfinx-rebel-shape python fem/heat/heat_simulation_spline.py --help
-conda run -n dolfinx-rebel-shape python fem/compare_iga_fem.py --help
+conda run -n dolfinx-forge-sim python fem/heat/heat_simulation_spline.py --help
+conda run -n dolfinx-forge-sim python fem/compare_iga_fem.py --help
 ```
 
 The shell equivalent is `fem/shells/shell_modal_analysis_spline.py`, and `main_scripts/compare_modal_fem_iga.py` runs that comparison across a whole set of scenes at once.
@@ -515,22 +515,22 @@ The shell equivalent is `fem/shells/shell_modal_analysis_spline.py`, and `main_s
 ## End-to-End Validation
 
 The pipeline above recovers a surface from images and then simulates on it, but on real data there is nothing to compare the result against.
-`rebel_shape/scripts/end_to_end/` closes that loop synthetically: it renders a multi-view dataset from a known mesh carrying known temperature and material fields, recovers the spline and the fields from those images alone, simulates on the recovery, and compares against a DOLFINx simulation on the original mesh.
+`forge_sim/scripts/end_to_end/` closes that loop synthetically: it renders a multi-view dataset from a known mesh carrying known temperature and material fields, recovers the spline and the fields from those images alone, simulates on the recovery, and compares against a DOLFINx simulation on the original mesh.
 The two sides share nothing but the physics: a different geometry, a different solver, a different discretisation, and a different provenance for the fields.
 
 `main_scripts/run_pipeline.py` drives the whole thing across both environments, and `--dry-run` reports which stages would run and confirms each one's target resolves, without executing any of them.
-[`rebel_shape/scripts/end_to_end/README.md`](./rebel_shape/scripts/end_to_end/README.md) is the reproduction guide and explains what each reported number isolates.
+[`forge_sim/scripts/end_to_end/README.md`](./forge_sim/scripts/end_to_end/README.md) is the reproduction guide and explains what each reported number isolates.
 
 ## Evaluate
 
-Render the images with `rebel_shape/scripts/render_eval_images.py` then run the NVS evaluation with `rebel_shape/scripts/evaluation/eval_real.py`.
+Render the images with `forge_sim/scripts/render_eval_images.py` then run the NVS evaluation with `forge_sim/scripts/evaluation/eval_real.py`.
 
 ### Baseline
 
 Run Large Step with:
 
 ```bash
-python rebel_shape/scripts/optimize_thermoscenes_mesh_manual_initial_pose.py --environment-map-path data/textures/checkerboard_lighter.exr --continuous-samples 25 --visibility-samples 9 --optimization-iterations 250 --shape-params.learning-rate-start 0.05 --shape-params.learning-rate-end 0.025 --shape-params.learning-rate-steepness 1.0 --shape-params.batch-size 9 --shape-params.uniform-adam --shape-params.no-use-lbfgs --shape-params.lbfgs-history-size 32 --shape-params.smoothing-strength 50.0 --texture-params.learning-rate-start 0.1 --texture-params.learning-rate-end 0.05 --texture-params.learning-rate-steepness 1.0 --texture-params.batch-size 6 --texture-params.no-uniform-adam --texture-params.no-use-lbfgs --texture-params.lbfgs-history-size 15 --texture-params.texture-resolution 1024 --texture-params.projection-steepness 1.0 --output-folder outputs --num-of-images-to-save 3 --use-gpu --no-mask-pixels-during-optimization --scene-path dataset-path --bbox-transforms-path bbox-file-path
+python forge_sim/scripts/optimize_thermoscenes_mesh_manual_initial_pose.py --environment-map-path data/textures/checkerboard_lighter.exr --continuous-samples 25 --visibility-samples 9 --optimization-iterations 250 --shape-params.learning-rate-start 0.05 --shape-params.learning-rate-end 0.025 --shape-params.learning-rate-steepness 1.0 --shape-params.batch-size 9 --shape-params.uniform-adam --shape-params.no-use-lbfgs --shape-params.lbfgs-history-size 32 --shape-params.smoothing-strength 50.0 --texture-params.learning-rate-start 0.1 --texture-params.learning-rate-end 0.05 --texture-params.learning-rate-steepness 1.0 --texture-params.batch-size 6 --texture-params.no-uniform-adam --texture-params.no-use-lbfgs --texture-params.lbfgs-history-size 15 --texture-params.texture-resolution 1024 --texture-params.projection-steepness 1.0 --output-folder outputs --num-of-images-to-save 3 --use-gpu --no-mask-pixels-during-optimization --scene-path dataset-path --bbox-transforms-path bbox-file-path
 ```
 
 `--optimization-iterations` must stay above every entry of `--h-refinement-iterations`
@@ -539,11 +539,11 @@ python rebel_shape/scripts/optimize_thermoscenes_mesh_manual_initial_pose.py --e
 Render novel views with:
 
 ```bash
-python rebel_shape/scripts/render_eval_images_mesh.py --flip-y --scene-path dataset-path --result-path outputs
+python forge_sim/scripts/render_eval_images_mesh.py --flip-y --scene-path dataset-path --result-path outputs
 ```
 
 And create NVS evaluation with:
 
 ```bash
-python rebel_shape/scripts/evaluation/eval_real.py --scene-path dataset-path --rendered-images-folder outputs/renders
+python forge_sim/scripts/evaluation/eval_real.py --scene-path dataset-path --rendered-images-folder outputs/renders
 ```

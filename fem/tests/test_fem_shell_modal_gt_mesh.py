@@ -10,7 +10,7 @@ from fem.end_to_end.modal_gt.fem_shell_modal_gt_mesh import (
     FEMShellModalGTMeshParameters,
 )
 from fem.shells.shell_element import ShellElement
-from rebel_shape.scripts.configs.structural_material_config import (
+from forge_sim.scripts.configs.structural_material_config import (
     StructuralMaterialConfig,
 )
 

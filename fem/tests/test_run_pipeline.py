@@ -4,7 +4,7 @@ import unittest
 from pathlib import Path
 
 # Imported for its module-level side effect: `_fem_fixtures` puts the
-# repository root on `sys.path`, so `fem` and `rebel_shape` resolve.
+# repository root on `sys.path`, so `fem` and `forge_sim` resolve.
 import _fem_fixtures  # noqa: F401
 import tyro
 
@@ -12,16 +12,16 @@ from fem.end_to_end.heat_gt.fem_heat_gt_mesh import FEMHeatGTMeshParameters
 from fem.end_to_end.modal_gt.fem_shell_modal_gt_mesh import (
     FEMShellModalGTMeshParameters,
 )
+from forge_sim.scripts.configs.structural_material_config import (
+    StructuralMaterialConfig,
+)
+from forge_sim.scripts.configs.thermal_material_config import ThermalMaterialConfig
+from forge_sim.scripts.end_to_end.end_to_end_config import EndToEndConfig
+from forge_sim.scripts.end_to_end.heat.thermal_sim_config import ThermalSimConfig
+from forge_sim.scripts.end_to_end.modal.modal_sim_config import ModalSimConfig
 from main_scripts.pipeline.stage import Stage
 from main_scripts.pipeline.stage_commands import StageCommands
 from main_scripts.run_pipeline import RunPipelineParameters
-from rebel_shape.scripts.configs.structural_material_config import (
-    StructuralMaterialConfig,
-)
-from rebel_shape.scripts.configs.thermal_material_config import ThermalMaterialConfig
-from rebel_shape.scripts.end_to_end.end_to_end_config import EndToEndConfig
-from rebel_shape.scripts.end_to_end.heat.thermal_sim_config import ThermalSimConfig
-from rebel_shape.scripts.end_to_end.modal.modal_sim_config import ModalSimConfig
 
 
 class TestPipelineForwarding(unittest.TestCase):

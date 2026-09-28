@@ -14,7 +14,7 @@ class CondaPython:
     here rather than each redeclaring it.
     """
 
-    ENV_VAR: ClassVar[str] = "REBEL_SHAPE_DOLFINX_PYTHON"
+    ENV_VAR: ClassVar[str] = "FORGE_SIM_DOLFINX_PYTHON"
     """
     Environment variable pointing at the DOLFINx conda environment's python
     interpreter.

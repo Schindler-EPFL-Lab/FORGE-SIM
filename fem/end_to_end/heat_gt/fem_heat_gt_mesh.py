@@ -46,15 +46,15 @@ from pathlib import Path
 
 import tyro
 
-# Repository root: makes `rebel_shape` and this script's own `fem` package
+# Repository root: makes `forge_sim` and this script's own `fem` package
 # importable when it is run by path rather than as `python -m`.
 sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 
 from dataclasses_reverse_cli.reverse_cli import ReverseCli
 
 from fem.end_to_end.heat_gt.fem_heat_gt_runner import FEMHeatGTRunner
-from rebel_shape.scripts.configs.thermal_material_config import ThermalMaterialConfig
-from rebel_shape.scripts.end_to_end.heat.thermal_sim_config import ThermalSimConfig
+from forge_sim.scripts.configs.thermal_material_config import ThermalMaterialConfig
+from forge_sim.scripts.end_to_end.heat.thermal_sim_config import ThermalSimConfig
 
 
 @dataclass(kw_only=True)
@@ -126,7 +126,7 @@ class FEMHeatGTMeshParameters(ReverseCli):
 
     Only a default for a standalone invocation. Every pipeline run overrides all four
     values from the shared
-    `rebel_shape.scripts.end_to_end.heat.thermal_sim_config.ThermalSimConfig`, so that
+    `forge_sim.scripts.end_to_end.heat.thermal_sim_config.ThermalSimConfig`, so that
     the FEM ground-truth run and the IGA run it is compared against use one set of
     materials.
     """

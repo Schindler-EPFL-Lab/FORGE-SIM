@@ -10,14 +10,14 @@ from OCP.TopAbs import TopAbs_FACE
 from OCP.TopExp import TopExp_Explorer
 from OCP.TopoDS import TopoDS, TopoDS_Shape
 
-from rebel_shape.meshing.composite_mesh import CompositeMesh
-from rebel_shape.meshing.composite_spline_surface import CompositeSplineSurface
-from rebel_shape.meshing.composite_spline_surface_factory import (
+from forge_sim.meshing.composite_mesh import CompositeMesh
+from forge_sim.meshing.composite_spline_surface import CompositeSplineSurface
+from forge_sim.meshing.composite_spline_surface_factory import (
     CompositeSplineSurfaceFactory,
 )
-from rebel_shape.meshing.patch import Patch
-from rebel_shape.meshing.rectangular_mesh import RectangularMesh
-from rebel_shape.splines.bspline_patch import BSplinePatch
+from forge_sim.meshing.patch import Patch
+from forge_sim.meshing.rectangular_mesh import RectangularMesh
+from forge_sim.splines.bspline_patch import BSplinePatch
 
 
 class TestCompositeSplineSurface(unittest.TestCase):

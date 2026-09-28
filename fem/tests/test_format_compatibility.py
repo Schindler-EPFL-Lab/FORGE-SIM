@@ -5,7 +5,7 @@ import unittest
 from pathlib import Path
 
 # Imported for its module-level side effect: `_fem_fixtures` puts the
-# repository root on `sys.path`, so `fem` and `rebel_shape` resolve.
+# repository root on `sys.path`, so `fem` and `forge_sim` resolve.
 import _fem_fixtures  # noqa: F401
 import h5py
 import numpy as np
@@ -17,14 +17,14 @@ from fem.iga_fem_comparison.xdmf_solution import XDMFSolution
 # repository (tens of MB per file), so their tests are confirmation only.
 _RECORDED_RUNS = Path(
     os.environ.get(
-        "REBEL_SHAPE_RECORDED_RUNS",
-        Path.home() / "Schindler/rebel-shape_paper/End-to-end-verification/suzanne",
+        "FORGE_SIM_RECORDED_RUNS",
+        Path.home() / "Schindler/forge-sim_paper/End-to-end-verification/suzanne",
     )
 )
 _RECORDED_IGA = _RECORDED_RUNS / "iga_heat_simulation" / "iga_heat.xdmf"
 _RECORDED_FEM = _RECORDED_RUNS / "fem_heat_simulation" / "fem_heat_gt.xdmf"
 _HAVE_RECORDED = _RECORDED_IGA.exists() and _RECORDED_FEM.exists()
-_SKIP_REASON = f"No recorded runs at {_RECORDED_RUNS} (set REBEL_SHAPE_RECORDED_RUNS)."
+_SKIP_REASON = f"No recorded runs at {_RECORDED_RUNS} (set FORGE_SIM_RECORDED_RUNS)."
 
 
 class TestFormatCompatibility(unittest.TestCase):
@@ -49,7 +49,7 @@ class TestFormatCompatibility(unittest.TestCase):
 
     The two tests against the full recorded archive are confirmation, not
     the guard: they skip when the archive is absent, which is the normal
-    case in CI. Point `REBEL_SHAPE_RECORDED_RUNS` at a directory holding
+    case in CI. Point `FORGE_SIM_RECORDED_RUNS` at a directory holding
     `iga_heat_simulation/` and `fem_heat_simulation/` to enable them.
     """
 

@@ -4,7 +4,7 @@ from petsc4py import PETSc
 
 from fem.heat.fem_heat_problem import FEMHeatProblem
 from fem.petsc_factor_solver import FactorSolver
-from rebel_shape import logger
+from forge_sim import logger
 
 
 class CrankNicolsonFEMScheme:

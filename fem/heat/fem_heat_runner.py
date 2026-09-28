@@ -20,7 +20,7 @@ from fem.heat.material_functions import MaterialFunctions
 from fem.heat.snapshot_diagnostics import SnapshotDiagnostics
 from fem.heat.vertex_interpolant import VertexInterpolant
 from fem.xdmf_time_series import XDMFTimeSeries
-from rebel_shape import logger
+from forge_sim import logger
 
 DiagnosticsCallback = Callable[[SnapshotDiagnostics], None]
 """

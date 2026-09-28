@@ -8,8 +8,8 @@ import numpy.typing as npt
 from fem.end_to_end.mesh_quality.mesh_quality_report import MeshQualityReport
 from fem.end_to_end.mesh_quality.triangle_quality import TriangleQuality
 from fem.meshprep.mesh_repair import clean_mesh
-from rebel_shape import logger
-from rebel_shape.scripts.end_to_end.end_to_end_config import EndToEndConfig
+from forge_sim import logger
+from forge_sim.scripts.end_to_end.end_to_end_config import EndToEndConfig
 
 
 class MeshQualityRunner:

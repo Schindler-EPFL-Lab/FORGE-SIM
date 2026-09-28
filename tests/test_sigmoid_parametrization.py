@@ -3,7 +3,7 @@ import unittest
 import mitsuba as mi
 import numpy as np
 
-from rebel_shape.property_optimizers.sigmoid_parametrization import (
+from forge_sim.property_optimizers.sigmoid_parametrization import (
     SigmoidParametrization,
 )
 

@@ -3,17 +3,17 @@ Shared fixtures for the DOLFINx heat-solver and shell-modal tests.
 
 Importing this module puts the repository root on `sys.path`, which is what makes
 both `fem` (this suite's subject, imported as `fem.heat.…`, `fem.shells.…`) and
-`rebel_shape` resolve. The conda environment installs neither, so without it the
+`forge_sim` resolve. The conda environment installs neither, so without it the
 suite only runs when the interpreter's own directory happens to be the root.
 
 `fem` is a top-level package name distinct from DOLFINx's `dolfinx.fem`
 submodule, so `from dolfinx import fem` inside these modules keeps binding to the
 real submodule; nothing here shadows it.
 
-Run the suite from the repository root (so `rebel_shape/__init__.py` can create
-`outputs/rebel_shape.log`)::
+Run the suite from the repository root (so `forge_sim/__init__.py` can create
+`outputs/forge_sim.log`)::
 
-    conda run -n dolfinx-rebel-shape python -m unittest discover fem/tests
+    conda run -n dolfinx-forge-sim python -m unittest discover fem/tests
 
 The geometry used throughout is a coarse gmsh sphere: a closed 2-manifold
 embedded in 3D with no boundary, which is exactly the setting the heat pipeline
@@ -44,7 +44,7 @@ from fem.shells.geometrically_exact_shell_problem import (  # noqa: E402
     GeometricallyExactShellProblem,
 )
 from fem.shells.shell_element import ShellElement  # noqa: E402
-from rebel_shape.scripts.configs.thermal_material_config import (  # noqa: E402
+from forge_sim.scripts.configs.thermal_material_config import (  # noqa: E402
     ThermalMaterialConfig,
 )
 

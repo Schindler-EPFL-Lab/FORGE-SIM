@@ -3,7 +3,7 @@ import unittest
 from pathlib import Path
 
 # Imported for its module-level side effect: `_fem_fixtures` puts the
-# repository root on `sys.path`, so `fem` and `rebel_shape` resolve.
+# repository root on `sys.path`, so `fem` and `forge_sim` resolve.
 import _fem_fixtures  # noqa: F401
 import basix.ufl
 import drjit as dr
@@ -18,8 +18,8 @@ from scipy.spatial import cKDTree
 
 from fem.dolfinx_mesh import create_manifold_mesh
 from fem.shells.spline_to_shell_mesh import build_shell_mesh, load_and_rescale_spline
-from rebel_shape.meshing.tessellated_spline_surface import TessellatedSplineSurface
-from rebel_shape.splines.cube_initialization import cubed_sphere
+from forge_sim.meshing.tessellated_spline_surface import TessellatedSplineSurface
+from forge_sim.splines.cube_initialization import cubed_sphere
 
 
 class TestSplineToShellMesh(unittest.TestCase):

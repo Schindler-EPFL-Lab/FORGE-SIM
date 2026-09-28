@@ -15,7 +15,7 @@ class MeshQualityReport:
     Before/after triangle-quality and topology record for one remesh.
 
     Written as `mesh_quality_report.json` by `analyze_mesh_quality.py`;
-    `rebel_shape/scripts/end_to_end/metrics/summarize.py` reads it back.
+    `forge_sim/scripts/end_to_end/metrics/summarize.py` reads it back.
     """
 
     @dataclass(frozen=True, kw_only=True)

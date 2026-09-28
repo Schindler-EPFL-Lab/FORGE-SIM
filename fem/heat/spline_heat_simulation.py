@@ -10,7 +10,7 @@ from fem.heat.fem_heat_runner import FEMHeatRun
 from fem.heat.fem_simulation_config import FEMSimulationConfig
 from fem.heat.fem_simulation_diagnostics import FEMSimulationDiagnostics
 from fem.spline_to_fem_projector import SplineToFEMProjector
-from rebel_shape.scripts.configs.thermal_material_config import ThermalMaterialConfig
+from forge_sim.scripts.configs.thermal_material_config import ThermalMaterialConfig
 
 
 @dataclass(kw_only=True)
@@ -29,7 +29,7 @@ class SplineHeatSimulationParameters(ReverseCli, ABC):
     same validation rules, and the same load-project-solve sequence.
 
     The knobs deliberately mirror the IGA scripts in
-    `rebel_shape.scripts.heat_simulation`, defaults included, so that a given
+    `forge_sim.scripts.heat_simulation`, defaults included, so that a given
     configuration resolves to a near-identical physical time step under either
     discretisation; `fem/tests/test_entry_points.py` pins that parity.
     """

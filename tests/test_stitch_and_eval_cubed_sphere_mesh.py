@@ -2,11 +2,11 @@ try:
     OPEN3D_IMPORTED = True
     import open3d as o3d
 
-    from rebel_shape.metrics.shapes import (
+    from forge_sim.metrics.shapes import (
         NERFSTUDIO_AXIS_FIX,
         load_reference_in_scene,
     )
-    from rebel_shape.scripts.evaluation.stitch_and_eval_cubed_sphere_mesh import (
+    from forge_sim.scripts.evaluation.stitch_and_eval_cubed_sphere_mesh import (
         CUBE_FACE_ORDER,
         discover_patch_files,
         stitch_patches,

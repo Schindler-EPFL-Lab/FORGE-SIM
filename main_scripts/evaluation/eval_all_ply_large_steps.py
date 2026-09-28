@@ -18,11 +18,11 @@ from dataclasses_reverse_cli.reverse_cli import ReverseCli
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
+from forge_sim import logger  # noqa: E402
 from main_scripts.evaluation.eval_all_common import (  # noqa: E402
     prepare_metrics_output_folder,
 )
 from main_scripts.evaluation.ply_scene import PlyScene  # noqa: E402
-from rebel_shape import logger  # noqa: E402
 
 
 @dataclass(kw_only=True)
@@ -31,10 +31,10 @@ class EvalAllPlyLargeStepsParameters(ReverseCli):
     Which PLY scenes to evaluate, and where their LargeSteps reconstructions
     live.
 
-    For each scene, spawns `rebel_shape/scripts/evaluation/eval_ply_mesh.py`
+    For each scene, spawns `forge_sim/scripts/evaluation/eval_ply_mesh.py`
     once per reconstructed mesh under
     `validation_inputs_root`/large-steps/<scene>/, then
-    `rebel_shape/scripts/evaluation/aggregate_metrics.py` once to average the
+    `forge_sim/scripts/evaluation/aggregate_metrics.py` once to average the
     per-mesh metrics into that scene's mean.
     """
 
@@ -95,7 +95,7 @@ def main(params: EvalAllPlyLargeStepsParameters) -> None:
 
             cmd = [
                 "python3",
-                "rebel_shape/scripts/evaluation/eval_ply_mesh.py",
+                "forge_sim/scripts/evaluation/eval_ply_mesh.py",
                 "--reference-shape-path",
                 str(reference_shape_path),
                 "--mesh-path",
@@ -108,7 +108,7 @@ def main(params: EvalAllPlyLargeStepsParameters) -> None:
 
         cmd = [
             "python3",
-            "rebel_shape/scripts/evaluation/aggregate_metrics.py",
+            "forge_sim/scripts/evaluation/aggregate_metrics.py",
             "--metrics-folders",
             *map(str, output_folders),
             "--metrics-file-names",

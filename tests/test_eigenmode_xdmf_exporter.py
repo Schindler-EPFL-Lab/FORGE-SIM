@@ -8,7 +8,7 @@ try:
     H5PY_IMPORTED = True
     import h5py
 
-    from rebel_shape.isogeometric_analysis.eigenmode_xdmf_exporter import (
+    from forge_sim.isogeometric_analysis.eigenmode_xdmf_exporter import (
         EigenmodeXDMFExporter,
     )
 except ImportError:
@@ -22,18 +22,18 @@ from pathlib import Path
 import mitsuba as mi
 import numpy as np
 
-from rebel_shape.isogeometric_analysis.reissner_mindlin_modal_problem import (
+from forge_sim.isogeometric_analysis.reissner_mindlin_modal_problem import (
     ReissnerMindlinModalProblem,
 )
-from rebel_shape.meshing.composite_iga_spline_surface_factory import (
+from forge_sim.meshing.composite_iga_spline_surface_factory import (
     CompositeIGASplineSurfaceFactory,
 )
-from rebel_shape.meshing.patch import Patch
-from rebel_shape.meshing.tessellated_iga_spline_surface import (
+from forge_sim.meshing.patch import Patch
+from forge_sim.meshing.tessellated_iga_spline_surface import (
     TessellatedIGASplineSurface,
 )
-from rebel_shape.splines.bspline_patch import BSplinePatch
-from rebel_shape.splines.iga_spline_patch import IGASplinePatch
+from forge_sim.splines.bspline_patch import BSplinePatch
+from forge_sim.splines.iga_spline_patch import IGASplinePatch
 
 
 @unittest.skipUnless(H5PY_IMPORTED, "h5py is not installed.")

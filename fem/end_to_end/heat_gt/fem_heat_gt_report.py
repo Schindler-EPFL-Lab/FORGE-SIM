@@ -1,8 +1,8 @@
 from dataclasses import asdict, dataclass
 from typing import Any
 
-from rebel_shape.scripts.configs.thermal_material_config import ThermalMaterialConfig
-from rebel_shape.scripts.end_to_end.heat.thermal_sim_config import ThermalSimConfig
+from forge_sim.scripts.configs.thermal_material_config import ThermalMaterialConfig
+from forge_sim.scripts.end_to_end.heat.thermal_sim_config import ThermalSimConfig
 
 
 @dataclass(frozen=True, kw_only=True)

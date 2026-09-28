@@ -11,7 +11,7 @@ try:
     import torch
     from PIL import Image
 
-    from rebel_shape.scripts.segmentation.mask_with_sam3 import (
+    from forge_sim.scripts.segmentation.mask_with_sam3 import (
         Sam3ThermoScenesParams,
         choose_mask,
         pil_to_rgba_with_alpha,
@@ -112,7 +112,7 @@ class TestSam3ThermoScenes(unittest.TestCase):
         self.assertEqual(rgba.getpixel((0, 0)), (255, 255, 255, 255))
         self.assertEqual(rgba.getpixel((1, 1)), (255, 255, 255, 0))
 
-    @patch("rebel_shape.scripts.segmentation.mask_with_sam3.build_processor")
+    @patch("forge_sim.scripts.segmentation.mask_with_sam3.build_processor")
     def test_full_run_flow(self, mock_build_processor) -> None:
         """
         Integration test: mocks the SAM3 processor to verify the file system

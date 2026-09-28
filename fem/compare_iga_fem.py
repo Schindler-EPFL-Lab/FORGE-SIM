@@ -13,7 +13,7 @@ from pathlib import Path
 import tyro
 from dataclasses_reverse_cli.reverse_cli import ReverseCli
 
-# Repository root: makes `rebel_shape` and this script's own `fem` package
+# Repository root: makes `forge_sim` and this script's own `fem` package
 # importable when it is run by path rather than as `python -m`.
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
@@ -21,7 +21,7 @@ from fem.iga_fem_comparison.comparison_report import ComparisonReport
 from fem.iga_fem_comparison.error_norms import ErrorNorms
 from fem.iga_fem_comparison.vertex_mapping import VertexMapping
 from fem.iga_fem_comparison.xdmf_solution import XDMFSolution
-from rebel_shape import logger
+from forge_sim import logger
 
 
 @dataclass(kw_only=True)

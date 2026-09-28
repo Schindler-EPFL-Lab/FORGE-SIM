@@ -9,7 +9,7 @@ import unittest
 
 import numpy as np
 
-from rebel_shape.scripts.end_to_end.heat.heat_field_metrics_runner import (
+from forge_sim.scripts.end_to_end.heat.heat_field_metrics_runner import (
     HeatFieldMetricsRunner,
 )
 

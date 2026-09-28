@@ -2,7 +2,7 @@ import json
 from pathlib import Path
 from typing import ClassVar
 
-from rebel_shape import logger
+from forge_sim import logger
 
 
 class VGGTSceneLayout:

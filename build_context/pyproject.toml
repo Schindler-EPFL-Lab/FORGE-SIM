@@ -3,7 +3,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "rebel-shape"
+name = "forge-sim"
 version = "0.1.0"
 description = "Perform shape optimization with Mitsuba"
 readme = "README.md"
@@ -54,7 +54,7 @@ name = "groundingdino"
 requires-dist = ["torch", "torchvision", "setuptools"]
 
 [tool.hatch.build.targets.wheel]
-packages = ["rebel_shape"]
+packages = ["forge_sim"]
 
 
 # RUFF

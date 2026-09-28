@@ -2,7 +2,7 @@ import unittest
 
 import numpy as np
 
-from rebel_shape.scripts.end_to_end.modal.degenerate_mode_runs import (
+from forge_sim.scripts.end_to_end.modal.degenerate_mode_runs import (
     degenerate_mode_runs,
 )
 

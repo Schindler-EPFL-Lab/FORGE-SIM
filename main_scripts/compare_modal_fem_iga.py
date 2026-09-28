@@ -9,7 +9,7 @@ against the already-computed IGA modal result. This isolates pure CODE agreement
 solvers on the same geometry) from the geometry-recovery gap that the
 GT-mesh-vs-spline comparison conflates.
 
-The FEM solver runs in the conda `dolfinx-rebel-shape` env (subprocess, one per
+The FEM solver runs in the conda `dolfinx-forge-sim` env (subprocess, one per
 scene); this driver runs in the .venv, mirroring `compare_all_scenes.py` beside it on
 the heat side. `SceneModalComparisonRun`
 (`main_scripts/modal_comparison/scene_modal_comparison_run.py`) resolves each
@@ -32,9 +32,9 @@ from dataclasses_reverse_cli.reverse_cli import ReverseCli
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+from forge_sim import logger  # noqa: E402
 from main_scripts.scenes.vggt_scene import VGGTScene  # noqa: E402
 from main_scripts.scenes.vggt_scene_profile import VGGTSceneProfile  # noqa: E402
-from rebel_shape import logger  # noqa: E402
 
 
 @dataclass(kw_only=True)
@@ -47,7 +47,7 @@ class ModalComparisonParameters(ReverseCli):
     The defaults are the ones the published modal table was produced with.
     """
 
-    DATASET_ROOT_ENV_VAR: ClassVar[str] = "REBEL_SHAPE_VGGT_DATASET_ROOT"
+    DATASET_ROOT_ENV_VAR: ClassVar[str] = "FORGE_SIM_VGGT_DATASET_ROOT"
     """
     Environment variable pointing at the VGGT dataset root, the directory holding one
     folder per scene. Used as the `--dataset-root` default, so the tree this driver
@@ -58,7 +58,7 @@ class ModalComparisonParameters(ReverseCli):
     dataset_root: Path | None = None
     """
     Root directory holding one folder per scene. Defaults to the
-    `REBEL_SHAPE_VGGT_DATASET_ROOT` environment variable.
+    `FORGE_SIM_VGGT_DATASET_ROOT` environment variable.
     """
     scenes: list[VGGTScene] = field(default_factory=list)
     """Scenes to compare; empty selects all of them."""

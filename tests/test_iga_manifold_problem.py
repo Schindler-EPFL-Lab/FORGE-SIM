@@ -3,13 +3,13 @@ import unittest
 import mitsuba as mi
 import numpy as np
 
-from rebel_shape.isogeometric_analysis.iga_manifold_problem import IGAManifoldProblem
-from rebel_shape.meshing.composite_iga_spline_surface_factory import (
+from forge_sim.isogeometric_analysis.iga_manifold_problem import IGAManifoldProblem
+from forge_sim.meshing.composite_iga_spline_surface_factory import (
     CompositeIGASplineSurfaceFactory,
 )
-from rebel_shape.meshing.patch import Patch
-from rebel_shape.splines.bspline_patch import BSplinePatch
-from rebel_shape.splines.iga_spline_patch import IGASplinePatch
+from forge_sim.meshing.patch import Patch
+from forge_sim.splines.bspline_patch import BSplinePatch
+from forge_sim.splines.iga_spline_patch import IGASplinePatch
 
 
 class TestIGAManifoldProblem(unittest.TestCase):

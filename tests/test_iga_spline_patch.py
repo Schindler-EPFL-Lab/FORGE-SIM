@@ -4,9 +4,9 @@ import jsonpickle
 import mitsuba as mi
 import numpy as np
 
-from rebel_shape.splines.bspline import BSpline
-from rebel_shape.splines.bspline_patch import BSplinePatch
-from rebel_shape.splines.iga_spline_patch import IGASplinePatch
+from forge_sim.splines.bspline import BSpline
+from forge_sim.splines.bspline_patch import BSplinePatch
+from forge_sim.splines.iga_spline_patch import IGASplinePatch
 
 
 class TestBSplinePatch(unittest.TestCase):

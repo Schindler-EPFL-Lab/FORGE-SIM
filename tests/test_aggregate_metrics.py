@@ -3,7 +3,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from rebel_shape.scripts.evaluation.aggregate_metrics import (
+from forge_sim.scripts.evaluation.aggregate_metrics import (
     AggregateMetricsParameters,
     aggregate_metrics,
 )

@@ -4,14 +4,14 @@ import jsonpickle
 import mitsuba as mi
 import numpy as np
 
-from rebel_shape.meshing.composite_iga_spline_surface import CompositeIGASplineSurface
-from rebel_shape.meshing.composite_iga_spline_surface_factory import (
+from forge_sim.meshing.composite_iga_spline_surface import CompositeIGASplineSurface
+from forge_sim.meshing.composite_iga_spline_surface_factory import (
     CompositeIGASplineSurfaceFactory,
 )
-from rebel_shape.meshing.composite_spline_surface import CompositeSplineSurface
-from rebel_shape.meshing.patch import Patch
-from rebel_shape.splines.bspline_patch import BSplinePatch
-from rebel_shape.splines.iga_spline_patch import IGASplinePatch
+from forge_sim.meshing.composite_spline_surface import CompositeSplineSurface
+from forge_sim.meshing.patch import Patch
+from forge_sim.splines.bspline_patch import BSplinePatch
+from forge_sim.splines.iga_spline_patch import IGASplinePatch
 
 
 class TestCompositeSplineSurface(unittest.TestCase):

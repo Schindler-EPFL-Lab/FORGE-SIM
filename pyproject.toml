@@ -3,7 +3,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "rebel-shape"
+name = "forge-sim"
 version = "0.1.0"
 description = "Perform shape optimization with Mitsuba"
 readme = "README.md"
@@ -68,7 +68,7 @@ sam3 = { git = "https://github.com/facebookresearch/sam3", rev = "86ed77094094e5
 
 
 [tool.hatch.build.targets.wheel]
-packages = ["rebel_shape"]
+packages = ["forge_sim"]
 
 
 # RUFF
@@ -90,7 +90,7 @@ unfixable = []
 
 [tool.ruff.lint.isort]
 # The three top-level packages of this repository form one first-party group.
-known-first-party = ["fem", "main_scripts", "rebel_shape"]
+known-first-party = ["fem", "main_scripts", "forge_sim"]
 
 
 [tool.ruff.format]

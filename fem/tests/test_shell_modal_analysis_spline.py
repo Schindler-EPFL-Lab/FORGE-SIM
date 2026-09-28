@@ -4,7 +4,7 @@ from pathlib import Path
 from unittest import mock
 
 # Imported for its module-level side effect: `_fem_fixtures` puts the
-# repository root on `sys.path`, so `fem` and `rebel_shape` resolve.
+# repository root on `sys.path`, so `fem` and `forge_sim` resolve.
 import _fem_fixtures  # noqa: F401
 import h5py
 import jsonpickle
@@ -19,7 +19,7 @@ from fem.shells.shell_modal_analysis_spline import (
     ShellModalAnalysisParameters,
     run_modal_analysis,
 )
-from rebel_shape.splines.cube_initialization import cubed_sphere
+from forge_sim.splines.cube_initialization import cubed_sphere
 
 
 class TestShellModalAnalysisSpline(unittest.TestCase):

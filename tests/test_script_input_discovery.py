@@ -17,14 +17,14 @@ from pathlib import Path
 import mitsuba as mi
 import numpy as np
 
-from main_scripts.evaluation.eval_all_common import prepare_metrics_output_folder
-from rebel_shape.scripts.evaluation.spline_texture_paths import SplineTexturePaths
-from rebel_shape.scripts.rename_dataset import RenameDatasetParams, rename_dataset
-from rebel_shape.scripts.render_eval_images import discover_spline_checkpoint
-from rebel_shape.scripts.render_eval_images_mesh import (
+from forge_sim.scripts.evaluation.spline_texture_paths import SplineTexturePaths
+from forge_sim.scripts.rename_dataset import RenameDatasetParams, rename_dataset
+from forge_sim.scripts.render_eval_images import discover_spline_checkpoint
+from forge_sim.scripts.render_eval_images_mesh import (
     discover_mesh_textures,
     face_key,
 )
+from main_scripts.evaluation.eval_all_common import prepare_metrics_output_folder
 
 
 class TestScriptInputDiscovery(unittest.TestCase):

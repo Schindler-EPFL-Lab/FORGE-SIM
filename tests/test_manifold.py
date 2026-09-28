@@ -4,8 +4,8 @@ import unittest
 import mitsuba as mi
 import numpy as np
 
-from rebel_shape.splines.bspline import BSpline
-from rebel_shape.splines.bspline_patch import BSplinePatch
+from forge_sim.splines.bspline import BSpline
+from forge_sim.splines.bspline_patch import BSplinePatch
 
 
 class TestBSplinePatch(unittest.TestCase):

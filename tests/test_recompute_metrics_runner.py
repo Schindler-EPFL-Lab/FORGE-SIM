@@ -14,10 +14,10 @@ from pathlib import Path
 import h5py
 import numpy as np
 
-from rebel_shape.scripts.end_to_end.metrics.recompute_metrics_runner import (
+from forge_sim.scripts.end_to_end.metrics.recompute_metrics_runner import (
     RecomputeMetricsRunner,
 )
-from rebel_shape.scripts.end_to_end.modal.modal_frequencies import RIGID_BODY_FREQ_HZ
+from forge_sim.scripts.end_to_end.modal.modal_frequencies import RIGID_BODY_FREQ_HZ
 
 
 class TestRecomputeMetricsRunner(unittest.TestCase):

@@ -2,7 +2,7 @@ try:
     PYTORCH_IMPORTED = True
     import torch
 
-    from rebel_shape.metrics.novel_view_synthesis import mitsuba_to_torch
+    from forge_sim.metrics.novel_view_synthesis import mitsuba_to_torch
 except ImportError:
     PYTORCH_IMPORTED = False
 

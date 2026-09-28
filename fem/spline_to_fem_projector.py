@@ -7,8 +7,8 @@ import numpy.typing as npt
 
 from fem.fem_field_data import FEMFieldData
 from fem.fem_mesh_data import FEMMeshData
-from rebel_shape import logger
-from rebel_shape.meshing.tessellated_iga_spline_surface import (
+from forge_sim import logger
+from forge_sim.meshing.tessellated_iga_spline_surface import (
     TessellatedIGASplineSurface,
 )
 

@@ -4,7 +4,7 @@ import drjit as dr
 import mitsuba as mi
 import numpy as np
 
-from rebel_shape.property_optimizers.laplacian_parametrization import (
+from forge_sim.property_optimizers.laplacian_parametrization import (
     LaplacianParametrization,
 )
 

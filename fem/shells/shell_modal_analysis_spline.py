@@ -1,8 +1,8 @@
 """
-Reissner-Mindlin shell modal analysis on a rebel-shape spline surface, in DOLFINx.
+Reissner-Mindlin shell modal analysis on a forge-sim spline surface, in DOLFINx.
 
 This is the FEM counterpart to the IGA
-`rebel_shape/scripts/reissner_mindlin_modal_analysis/reissner_mindlin_modal_analysis.py`.
+`forge_sim/scripts/reissner_mindlin_modal_analysis/reissner_mindlin_modal_analysis.py`.
 It loads the same serialized spline `.json`, applies the same geometry rescaling
 (`target_length_scale`), builds a curved (isoparametric) DOLFINx mesh on the
 spline mid-surface, and solves the generalized
@@ -15,7 +15,7 @@ with a large gap to the first elastic mode, then the elastic spectrum.
 
 The eigensolve uses SLEPc shift-invert with a MUMPS factorization (memory-scalable),
 mass-shifted to lift the 6-dimensional rigid-body nullspace, the same strategy as
-the IGA `ModalAnalysisSolver`. Run from the repo root in the `dolfinx-rebel-shape`
+the IGA `ModalAnalysisSolver`. Run from the repo root in the `dolfinx-forge-sim`
 conda environment::
 
     python fem/shells/shell_modal_analysis_spline.py --spline-path <surface.json>
@@ -35,7 +35,7 @@ import mitsuba as mi
 import numpy as np
 import tyro
 
-# Repository root: makes `rebel_shape` and this script's own `fem` package
+# Repository root: makes `forge_sim` and this script's own `fem` package
 # importable when it is run by path rather than as `python -m`.
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
@@ -51,8 +51,8 @@ from fem.shells.modal_result import ModalResult
 from fem.shells.rigid_body_modes import report_rigid_body_modes
 from fem.shells.shell_element import ShellElement
 from fem.shells.spline_to_shell_mesh import build_shell_mesh, load_and_rescale_spline
-from rebel_shape import logger
-from rebel_shape.scripts.configs.structural_material_config import (
+from forge_sim import logger
+from forge_sim.scripts.configs.structural_material_config import (
     StructuralMaterialConfig,
 )
 

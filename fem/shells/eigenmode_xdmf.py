@@ -2,7 +2,7 @@
 Writer for shell eigenmodes in the IGA runner's temporal XDMF/HDF5 format.
 
 The layout is the one
-`rebel_shape.scripts.reissner_mindlin_modal_analysis.reissner_mindlin_modal_runner`
+`forge_sim.scripts.reissner_mindlin_modal_analysis.reissner_mindlin_modal_runner`
 writes, so that a FEM run and an IGA run of the same surface open identically in
 ParaView and the post-hoc MAC alignment reads either::
 
@@ -34,7 +34,7 @@ from scipy.spatial import cKDTree
 
 from fem.shells.modal_result import ModalResult
 from fem.shells.mode_payload import ModePayload
-from rebel_shape import logger
+from forge_sim import logger
 
 
 def _write_mode_group(h5_file: h5py.File, position: int, mode: ModePayload) -> None:

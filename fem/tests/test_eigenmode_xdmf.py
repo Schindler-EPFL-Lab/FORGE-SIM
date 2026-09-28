@@ -6,7 +6,7 @@ from pathlib import Path
 from xml.etree import ElementTree
 
 # Imported for its module-level side effect: `_fem_fixtures` puts the
-# repository root on `sys.path`, so `fem` and `rebel_shape` resolve.
+# repository root on `sys.path`, so `fem` and `forge_sim` resolve.
 import _fem_fixtures  # noqa: F401
 import h5py
 import numpy as np
@@ -25,13 +25,13 @@ from fem.shells.shell_element import ShellElement
 # environment variable) as `test_format_compatibility.py`.
 _RECORDED_RUNS = Path(
     os.environ.get(
-        "REBEL_SHAPE_RECORDED_RUNS",
-        Path.home() / "Schindler/rebel-shape_paper/End-to-end-verification/suzanne",
+        "FORGE_SIM_RECORDED_RUNS",
+        Path.home() / "Schindler/forge-sim_paper/End-to-end-verification/suzanne",
     )
 )
 _RECORDED_MODAL = _RECORDED_RUNS / "fem_modal_simulation" / "eigenmodes.xdmf"
 _SKIP_REASON = (
-    f"No recorded modal run at {_RECORDED_MODAL} (set REBEL_SHAPE_RECORDED_RUNS)."
+    f"No recorded modal run at {_RECORDED_MODAL} (set FORGE_SIM_RECORDED_RUNS)."
 )
 
 
@@ -225,7 +225,7 @@ class TestEigenmodeExport(unittest.TestCase):
     def test_out_of_range_indices_are_skipped_with_a_warning(self) -> None:
         """The default index list is a fixed range, so asking for more modes than
         were computed is routine, but it must be reported, not silent."""
-        with self.assertLogs("rebel_shape", level="WARNING"):
+        with self.assertLogs("forge_sim", level="WARNING"):
             path = self.export(indices=(0, 99))
         grids = ElementTree.parse(path).getroot().findall("Domain/Grid/Grid")
         self.assertEqual([grid.get("Name") for grid in grids], ["mode_0"])
@@ -234,7 +234,7 @@ class TestEigenmodeExport(unittest.TestCase):
         """A requested index outside the computed modes also leaves nothing
         written, which gets its own warning distinct from the skip-warning
         above."""
-        with self.assertLogs("rebel_shape", level="WARNING") as logs:
+        with self.assertLogs("forge_sim", level="WARNING") as logs:
             export_mode_shapes_xdmf(self.problem.V, self.result, [99], self.folder)
         self.assertTrue(
             any("writing nothing" in message for message in logs.output)
@@ -244,7 +244,7 @@ class TestEigenmodeExport(unittest.TestCase):
     def test_empty_index_list_writes_nothing(self) -> None:
         """An empty request has no length mismatch to trigger the skip-warning,
         so the nothing-written warning is the only signal that nothing ran."""
-        with self.assertLogs("rebel_shape", level="WARNING") as logs:
+        with self.assertLogs("forge_sim", level="WARNING") as logs:
             export_mode_shapes_xdmf(self.problem.V, self.result, [], self.folder)
         self.assertTrue(
             any("writing nothing" in message for message in logs.output)

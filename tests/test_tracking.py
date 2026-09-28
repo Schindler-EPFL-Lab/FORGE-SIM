@@ -9,14 +9,14 @@ from unittest import mock
 
 import mlflow
 
-from rebel_shape import logger as rebel_shape_logger
-from rebel_shape import tracking
-from rebel_shape.tracking import TrackingConfig, TrackingMode
+from forge_sim import logger as forge_sim_logger
+from forge_sim import tracking
+from forge_sim.tracking import TrackingConfig, TrackingMode
 
 
 class TestTracking(unittest.TestCase):
     """
-    Tests for `rebel_shape.tracking`: `TrackingConfig.from_environment` and its derived
+    Tests for `forge_sim.tracking`: `TrackingConfig.from_environment` and its derived
     properties, the module-level singleton (`configure`, `is_enabled`, `run` and the
     `log_*` functions), attaching to a run that a job harness pre-created, and the
     disabled-by-default guarantee.
@@ -115,7 +115,7 @@ class TestTracking(unittest.TestCase):
                 self.assertIs(config.mode, expected)
 
     def test_malformed_mode_variable_raises_value_error_naming_the_value(self):
-        """A `REBEL_SHAPE_TRACKING` value that is not auto/on/off must raise, since
+        """A `FORGE_SIM_TRACKING` value that is not auto/on/off must raise, since
         `configure` relies on this to decide when to warn and fall back to OFF."""
         with self.tracking_environment(**{tracking.TRACKING_MODE_VARIABLE: "bogus"}):
             with self.assertRaises(ValueError) as context:
@@ -199,7 +199,7 @@ class TestTracking(unittest.TestCase):
     # configure / is_enabled
 
     def test_malformed_env_warns_and_disables_instead_of_autodetecting(self):
-        """A malformed `REBEL_SHAPE_TRACKING`, discovered through the ordinary
+        """A malformed `FORGE_SIM_TRACKING`, discovered through the ordinary
         `is_enabled()` entry point, must warn and disable rather than fall back to
         AUTO - falling back could silently re-enable tracking on a machine whose owner
         deliberately set a (mistyped) value to turn it off."""
@@ -209,7 +209,7 @@ class TestTracking(unittest.TestCase):
                 tracking.TRACKING_URI_VARIABLE: "http://tracking.local",
             }
         ):
-            with self.assertLogs(rebel_shape_logger, level="WARNING") as captured:
+            with self.assertLogs(forge_sim_logger, level="WARNING") as captured:
                 enabled = tracking.is_enabled()
 
         self.assertFalse(enabled)
@@ -294,7 +294,7 @@ class TestTracking(unittest.TestCase):
         """A directory that does not exist must return silently without importing or
         calling MLflow at all."""
         tracking.configure(TrackingConfig(mode=TrackingMode.ON))
-        missing = Path(tempfile.gettempdir()) / "rebel-shape-tracking-test-missing"
+        missing = Path(tempfile.gettempdir()) / "forge-sim-tracking-test-missing"
         self.assertFalse(missing.exists())
         with mock.patch.object(mlflow, "log_artifacts") as log_artifacts:
             tracking.log_directory(missing)
@@ -557,12 +557,12 @@ class TestTracking(unittest.TestCase):
 
     # disabled by default, in a fresh interpreter
     #
-    # Runs `rebel_shape.tracking` in a fresh interpreter, which is the only honest way
+    # Runs `forge_sim.tracking` in a fresh interpreter, which is the only honest way
     # to assert that `mlflow` was never imported: by the time any test in this file
     # runs, `mlflow` is already present in `sys.modules` of the parent process (this
     # module imports it for mocking), so that check can only be made from a clean
     # process. The subprocess runs with its own scratch directory as the working
-    # directory (with `PYTHONPATH` pointed at the repo so `rebel_shape` still resolves
+    # directory (with `PYTHONPATH` pointed at the repo so `forge_sim` still resolves
     # to this worktree), rather than the repo root, so that this test cannot be
     # confused by - or endanger - whatever a real optimization run may have already
     # left behind in the repo's own gitignored `mlruns/`.
@@ -574,7 +574,7 @@ class TestTracking(unittest.TestCase):
         with no tracking configured silently starting to write local runs."""
         script = (
             "import sys\n"
-            "from rebel_shape import tracking\n"
+            "from forge_sim import tracking\n"
             "assert tracking.is_enabled() is False\n"
             "assert 'mlflow' not in sys.modules\n"
             "tracking.log_metric('loss', 1.0)\n"

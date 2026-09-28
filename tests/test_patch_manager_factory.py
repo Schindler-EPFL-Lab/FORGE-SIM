@@ -4,14 +4,14 @@ from unittest.mock import MagicMock
 import drjit as dr
 import mitsuba as mi
 
-from rebel_shape.meshing.composite_spline_surface_factory import (
+from forge_sim.meshing.composite_spline_surface_factory import (
     CompositeSplineSurfaceFactory,
 )
-from rebel_shape.meshing.patch import Patch
-from rebel_shape.meshing.patch_manager import PatchManager
-from rebel_shape.meshing.patch_manager_factory import PatchManagerFactory
-from rebel_shape.splines.bspline import BSpline
-from rebel_shape.splines.bspline_patch import BSplinePatch
+from forge_sim.meshing.patch import Patch
+from forge_sim.meshing.patch_manager import PatchManager
+from forge_sim.meshing.patch_manager_factory import PatchManagerFactory
+from forge_sim.splines.bspline import BSpline
+from forge_sim.splines.bspline_patch import BSplinePatch
 
 
 class TestPatchManagerFactory(unittest.TestCase):

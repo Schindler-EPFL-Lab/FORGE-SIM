@@ -20,7 +20,7 @@ Artifacts land in `<dataset-root>/<directory>/<scene-subdir>/fem_comparison/`: a
 per-timestep table (`comparison_L2.txt`), the FEM solution (`fem_solution.xdmf`)
 and the IGA-minus-FEM difference field (`difference.xdmf`).
 
-Run from the repo root in the `dolfinx-rebel-shape` conda environment::
+Run from the repo root in the `dolfinx-forge-sim` conda environment::
 
     python fem/end_to_end/heat_comparison/compare_scene.py \\
         --dataset-root <DATASET_ROOT> --directory buildnet-1 \\
@@ -37,7 +37,7 @@ from pathlib import Path
 import mitsuba as mi
 import tyro
 
-# Repository root: makes `rebel_shape` and this script's own `fem` package
+# Repository root: makes `forge_sim` and this script's own `fem` package
 # importable when it is run by path rather than as `python -m`.
 sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 
@@ -47,8 +47,8 @@ from fem.end_to_end.heat_comparison.heat_comparison_scene_config import (
     HeatComparisonSceneConfig,
 )
 from fem.end_to_end.heat_comparison.scene_heat_comparison import SceneHeatComparison
-from rebel_shape import logger
-from rebel_shape.scripts.configs.thermal_material_config import ThermalMaterialConfig
+from forge_sim import logger
+from forge_sim.scripts.configs.thermal_material_config import ThermalMaterialConfig
 
 
 @dataclass(kw_only=True)

@@ -1,6 +1,6 @@
 import unittest
 
-from rebel_shape.plugin_wrappers.prb_integrator import GuidingOptions, PRBIntegrator
+from forge_sim.plugin_wrappers.prb_integrator import GuidingOptions, PRBIntegrator
 
 
 class TestPRBIntegrator(unittest.TestCase):

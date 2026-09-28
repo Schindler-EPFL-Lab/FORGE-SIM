@@ -2,8 +2,8 @@ import unittest
 
 import mitsuba as mi
 
-from rebel_shape.plugin_wrappers.perspective_camera import PerspectiveCamera
-from rebel_shape.plugin_wrappers.sampler import Sampler
+from forge_sim.plugin_wrappers.perspective_camera import PerspectiveCamera
+from forge_sim.plugin_wrappers.sampler import Sampler
 
 
 class TestPerspectiveCamera(unittest.TestCase):

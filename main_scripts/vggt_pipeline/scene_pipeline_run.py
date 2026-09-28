@@ -4,13 +4,13 @@ import sys
 from collections.abc import Sequence
 from pathlib import Path
 
+from forge_sim import logger
 from main_scripts.run_vggt_pipeline import VGGTPipelineParameters
 from main_scripts.scenes.vggt_scene import VGGTScene
 from main_scripts.scenes.vggt_scene_layout import VGGTSceneLayout
 from main_scripts.scenes.vggt_scene_profile import VGGTSceneProfile
 from main_scripts.vggt_pipeline.inpaint_pass import InpaintPass
 from main_scripts.vggt_pipeline.pipeline_steps import PipelineSteps
-from rebel_shape import logger
 
 
 class ScenePipelineRun:
@@ -198,7 +198,7 @@ class ScenePipelineRun:
         cmd = [
             sys.executable,
             "-m",
-            "rebel_shape.scripts.fix_vggt_thermal_paths",
+            "forge_sim.scripts.fix_vggt_thermal_paths",
             "--scene-path",
             dataset_dir.resolve(),
             "--thermal-folder",
@@ -229,7 +229,7 @@ class ScenePipelineRun:
         cmd = [
             sys.executable,
             "-m",
-            "rebel_shape.scripts.inpaint_data_spline",
+            "forge_sim.scripts.inpaint_data_spline",
             "--thermoscenes-scene-path",
             (self._scene_dir / "dataset").resolve(),
             "--inpainting-images-type",
@@ -317,7 +317,7 @@ class ScenePipelineRun:
         cmd = [
             sys.executable,
             "-m",
-            "rebel_shape.scripts.heat_simulation.heat_simulation_two_materials",
+            "forge_sim.scripts.heat_simulation.heat_simulation_two_materials",
             "--spline-path",
             spline_path,
             "--facade-mask-path",
@@ -386,7 +386,7 @@ class ScenePipelineRun:
         cmd = [
             sys.executable,
             "-m",
-            "rebel_shape.scripts.heat_simulation.heat_simulation",
+            "forge_sim.scripts.heat_simulation.heat_simulation",
             "--spline-path",
             spline_path,
             "--output-folder",
@@ -447,7 +447,7 @@ class ScenePipelineRun:
         cmd = [
             sys.executable,
             "-m",
-            "rebel_shape.scripts.reissner_mindlin_modal_analysis"
+            "forge_sim.scripts.reissner_mindlin_modal_analysis"
             ".reissner_mindlin_modal_analysis",
             "--spline-path",
             spline_path,

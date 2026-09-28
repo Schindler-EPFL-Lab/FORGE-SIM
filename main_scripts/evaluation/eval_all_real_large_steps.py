@@ -17,11 +17,11 @@ from dataclasses_reverse_cli.reverse_cli import ReverseCli
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
+from forge_sim import logger  # noqa: E402
 from main_scripts.evaluation.eval_all_common import (  # noqa: E402
     prepare_metrics_output_folder,
 )
 from main_scripts.evaluation.real_scene import RealScene  # noqa: E402
-from rebel_shape import logger  # noqa: E402
 
 
 @dataclass(kw_only=True)
@@ -99,7 +99,7 @@ def main(params: EvalAllRealLargeStepsParameters) -> None:
 
         cmd = [
             "python3",
-            "rebel_shape/scripts/render_eval_images_mesh.py",
+            "forge_sim/scripts/render_eval_images_mesh.py",
             "--scene-path",
             str(thermoscenes_path),
             "--environment-map-path",
@@ -115,7 +115,7 @@ def main(params: EvalAllRealLargeStepsParameters) -> None:
 
         cmd = [
             "python3",
-            "rebel_shape/scripts/evaluation/eval_real.py",
+            "forge_sim/scripts/evaluation/eval_real.py",
             "--scene-path",
             str(thermoscenes_path),
             "--environment-map-path",
@@ -130,7 +130,7 @@ def main(params: EvalAllRealLargeStepsParameters) -> None:
 
         cmd = [
             "python3",
-            "rebel_shape/scripts/evaluation/aggregate_metrics.py",
+            "forge_sim/scripts/evaluation/aggregate_metrics.py",
             "--metrics-folders",
             str(output_folder),
             "--metrics-file-names",

@@ -28,17 +28,17 @@ from collections.abc import Callable
 from pathlib import Path
 
 # Imported for its module-level side effect: `_fem_fixtures` puts the
-# repository root on `sys.path`, so `fem` and `rebel_shape` resolve.
+# repository root on `sys.path`, so `fem` and `forge_sim` resolve.
 import _fem_fixtures  # noqa: F401
 import jsonpickle
 import mitsuba as mi
 import numpy as np
 import numpy.typing as npt
 
-from rebel_shape.meshing.tessellated_iga_spline_surface import (
+from forge_sim.meshing.tessellated_iga_spline_surface import (
     TessellatedIGASplineSurface,
 )
-from rebel_shape.splines.cube_initialization import cubed_sphere
+from forge_sim.splines.cube_initialization import cubed_sphere
 
 # Maps a patch's control-point positions, shape (n_cp, 3), to that patch's field
 # values, shape (n_cp, n_dofs).

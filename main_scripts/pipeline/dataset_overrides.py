@@ -2,7 +2,7 @@ import dataclasses
 from dataclasses import dataclass
 from pathlib import Path
 
-from rebel_shape.scripts.end_to_end.end_to_end_config import EndToEndConfig
+from forge_sim.scripts.end_to_end.end_to_end_config import EndToEndConfig
 
 
 @dataclass(frozen=True, kw_only=True)

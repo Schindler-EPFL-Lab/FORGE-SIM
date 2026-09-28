@@ -1,6 +1,6 @@
 import unittest
 
-from rebel_shape.scene_optimizers.batch_maker import BatchMaker
+from forge_sim.scene_optimizers.batch_maker import BatchMaker
 
 
 class TestBatchMaker(unittest.TestCase):

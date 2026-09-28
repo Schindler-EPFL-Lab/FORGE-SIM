@@ -3,8 +3,8 @@ import unittest
 import mitsuba as mi
 import numpy as np
 
-from rebel_shape.meshing.patch import Patch
-from rebel_shape.meshing.rectangular_mesh import RectangularMesh
+from forge_sim.meshing.patch import Patch
+from forge_sim.meshing.rectangular_mesh import RectangularMesh
 
 
 class TestRectangularMesh(unittest.TestCase):

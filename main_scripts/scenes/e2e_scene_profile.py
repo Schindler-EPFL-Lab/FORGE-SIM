@@ -2,8 +2,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import ClassVar
 
+from forge_sim.scripts.end_to_end.heat.thermal_sim_config import ThermalSimConfig
 from main_scripts.scenes.e2e_scene import E2EScene
-from rebel_shape.scripts.end_to_end.heat.thermal_sim_config import ThermalSimConfig
 
 
 @dataclass(frozen=True, kw_only=True)

@@ -3,18 +3,18 @@ import unittest
 import mitsuba as mi
 import numpy as np
 
-from rebel_shape.meshing.composite_spline_surface_factory import (
+from forge_sim.meshing.composite_spline_surface_factory import (
     CompositeSplineSurfaceFactory,
 )
-from rebel_shape.meshing.mesh import Mesh
-from rebel_shape.meshing.patch import Patch
-from rebel_shape.meshing.tessellated_spline_surface import TessellatedSplineSurface
-from rebel_shape.regularization.normal_loss import NormalLoss
-from rebel_shape.regularization.position_loss import PositionLoss
-from rebel_shape.regularization.sparse_laplacian_matrix import SparseLaplacianMatrix
-from rebel_shape.regularization.spline_g1_loss import SplineG1Loss
-from rebel_shape.regularization.spline_normal_loss import SplineNormalLoss
-from rebel_shape.splines.bspline_patch import BSplinePatch
+from forge_sim.meshing.mesh import Mesh
+from forge_sim.meshing.patch import Patch
+from forge_sim.meshing.tessellated_spline_surface import TessellatedSplineSurface
+from forge_sim.regularization.normal_loss import NormalLoss
+from forge_sim.regularization.position_loss import PositionLoss
+from forge_sim.regularization.sparse_laplacian_matrix import SparseLaplacianMatrix
+from forge_sim.regularization.spline_g1_loss import SplineG1Loss
+from forge_sim.regularization.spline_normal_loss import SplineNormalLoss
+from forge_sim.splines.bspline_patch import BSplinePatch
 
 
 class TestRegularization(unittest.TestCase):

@@ -1,12 +1,12 @@
 # Conda environment for DOLFINx-based FEM heat and shell simulations, the
-# independent cross-validator of rebel-shape's IGA solvers.
+# independent cross-validator of forge-sim's IGA solvers.
 #
 # Create with:
 #   conda env create -f environment.yml
-# Then install rebel-shape itself, without letting it re-resolve the versions above:
+# Then install forge-sim itself, without letting it re-resolve the versions above:
 #   pip install -e . --no-deps        (from the repository root)
 
-name: dolfinx-rebel-shape
+name: dolfinx-forge-sim
 
 channels:
   - conda-forge
@@ -47,7 +47,7 @@ dependencies:
 
   - pip
   - pip:
-      # rebel-shape itself is not installed by this file; `pip install -e .` would
+      # forge-sim itself is not installed by this file; `pip install -e .` would
       # resolve `ocp-stubs`'s uv git source incorrectly and pull `cadquery-ocp` in
       # place of the novtk build below, so install with `--no-deps` (see above).
       #

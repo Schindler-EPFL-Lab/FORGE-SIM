@@ -8,13 +8,13 @@ import mitsuba as mi
 import numpy as np
 from PIL import Image
 
-from rebel_shape.meshing.composite_spline_surface_factory import (
+from forge_sim.meshing.composite_spline_surface_factory import (
     CompositeSplineSurfaceFactory,
 )
-from rebel_shape.meshing.patch import Patch
-from rebel_shape.meshing.tessellated_spline_surface import TessellatedSplineSurface
-from rebel_shape.plugin_wrappers.diffuse_bsdf import DiffuseBSDF
-from rebel_shape.splines.bspline_patch import BSplinePatch
+from forge_sim.meshing.patch import Patch
+from forge_sim.meshing.tessellated_spline_surface import TessellatedSplineSurface
+from forge_sim.plugin_wrappers.diffuse_bsdf import DiffuseBSDF
+from forge_sim.splines.bspline_patch import BSplinePatch
 
 
 class TestTessellatedSplineSurface(unittest.TestCase):

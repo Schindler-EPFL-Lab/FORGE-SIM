@@ -10,7 +10,7 @@ the same surface, the residual is a measure of the two discretizations' agreemen
 rather than of the reconstruction, which is what makes the comparison
 self-validating.
 
-The FEM solver runs in the conda `dolfinx-rebel-shape` env (subprocess, one per
+The FEM solver runs in the conda `dolfinx-forge-sim` env (subprocess, one per
 scene); this driver runs in the .venv, mirroring `compare_modal_fem_iga.py` beside it
 on the modal side. `SceneHeatComparisonRun`
 (`main_scripts/heat_comparison/scene_heat_comparison_run.py`) resolves each scene's

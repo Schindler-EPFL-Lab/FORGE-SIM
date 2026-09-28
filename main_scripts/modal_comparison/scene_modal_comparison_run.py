@@ -2,13 +2,13 @@ import subprocess
 from pathlib import Path
 from typing import ClassVar
 
+from forge_sim import logger
+from forge_sim.scripts.end_to_end.data_paths import REPO_ROOT
 from main_scripts.compare_modal_fem_iga import ModalComparisonParameters
 from main_scripts.conda_python import CondaPython
 from main_scripts.scenes.vggt_scene import VGGTScene
 from main_scripts.scenes.vggt_scene_layout import VGGTSceneLayout
 from main_scripts.scenes.vggt_scene_profile import VGGTSceneProfile
-from rebel_shape import logger
-from rebel_shape.scripts.end_to_end.data_paths import REPO_ROOT
 
 
 class SceneModalComparisonRun:

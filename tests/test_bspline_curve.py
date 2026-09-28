@@ -4,8 +4,8 @@ import drjit as dr
 import mitsuba as mi
 import numpy as np
 
-from rebel_shape.splines.bspline import BSpline
-from rebel_shape.splines.bspline_curve import BSplineCurve
+from forge_sim.splines.bspline import BSpline
+from forge_sim.splines.bspline_curve import BSplineCurve
 
 
 class TestBSplineCurve(unittest.TestCase):

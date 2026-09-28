@@ -6,21 +6,21 @@ import drjit as dr
 import mitsuba as mi
 import numpy as np
 
-from rebel_shape.meshing.composite_spline_surface_factory import (
+from forge_sim.meshing.composite_spline_surface_factory import (
     CompositeSplineSurfaceFactory,
 )
-from rebel_shape.meshing.tessellated_iga_spline_surface import (
+from forge_sim.meshing.tessellated_iga_spline_surface import (
     TessellatedIGASplineSurface,
 )
-from rebel_shape.meshing.tessellated_spline_surface import TessellatedSplineSurface
-from rebel_shape.scripts.configs.structural_material_config import (
+from forge_sim.meshing.tessellated_spline_surface import TessellatedSplineSurface
+from forge_sim.scripts.configs.structural_material_config import (
     StructuralMaterialConfig,
 )
-from rebel_shape.scripts.end_to_end.modal.modal_frequencies import modal_frequencies
-from rebel_shape.scripts.reissner_mindlin_modal_analysis.reissner_mindlin_modal_runner import (  # noqa: E501
+from forge_sim.scripts.end_to_end.modal.modal_frequencies import modal_frequencies
+from forge_sim.scripts.reissner_mindlin_modal_analysis.reissner_mindlin_modal_runner import (  # noqa: E501
     ReissnerMindlinModalRunner,
 )
-from rebel_shape.splines.bspline_patch import BSplinePatch
+from forge_sim.splines.bspline_patch import BSplinePatch
 
 
 class TestReissnerMindlinModalRunner(unittest.TestCase):

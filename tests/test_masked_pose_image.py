@@ -4,8 +4,8 @@ import drjit as dr
 import mitsuba as mi
 import numpy as np
 
-from rebel_shape.data_processing.masked_pose_image import MaskedPoseImage
-from rebel_shape.plugin_wrappers.perspective_camera import PerspectiveCamera
+from forge_sim.data_processing.masked_pose_image import MaskedPoseImage
+from forge_sim.plugin_wrappers.perspective_camera import PerspectiveCamera
 
 
 class TestMaskedPoseImage(unittest.TestCase):

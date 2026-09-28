@@ -2,7 +2,7 @@ import unittest
 
 import numpy as np
 
-from rebel_shape.scripts.end_to_end.modal.area_weighting import (
+from forge_sim.scripts.end_to_end.modal.area_weighting import (
     mode_column,
     vertex_areas,
 )

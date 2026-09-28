@@ -13,7 +13,7 @@ from fem.shells.shell_modal_analysis_spline import (
     ShellModalAnalysisParameters,
     run_modal_analysis,
 )
-from rebel_shape import logger
+from forge_sim import logger
 
 
 class SceneModalComparison:

@@ -6,13 +6,13 @@ import numpy as np
 import numpy.typing as npt
 from scipy.sparse import linalg
 
-from rebel_shape.isogeometric_analysis.manifold_poisson_problem import (
+from forge_sim.isogeometric_analysis.manifold_poisson_problem import (
     ManifoldPoissonProblem,
 )
-from rebel_shape.meshing.patch import Patch
-from rebel_shape.splines.bspline import BSpline
-from rebel_shape.splines.bspline_patch import BSplinePatch
-from rebel_shape.splines.iga_spline_patch import IGASplinePatch
+from forge_sim.meshing.patch import Patch
+from forge_sim.splines.bspline import BSpline
+from forge_sim.splines.bspline_patch import BSplinePatch
+from forge_sim.splines.iga_spline_patch import IGASplinePatch
 
 
 class TestManifoldPoissonProblem(unittest.TestCase):

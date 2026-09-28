@@ -12,9 +12,9 @@ from fem.fem_mesh_data import FEMMeshData
 from fem.heat.fem_heat_runner import FEMHeatRun
 from fem.heat.fem_simulation_config import FEMSimulationConfig
 from fem.heat.fem_simulation_diagnostics import FEMSimulationDiagnostics
-from rebel_shape import logger
-from rebel_shape.scripts.configs.thermal_material_config import ThermalMaterialConfig
-from rebel_shape.scripts.end_to_end.heat.thermal_sim_config import ThermalSimConfig
+from forge_sim import logger
+from forge_sim.scripts.configs.thermal_material_config import ThermalMaterialConfig
+from forge_sim.scripts.end_to_end.heat.thermal_sim_config import ThermalSimConfig
 
 
 class FEMHeatGTRunner:

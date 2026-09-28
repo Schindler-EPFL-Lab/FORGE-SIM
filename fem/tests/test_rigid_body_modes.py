@@ -1,7 +1,7 @@
 import unittest
 
 # Imported for its module-level side effect: `_fem_fixtures` puts the
-# repository root on `sys.path`, so `fem` and `rebel_shape` resolve.
+# repository root on `sys.path`, so `fem` and `forge_sim` resolve.
 import _fem_fixtures  # noqa: F401
 import numpy as np
 import numpy.typing as npt
@@ -39,7 +39,7 @@ class TestRigidBodyModeDetection(unittest.TestCase):
         self, eigenvalues: npt.NDArray[np.float64], n_rigid: int = 6
     ) -> list[str]:
         frequencies = np.sqrt(np.abs(eigenvalues)) / (2.0 * np.pi)
-        with self.assertLogs("rebel_shape", level="INFO") as captured:
+        with self.assertLogs("forge_sim", level="INFO") as captured:
             report_rigid_body_modes(eigenvalues, frequencies, n_rigid)
         return captured.output
 

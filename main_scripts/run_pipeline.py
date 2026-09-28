@@ -36,20 +36,20 @@ from dataclasses_reverse_cli.reverse_cli import ReverseCli
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+from forge_sim import logger  # noqa: E402
+from forge_sim.scripts.end_to_end.data_paths import REPO_ROOT  # noqa: E402
+from forge_sim.scripts.end_to_end.end_to_end_config import (  # noqa: E402
+    EndToEndConfig,
+)
+from forge_sim.scripts.end_to_end.heat.thermal_sim_config import (  # noqa: E402
+    ThermalSimConfig,
+)
 from main_scripts.conda_python import CondaPython  # noqa: E402
 from main_scripts.pipeline.dataset_overrides import DatasetOverrides  # noqa: E402
 from main_scripts.pipeline.stage import Stage  # noqa: E402
 from main_scripts.pipeline.stage_commands import StageCommands  # noqa: E402
 from main_scripts.scenes.e2e_scene import E2EScene  # noqa: E402
 from main_scripts.scenes.e2e_scene_profile import E2ESceneProfile  # noqa: E402
-from rebel_shape import logger  # noqa: E402
-from rebel_shape.scripts.end_to_end.data_paths import REPO_ROOT  # noqa: E402
-from rebel_shape.scripts.end_to_end.end_to_end_config import (  # noqa: E402
-    EndToEndConfig,
-)
-from rebel_shape.scripts.end_to_end.heat.thermal_sim_config import (  # noqa: E402
-    ThermalSimConfig,
-)
 
 
 @dataclass(kw_only=True)
@@ -61,7 +61,7 @@ class RunPipelineParameters(ReverseCli):
     `__post_init__`, so the flag only selects which stages run, not their order."""
     conda_python: Path | None = None
     """Python interpreter of the DOLFINx conda env (for the FEM stages). Defaults to
-    the `REBEL_SHAPE_DOLFINX_PYTHON` environment variable."""
+    the `FORGE_SIM_DOLFINX_PYTHON` environment variable."""
     use_gpu: bool = True
     """Run the Mitsuba (venv) stages on the GPU. Set False to use the CPU/LLVM
     variant, e.g. to avoid the cuda_ad_mono PTX-compilation bug seen on some

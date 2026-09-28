@@ -31,7 +31,7 @@ class GeometricallyExactShellProblem:
     the broken Piola-map-on-orientable-manifolds machinery, DOLFINx #3845, that
     rules out a clean MITC / TDNNS / Regge element on a closed surface). Run
     serially; both solve paths use the same mass-shifted shift-invert as the
-    IGA solver. Environment: conda `dolfinx-rebel-shape` (DOLFINx 0.9.x).
+    IGA solver. Environment: conda `dolfinx-forge-sim` (DOLFINx 0.9.x).
 
     A coordinate-free geometrically-exact Naghdi shell built from the surface
     normal n and the tangential projector P = I - n(x)n, on geometry that lies
@@ -65,7 +65,7 @@ class GeometricallyExactShellProblem:
 
     Validated on the canonical unit steel sphere (R=1, E=193.05 GPa, nu=0.28,
     rho=8025.9, h=1.5875 mm): P2 and P3 both reproduce, and converge to, the analytical
-    thin-shell spectrum and the rebel-shape IGA spectrum to < 0.01 %:
+    thin-shell spectrum and the forge-sim IGA spectrum to < 0.01 %:
         6 RB modes @ 0 | n=2: 576.3 Hz (x5) | n=3: 681.0 Hz (x7) | n=4: 721.8 Hz (x9).
 
     Geometry order, normals and drilling

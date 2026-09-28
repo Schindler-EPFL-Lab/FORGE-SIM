@@ -7,7 +7,7 @@ from pathlib import Path
 from unittest import mock
 
 # Imported for its module-level side effect: `_fem_fixtures` puts the
-# repository root on `sys.path`, so `fem` and `rebel_shape` resolve.
+# repository root on `sys.path`, so `fem` and `forge_sim` resolve.
 import _fem_fixtures  # noqa: F401
 
 from fem.heat import spline_heat_simulation
@@ -18,8 +18,8 @@ from fem.heat.heat_simulation_spline_two_materials import (
 )
 from fem.heat.snapshot_diagnostics import SnapshotDiagnostics
 from fem.heat.spline_heat_simulation import SplineHeatSimulationParameters
-from rebel_shape.scripts.heat_simulation.heat_simulation import HeatSimulationParameters
-from rebel_shape.scripts.heat_simulation.heat_simulation_two_materials import (
+from forge_sim.scripts.heat_simulation.heat_simulation import HeatSimulationParameters
+from forge_sim.scripts.heat_simulation.heat_simulation_two_materials import (
     HeatSimulationParametersTwoMaterials,
 )
 

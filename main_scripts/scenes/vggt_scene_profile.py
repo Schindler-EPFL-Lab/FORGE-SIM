@@ -2,11 +2,11 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import ClassVar
 
-from main_scripts.scenes.vggt_scene import VGGTScene
-from main_scripts.scenes.vggt_scene_thermal_profile import VGGTSceneThermalProfile
-from rebel_shape.scripts.configs.structural_material_config import (
+from forge_sim.scripts.configs.structural_material_config import (
     StructuralMaterialConfig,
 )
+from main_scripts.scenes.vggt_scene import VGGTScene
+from main_scripts.scenes.vggt_scene_thermal_profile import VGGTSceneThermalProfile
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -19,7 +19,7 @@ class VGGTSceneProfile:
     `fem/end_to_end/heat_comparison/scene_profile.py`, each carrying only the
     fields its own side needed and unable to import the other. This carries the
     union, and lives in `main_scripts/`: the registry of published scenes is
-    this package's own subject (`CLAUDE.md` SS3); `rebel_shape/` and `fem/` are
+    this package's own subject (`CLAUDE.md` SS3); `forge_sim/` and `fem/` are
     libraries that take a scene's values as ordinary arguments and never need to
     know the registry exists.
 

@@ -3,7 +3,7 @@ import unittest
 import drjit as dr
 import mitsuba as mi
 
-from rebel_shape.splines.cube_initialization import _get_normalizing_tf_matrix
+from forge_sim.splines.cube_initialization import _get_normalizing_tf_matrix
 
 
 class TestNormalizeUsingBBox(unittest.TestCase):

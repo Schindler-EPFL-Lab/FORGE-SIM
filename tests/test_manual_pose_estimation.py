@@ -8,7 +8,7 @@ import mitsuba as mi
 import numpy as np
 from scipy.spatial.transform import Rotation
 
-from rebel_shape.data_processing.manual_initialization import (
+from forge_sim.data_processing.manual_initialization import (
     load_bounding_bbox_transforms,
     pose_params_to_bbox_transforms,
     save_bounding_bbox_transforms,

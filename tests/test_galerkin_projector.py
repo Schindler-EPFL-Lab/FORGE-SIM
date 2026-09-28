@@ -4,12 +4,12 @@ import drjit as dr
 import mitsuba as mi
 import numpy as np
 
-from rebel_shape.isogeometric_analysis.galerkin_projector import GalerkinProjector
-from rebel_shape.isogeometric_analysis.galerkin_projector_smooth import (
+from forge_sim.isogeometric_analysis.galerkin_projector import GalerkinProjector
+from forge_sim.isogeometric_analysis.galerkin_projector_smooth import (
     GalerkinProjectorSmooth,
 )
-from rebel_shape.splines.bspline_patch import BSplinePatch
-from rebel_shape.splines.iga_spline_patch import IGASplinePatch
+from forge_sim.splines.bspline_patch import BSplinePatch
+from forge_sim.splines.iga_spline_patch import IGASplinePatch
 
 
 class TestGalerkinProjector(unittest.TestCase):

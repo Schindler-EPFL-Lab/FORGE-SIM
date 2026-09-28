@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 
-from rebel_shape.scripts.configs.structural_material_config import (
+from forge_sim.scripts.configs.structural_material_config import (
     StructuralMaterialConfig,
 )
 

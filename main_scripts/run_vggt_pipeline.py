@@ -17,7 +17,7 @@ Outputs land in `<scene>/heat_simulation/` and `<scene>/modal_analysis/`, leavin
 reconstruction folder (`result/` or `results/`) untouched.
 
 Like `run_pipeline.py` beside it, this lives outside both packages: it drives
-`rebel_shape` from the outside rather than belonging to it, so it is a plain script
+`forge_sim` from the outside rather than belonging to it, so it is a plain script
 rather than a module of either.
 """
 
@@ -31,11 +31,11 @@ from dataclasses_reverse_cli.reverse_cli import ReverseCli
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+from forge_sim import logger  # noqa: E402
 from main_scripts.scenes.vggt_scene import VGGTScene  # noqa: E402
 from main_scripts.scenes.vggt_scene_layout import VGGTSceneLayout  # noqa: E402
 from main_scripts.vggt_pipeline.pipeline_stage import PipelineStage  # noqa: E402
 from main_scripts.vggt_pipeline.scene_failure import SceneFailure  # noqa: E402
-from rebel_shape import logger  # noqa: E402
 
 
 @dataclass(kw_only=True)

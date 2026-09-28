@@ -207,7 +207,7 @@ class TestSplineToFEMProjector(unittest.TestCase):
         for a target of 7.0 on this sphere).
 
         This is a "do not fix this" test. `_apply_length_scaling` is a verbatim
-        parity port of the IGA runner (`rebel_shape/scripts/heat_simulation/
+        parity port of the IGA runner (`forge_sim/scripts/heat_simulation/
         heat_simulation.py`), which also normalizes the control-point box;
         "correcting" either side alone to the surface box would silently
         desynchronise the geometry the two solvers integrate and invalidate every

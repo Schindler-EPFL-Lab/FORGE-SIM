@@ -22,8 +22,8 @@ from fem.shells.geometrically_exact_shell_problem import GeometricallyExactShell
 from fem.shells.modal_result import ModalResult
 from fem.shells.rigid_body_modes import detect_rigid_body_modes, report_rigid_body_modes
 from fem.shells.shell_element import ShellElement
-from rebel_shape import logger
-from rebel_shape.scripts.configs.structural_material_config import (
+from forge_sim import logger
+from forge_sim.scripts.configs.structural_material_config import (
     StructuralMaterialConfig,
 )
 

@@ -4,8 +4,8 @@ import drjit as dr
 import mitsuba as mi
 import numpy as np
 
-from rebel_shape.splines.bivariate_bspline import BivariateBSpline
-from rebel_shape.splines.bspline import BSpline
+from forge_sim.splines.bivariate_bspline import BivariateBSpline
+from forge_sim.splines.bspline import BSpline
 
 
 class TestBivariateBSpline(unittest.TestCase):

@@ -8,7 +8,7 @@ from fem.iga_fem_comparison.error_norms import ErrorNorms
 from fem.iga_fem_comparison.xdmf_solution import XDMFSolution
 from fem.matching_snapshots_guard import MatchingSnapshotsGuard
 from fem.xdmf_time_series import XDMFTimeSeries
-from rebel_shape import logger
+from forge_sim import logger
 
 
 @dataclass(frozen=True, kw_only=True)

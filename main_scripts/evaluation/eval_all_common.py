@@ -2,7 +2,7 @@
 What the six `eval_all_*` batch drivers share.
 
 Each driver shells out to a per-scene render script and a per-scene metrics script,
-then to `rebel_shape/scripts/evaluation/aggregate_metrics.py`, which reads back the
+then to `forge_sim/scripts/evaluation/aggregate_metrics.py`, which reads back the
 metrics files the per-scene metrics script wrote. The guard here is what keeps that
 read honest when a driver is re-run into an output root that is not empty.
 """

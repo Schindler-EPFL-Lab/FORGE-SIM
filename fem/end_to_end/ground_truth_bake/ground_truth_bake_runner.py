@@ -14,14 +14,14 @@ from fem.meshprep.mesh_repair import clean_mesh
 from fem.meshprep.p2_geometry import curved_edge_nodes
 from fem.meshprep.reference_surface import transfer_vertex_field_to_points
 from fem.meshprep.repaired_mesh import RepairedMesh
-from rebel_shape import logger
-from rebel_shape.scripts.end_to_end.dataset.mesh_arrays import MeshArrays
-from rebel_shape.scripts.end_to_end.dataset.synthetic_fields import (
+from forge_sim import logger
+from forge_sim.scripts.end_to_end.dataset.mesh_arrays import MeshArrays
+from forge_sim.scripts.end_to_end.dataset.synthetic_fields import (
     material_labels,
     synthetic_temperature,
 )
-from rebel_shape.scripts.end_to_end.end_to_end_config import EndToEndConfig
-from rebel_shape.scripts.end_to_end.heat.thermal_sim_config import ThermalSimConfig
+from forge_sim.scripts.end_to_end.end_to_end_config import EndToEndConfig
+from forge_sim.scripts.end_to_end.heat.thermal_sim_config import ThermalSimConfig
 
 
 class GroundTruthBakeRunner:
@@ -264,7 +264,7 @@ class GroundTruthBakeRunner:
 
         Left continuous; every consumer thresholds at 0.5
         (`fem/end_to_end/heat_gt/fem_heat_gt_mesh.py`,
-        `rebel_shape/scripts/end_to_end/heat/iga_heat_simulation.py`).
+        `forge_sim/scripts/end_to_end/heat/iga_heat_simulation.py`).
         """
         if self._config.gt_material_mesh_path is not None:
             measured_material, orig_material = MeshArrays.from_inpainted_ply(

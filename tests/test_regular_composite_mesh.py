@@ -6,8 +6,8 @@ import jsonpickle
 import mitsuba as mi
 import numpy as np
 
-from rebel_shape.meshing.patch import Patch
-from rebel_shape.meshing.regular_composite_mesh import RegularCompositeMesh
+from forge_sim.meshing.patch import Patch
+from forge_sim.meshing.regular_composite_mesh import RegularCompositeMesh
 
 
 class TestRegularCompositeMesh(unittest.TestCase):

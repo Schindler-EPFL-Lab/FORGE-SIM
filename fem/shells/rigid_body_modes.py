@@ -26,7 +26,7 @@ import numpy as np
 import numpy.typing as npt
 
 from fem.shells.rigid_body_mode_detection import RigidBodyModeDetection
-from rebel_shape import logger
+from forge_sim import logger
 
 _NEAR_ZERO_FLOOR: float = 1.0e-6
 """

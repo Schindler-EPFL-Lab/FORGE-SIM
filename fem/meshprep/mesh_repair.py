@@ -3,7 +3,7 @@ Turning a hand-modelled triangle mesh into a watertight analysis surface.
 
 Mesh repair is part of the FEM workflow: the reconstructed spline is already a
 closed B-rep, so only the ground-truth side needs it, which is why these helpers
-live here rather than in `rebel_shape`. Nothing in this module needs DOLFINx;
+live here rather than in `forge_sim`. Nothing in this module needs DOLFINx;
 Open3D and SciPy are enough.
 
 The module mixes pure-numpy topology functions (:func:`directed_boundary_loops`,

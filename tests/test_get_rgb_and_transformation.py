@@ -7,12 +7,12 @@ import mitsuba as mi
 import numpy as np
 import numpy.testing as npt
 
-from rebel_shape.data_processing.get_rgb_and_transformation import (
+from forge_sim.data_processing.get_rgb_and_transformation import (
     SaveFormats,
     export_transforms_from_cameras_opencv,
     render_and_save_reference_set,
 )
-from rebel_shape.plugin_wrappers.perspective_camera import PerspectiveCamera
+from forge_sim.plugin_wrappers.perspective_camera import PerspectiveCamera
 
 
 class TestGetRgbAndTransformation(unittest.TestCase):

@@ -1,5 +1,5 @@
 """
-Build a curved (isoparametric) DOLFINx surface mesh from a rebel-shape spline.
+Build a curved (isoparametric) DOLFINx surface mesh from a forge-sim spline.
 
 The geometrically-exact shell solver needs a mesh whose geometry lies exactly on
 the spline mid-surface (flat facets only degrade accuracy). This module turns a
@@ -28,8 +28,8 @@ from mpi4py import MPI
 
 from fem.dolfinx_mesh import create_manifold_mesh
 from fem.meshprep.p2_geometry import basix_edge_table
-from rebel_shape import logger
-from rebel_shape.meshing.tessellated_spline_surface import TessellatedSplineSurface
+from forge_sim import logger
+from forge_sim.meshing.tessellated_spline_surface import TessellatedSplineSurface
 
 
 def load_and_rescale_spline(

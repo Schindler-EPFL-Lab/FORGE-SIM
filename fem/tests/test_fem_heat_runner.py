@@ -15,7 +15,7 @@ from fem.heat.fem_simulation_config import FEMSimulationConfig
 from fem.heat.snapshot_diagnostics import SnapshotDiagnostics
 from fem.iga_fem_comparison.xdmf_solution import XDMFSolution
 from fem.spline_to_fem_projector import SplineToFEMProjector
-from rebel_shape.scripts.configs.thermal_material_config import ThermalMaterialConfig
+from forge_sim.scripts.configs.thermal_material_config import ThermalMaterialConfig
 
 
 class TestFEMHeatRunner(unittest.TestCase):

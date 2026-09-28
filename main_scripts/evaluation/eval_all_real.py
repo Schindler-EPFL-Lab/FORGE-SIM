@@ -1,6 +1,6 @@
 """
 Batch novel-view-synthesis evaluation of splines reconstructed by the proposed
-rebel-shape method, across the real (Thermoscenes) scenes.
+forge-sim method, across the real (Thermoscenes) scenes.
 
 `--scenes-names` takes `RealScene` members; tyro renders them by member NAME, not
 by value, so a command line spells `--scenes-names CAR` where it used to spell
@@ -17,14 +17,14 @@ from dataclasses_reverse_cli.reverse_cli import ReverseCli
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
+from forge_sim import logger  # noqa: E402
+from forge_sim.scripts.evaluation.spline_texture_paths import (  # noqa: E402
+    SplineTexturePaths,
+)
 from main_scripts.evaluation.eval_all_common import (  # noqa: E402
     prepare_metrics_output_folder,
 )
 from main_scripts.evaluation.real_scene import RealScene  # noqa: E402
-from rebel_shape import logger  # noqa: E402
-from rebel_shape.scripts.evaluation.spline_texture_paths import (  # noqa: E402
-    SplineTexturePaths,
-)
 
 
 @dataclass(kw_only=True)
@@ -32,10 +32,10 @@ class EvalAllRealParameters(ReverseCli):
     """
     Which real scenes to evaluate, and at what environment map.
 
-    For each scene, spawns `rebel_shape/scripts/render_eval_images.py` then
-    `rebel_shape/scripts/evaluation/eval_real.py` once per reconstructed spline
+    For each scene, spawns `forge_sim/scripts/render_eval_images.py` then
+    `forge_sim/scripts/evaluation/eval_real.py` once per reconstructed spline
     under `validation_inputs_root`/splines/<scene>/, then
-    `rebel_shape/scripts/evaluation/aggregate_metrics.py` once to average the
+    `forge_sim/scripts/evaluation/aggregate_metrics.py` once to average the
     per-spline metrics into that scene's mean.
     """
 
@@ -123,7 +123,7 @@ def main(params: EvalAllRealParameters) -> None:
 
             cmd = [
                 "python3",
-                "rebel_shape/scripts/render_eval_images.py",
+                "forge_sim/scripts/render_eval_images.py",
                 "--scene-path",
                 str(thermoscenes_path),
                 "--environment-map-path",
@@ -141,7 +141,7 @@ def main(params: EvalAllRealParameters) -> None:
 
             cmd = [
                 "python3",
-                "rebel_shape/scripts/evaluation/eval_real.py",
+                "forge_sim/scripts/evaluation/eval_real.py",
                 "--scene-path",
                 str(thermoscenes_path),
                 "--environment-map-path",
@@ -156,7 +156,7 @@ def main(params: EvalAllRealParameters) -> None:
 
         cmd = [
             "python3",
-            "rebel_shape/scripts/evaluation/aggregate_metrics.py",
+            "forge_sim/scripts/evaluation/aggregate_metrics.py",
             "--metrics-folders",
             *map(str, output_folders),
             "--metrics-file-names",

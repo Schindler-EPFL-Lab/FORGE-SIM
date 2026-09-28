@@ -2,7 +2,7 @@
 Reissner-Mindlin shell modal analysis on a ground-truth triangle mesh, in DOLFINx.
 
 This is the sibling of `shell_modal_analysis_spline.py`: instead of building the
-mesh from a rebel-shape spline mid-surface, it runs the identical geometrically-exact,
+mesh from a forge-sim spline mid-surface, it runs the identical geometrically-exact,
 locking-free shell problem (`geometrically_exact_shell_problem.py`) on a bare
 triangle mesh supplied as a NumPy `.npz`. The mesh is the ground-truth surface
 itself, a faceted reconstruction with no underlying smooth surface, so the
@@ -26,7 +26,7 @@ Input `.npz` contract (e.g. `outputs/suzanne_e2e/07_fem_modal/modal_gt.npz`):
     faces     (m, 3) int:     triangle vertex indices
     scale     scalar:         informational only (the rescale factor already applied)
 
-Run from the repo root in the `dolfinx-rebel-shape` conda environment::
+Run from the repo root in the `dolfinx-forge-sim` conda environment::
 
     python fem/end_to_end/modal_gt/fem_shell_modal_gt_mesh.py \
         --mesh-npz outputs/suzanne_e2e/07_fem_modal/modal_gt.npz
@@ -50,7 +50,7 @@ from pathlib import Path
 
 import tyro
 
-# Repository root: makes `rebel_shape` and this script's own `fem` package
+# Repository root: makes `forge_sim` and this script's own `fem` package
 # importable when it is run by path rather than as `python -m`.
 sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 
@@ -60,7 +60,7 @@ from fem.end_to_end.modal_gt.fem_shell_modal_gt_runner import FEMShellModalGTRun
 from fem.petsc_factor_solver import FactorSolver
 from fem.shells.modal_result import ModalResult
 from fem.shells.shell_element import ShellElement
-from rebel_shape.scripts.configs.structural_material_config import (
+from forge_sim.scripts.configs.structural_material_config import (
     StructuralMaterialConfig,
 )
 

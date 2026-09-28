@@ -9,4 +9,4 @@ run_experiment/
 dataset/
 # The rule above is for the datasets' own `dataset/` folders and matches at any
 # depth, which would swallow the end-to-end experiment's dataset stage.
-!rebel_shape/scripts/end_to_end/dataset/
+!forge_sim/scripts/end_to_end/dataset/

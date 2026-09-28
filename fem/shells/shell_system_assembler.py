@@ -23,7 +23,7 @@ class ShellSystemAssembler:
     combined stiffness and one mass matrix, as PETSc AIJ, and never holds five
     scipy matrices at once. `Backend` selects between the two at construction,
     mirroring
-    `rebel_shape.isogeometric_analysis.sparse_cholesky.SparseCholeskySolver`:
+    `forge_sim.isogeometric_analysis.sparse_cholesky.SparseCholeskySolver`:
     one class, one entry point (`assemble`), the choice readable afterwards.
 
     Under the B-bar locking cure the membrane and transverse-shear stiffness are

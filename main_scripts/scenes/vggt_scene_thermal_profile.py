@@ -1,8 +1,8 @@
 from dataclasses import dataclass
 from typing import ClassVar
 
+from forge_sim.scripts.configs.thermal_material_config import ThermalMaterialConfig
 from main_scripts.scenes.vggt_scene import VGGTScene
-from rebel_shape.scripts.configs.thermal_material_config import ThermalMaterialConfig
 
 
 @dataclass(frozen=True, kw_only=True)
