@@ -7,7 +7,7 @@ name = "rebel-shape"
 version = "0.1.0"
 description = "Perform shape optimization with Mitsuba"
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.12, < 3.14" # We are limiting to 3.14 because gpytoolbox==0.3.6 has no wheels for 3.14.
 dependencies = [
     "mitsuba>=3.8.0",
     "matplotlib>=3.10.0",
@@ -17,7 +17,7 @@ dependencies = [
     "dataclasses-reverse-cli>=0.0.5",
     "tyro>=0.9.27",
     "mlflow>=3.7.0",
-    "cadquery-ocp>=7.8.1.1.post1",
+    "cadquery-ocp>=7.8.1.1.post1,<8",
     "ocp-stubs",
 ]
 
@@ -41,7 +41,6 @@ azure = [
     "azureml-mlflow>=1.59.0.post1",
     "debugpy>=1.8.12",
 ]
-azure-local = ["azure-cli>=2.70.0", "azure-ml-utils>=0.0.1"]
 evaluation = [
     "open3d>0.18.0",
     "torch>=2.7.1",
@@ -57,11 +56,10 @@ fast-cholesky = ["scikit-sparse>=0.5.0"]
 # Pinned rather than bounded below: gpytoolbox remeshes the ground-truth meshes the
 # end-to-end verification measures against, so a new release would silently move
 # every metric derived from them.
-remeshing = ["gpytoolbox==0.3.6"]
+remeshing = ["gpytoolbox==0.3.6; platform_machine != 'aarch64' or sys_platform != 'linux'"]
 
 
 [tool.uv.sources]
-azure-ml-utils = { path = "../azure-ml-utils", editable = true }
 moge = { git = "https://github.com/microsoft/MoGe", rev = "0286b495230a074aadf1c76cc5c679e943e5d1c6" }
 ocp-stubs = { git = "https://github.com/CadQuery/OCP-stubs", rev = "e838ff400d5ee2f4a0579d2a713b19311855288f" }
 sam3 = { git = "https://github.com/facebookresearch/sam3", rev = "86ed77094094e5cabb16b0414ec60c5ba9ce0a0f" }
