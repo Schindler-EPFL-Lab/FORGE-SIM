@@ -1,7 +1,7 @@
 import drjit as dr
 import mitsuba as mi
 
-from forge_sim.data_processing.input_preprocessing import MaskedPoseImage
+from forge_sim.data_processing.masked_pose_image import MaskedPoseImage
 from forge_sim.scene_optimizers.scene_adam import SceneAdam
 from forge_sim.scene_optimizers.scene_optimizer import SceneOptimizer
 
@@ -97,7 +97,7 @@ class SceneAdamInterleaved(SceneAdam):
         total_loss = mi.TensorXf(0.0)
         total_reg_loss = mi.TensorXf(0.0)
 
-        for batch_indices in self.iteration_batch_indices(sensor_count):
+        for batch_indices in self._batch_maker.iteration_batch_indices(sensor_count):
             for param_config in param_optimization_configs:
                 batch_image_loss, batch_reg_loss = self._objective_function(
                     scene=scene,

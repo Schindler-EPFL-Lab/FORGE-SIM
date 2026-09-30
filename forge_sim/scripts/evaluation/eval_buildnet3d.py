@@ -11,7 +11,6 @@ import torchvision
 os.environ["OPENCV_IO_ENABLE_OPENEXR"] = "1"
 
 import json
-import sys
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -19,13 +18,6 @@ import mitsuba as mi
 import open3d as o3d
 import torch
 import tyro
-
-# This is a hack so that the script work with azure sdkv2.
-# The root folder is _not_ added to the python path as it was in sdkv1
-# and thus, local imports of rebel_nerf are not found.
-# Remove when https://github.com/Azure/azure-sdk-for-python/issues/29724 is fixed
-sys.path.append("./")
-
 from dataclasses_reverse_cli.reverse_cli import ReverseCli
 
 from forge_sim.data_processing.image_scene_loader import ImageSceneLoader

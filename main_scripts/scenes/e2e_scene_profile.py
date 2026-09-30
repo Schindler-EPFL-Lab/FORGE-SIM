@@ -20,6 +20,11 @@ class E2ESceneProfile:
     table answers which field a target was run with. It was previously inferred from
     whether the target's mesh happened to carry UVs, which made the answer a property
     of the loader and moved every heat number for one target when the loader changed.
+
+    The pre-built spline is per scene for a stronger reason: a recovered spline is
+    only valid for the scene it was recovered from, so a target with none registered
+    must reconstruct rather than inherit another target's spline from the config
+    default.
     """
 
     SCENE_PROFILES: ClassVar[dict[E2EScene, "E2ESceneProfile"]] = {}
@@ -27,6 +32,11 @@ class E2ESceneProfile:
 
     mesh_path: Path
     """Ground-truth source mesh, relative to the repository root."""
+    prebuilt_spline_path: Path | None
+    """
+    Recovered spline for this target, relative to the repository root, or `None` when
+    none is shipped and the pipeline must reconstruct it from the dataset.
+    """
     temperature_field_source: ThermalSimConfig.TemperatureFieldSource
     """Which coordinates this target's ground-truth temperature is evaluated in."""
 
@@ -52,15 +62,23 @@ _UV = ThermalSimConfig.TemperatureFieldSource.UV_TEXTURE
 
 E2ESceneProfile.SCENE_PROFILES = {
     E2EScene.SUZANNE: E2ESceneProfile(
-        mesh_path=Path("data/meshes/suzanne.ply"), temperature_field_source=_WORLD
+        mesh_path=Path("data/meshes/suzanne.ply"),
+        prebuilt_spline_path=Path("data/splines/spline_suzanne.json"),
+        temperature_field_source=_WORLD,
     ),
     E2EScene.SPOT: E2ESceneProfile(
-        mesh_path=Path("data/meshes/spot.ply"), temperature_field_source=_UV
+        mesh_path=Path("data/meshes/spot.ply"),
+        prebuilt_spline_path=None,
+        temperature_field_source=_UV,
     ),
     E2EScene.BUNNY: E2ESceneProfile(
-        mesh_path=Path("data/meshes/bunny.ply"), temperature_field_source=_WORLD
+        mesh_path=Path("data/meshes/bunny.ply"),
+        prebuilt_spline_path=None,
+        temperature_field_source=_WORLD,
     ),
     E2EScene.ARMADILLO: E2ESceneProfile(
-        mesh_path=Path("data/meshes/armadillo.ply"), temperature_field_source=_WORLD
+        mesh_path=Path("data/meshes/armadillo.ply"),
+        prebuilt_spline_path=None,
+        temperature_field_source=_WORLD,
     ),
 }

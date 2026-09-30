@@ -2,6 +2,7 @@ import abc
 
 import mitsuba as mi
 
+from forge_sim.scene_optimizers.batch_maker import BatchMaker
 from forge_sim.scene_optimizers.scene_optimizer import (
     MitsubaOptimizationType,
     SceneOptimizer,
@@ -51,9 +52,11 @@ class SceneAdam(SceneOptimizer, abc.ABC):
             less than 1.
         """
         super().__init__(
-            max_batch_size=batch_size,
-            randomize_image_order=randomize_image_order,
-            image_order_seed=image_order_seed,
+            batch_maker=BatchMaker(
+                max_batch_size=batch_size,
+                randomize_image_order=randomize_image_order,
+                image_order_seed=image_order_seed,
+            )
         )
 
         if learning_rate <= 0.0:

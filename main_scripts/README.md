@@ -62,5 +62,15 @@ way to see how the two environments are stitched together.
 
 `--name`, `--mesh-path`, `--prebuilt-spline-path` and `--output-root` move together and are
 forwarded to every stage; they are how a run is pointed at a different target.
+
+`--scene` (`SUZANNE`, `SPOT`, `BUNNY` or `ARMADILLO`) fills `--name`, `--mesh-path`,
+the ground-truth temperature rule and the pre-built spline from the scene's entry in
+`scenes/`, and any of those flags given explicitly still wins. Only Suzanne has a
+shipped spline; a spline is valid only for the scene it was recovered from, so a run
+for any other scene reconstructs its own and does not inherit Suzanne's. That absence
+is forwarded to every stage as `--prebuilt-spline-path None`, because a stage left to
+its own configuration would fall back to Suzanne's spline. With no `--scene` and no
+flag the configuration default (Suzanne's spline) applies.
+
 [`forge_sim/scripts/end_to_end/README.md`](../forge_sim/scripts/end_to_end/README.md)
 covers the stages themselves and what each one deposits.

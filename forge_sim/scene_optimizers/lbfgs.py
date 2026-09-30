@@ -38,10 +38,6 @@ class LBFGS(mi.ad.Optimizer):
     performed many times - images have to be re-rendered for each line search
     iteration, which can be very slow. Using the Wolfe curvature condition is even
     slower as the gradient has to be computed for each line search iteration.
-
-    The implementation is based on the code from Dr.TVAM
-    https://github.com/rgl-epfl/drtvam/blob/f1348f58f194e83dcca0c47ef17d3a74d402f047/src/drtvam/lbfgs.py
-    and is written by the same team that developed Dr.Jit and Mitsuba 3.
     """
 
     CURVATURE_EPSILON_REL: float = 1e-12

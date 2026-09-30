@@ -16,13 +16,10 @@ this module never calls `mlflow.set_tracking_uri`, which both overrides and over
 `MLFLOW_TRACKING_URI` for the process and every subprocess it spawns, and would
 therefore leave the environment unable to configure anything.
 
-Inside an Azure ML job the `azureml-mlflow` plugin configures the tracking destination
-and pre-creates the job's run. So as not to override any of that, this module never
-calls `set_tracking_uri`, calls `set_experiment` only when an experiment was asked for
-and no run is waiting to be attached to, and attaches to the pre-created run through
-`mlflow.start_run`. The Azure path is unverified since 2026 because nobody currently
-has Azure access; an Azure job should therefore set `FORGE_SIM_TRACKING=on` rather
-than rely on the detection in `TrackingConfig`.
+A job harness may configure the tracking destination and pre-create a run for the
+process. So as not to override any of that, this module never calls `set_tracking_uri`,
+calls `set_experiment` only when an experiment was asked for and no run is waiting to
+be attached to, and attaches to the pre-created run through `mlflow.start_run`.
 """
 
 import contextlib
@@ -42,15 +39,13 @@ TRACKING_MODE_VARIABLE = "FORGE_SIM_TRACKING"
 TRACKING_URI_VARIABLE = "MLFLOW_TRACKING_URI"
 """MLflow's own environment variable naming the tracking destination."""
 
-AZURE_ML_JOB_VARIABLES = ("MLFLOW_RUN_ID", "AZUREML_RUN_ID")
+ATTACHED_RUN_VARIABLES = ("MLFLOW_RUN_ID",)
 """
 Environment variables whose presence indicates that a job harness has already created
 a run for this process to attach to.
 
-Either one means a destination exists even when `MLFLOW_TRACKING_URI` is not exported.
-Only `MLFLOW_RUN_ID` also makes `mlflow.start_run` attach to that run; `AZUREML_RUN_ID`
-is read purely as evidence that a job harness is present, since MLflow itself does not
-consult it.
+Any one of them means a destination exists even when `MLFLOW_TRACKING_URI` is not
+exported. `MLFLOW_RUN_ID` is also what makes `mlflow.start_run` attach to that run.
 """
 
 
@@ -81,9 +76,9 @@ class TrackingConfig:
     run for this process, which is a destination in its own right even when no tracking
     URI is exported. `experiment_name`, when given, is the MLflow experiment that runs
     are created in; when `None` the experiment is left to MLflow, which honours
-    `MLFLOW_EXPERIMENT_NAME` and which is how an Azure ML job routes its runs. It is
-    also ignored when `in_job_with_existing_run` holds, since the pre-created run
-    already belongs to an experiment and cannot be moved into another one.
+    `MLFLOW_EXPERIMENT_NAME`. It is also ignored when `in_job_with_existing_run`
+    holds, since the pre-created run already belongs to an experiment and cannot be
+    moved into another one.
 
     Instances are immutable; build one with `from_environment` rather than by hand.
     """
@@ -99,9 +94,9 @@ class TrackingConfig:
     ) -> "TrackingConfig":
         """
         Reads `FORGE_SIM_TRACKING`, `MLFLOW_TRACKING_URI` and the job markers listed
-        in `AZURE_ML_JOB_VARIABLES`, and returns the resulting configuration.
+        in `ATTACHED_RUN_VARIABLES`, and returns the resulting configuration.
         `experiment_name` overrides the experiment for this process; leave it `None` to
-        let MLflow decide, which is what an Azure ML job needs.
+        let MLflow decide.
 
         The mode is matched case-insensitively and after stripping surrounding
         whitespace, so `off`, `OFF` and ` Off ` all name `TrackingMode.OFF`. An empty
@@ -135,7 +130,7 @@ class TrackingConfig:
             tracking_uri=os.environ.get(TRACKING_URI_VARIABLE) or None,
             experiment_name=experiment_name,
             in_job_with_existing_run=any(
-                os.environ.get(variable) for variable in AZURE_ML_JOB_VARIABLES
+                os.environ.get(variable) for variable in ATTACHED_RUN_VARIABLES
             ),
         )
 
@@ -245,15 +240,15 @@ def run(
 
     `run_name` names the run; when omitted MLflow generates one. `artifact_directory`,
     if given, is uploaded once on exit, including when the block raises, so that a
-    crashed run still keeps its partial results. This reproduces what Azure ML provided
-    by collecting a job's output directory, and replaces per-file artifact logging
-    inside the library: only files written under `artifact_directory` are recorded.
+    crashed run still keeps its partial results. This replaces per-file artifact
+    logging inside the library: only files written under `artifact_directory` are
+    recorded.
     `config` overrides the process configuration for this run, and is the only way to
     set an experiment name in code.
 
     When enabled, the run is started with `mlflow.start_run`, which attaches to an
-    existing run when `MLFLOW_RUN_ID` is set - the mechanism by which a run inside an
-    Azure ML job joins the job's own run rather than creating a second one. Note that
+    existing run when `MLFLOW_RUN_ID` is set - the mechanism by which a run inside a
+    job joins the job's own run rather than creating a second one. Note that
     `mlflow.start_run` consumes that variable, so only the first `run` of a process
     attaches; a second one would create a run of its own. Every script here opens
     exactly one. The run is
@@ -329,8 +324,7 @@ def log_directory(directory: Path, *, artifact_path: str | None = None) -> None:
     """
     Uploads the whole of `directory` as run artifacts, optionally under `artifact_path`
     within the run. One call over a directory is preferred to one call per file:
-    against a remote store each file is a separate round trip, and a directory upload
-    matches how Azure ML collected a job's outputs.
+    against a remote store each file is a separate round trip.
 
     Does nothing when `directory` does not exist. The existence check is inside the
     guarded block because `Path.is_dir` only swallows the "not there" family of

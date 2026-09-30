@@ -14,17 +14,20 @@ from fem.compare_iga_fem import CompareIGAFEMParameters, compare_solutions
 from fem.iga_fem_comparison.xdmf_solution import XDMFSolution
 
 # Recorded end-to-end runs, if this machine has them. They live outside the
-# repository (tens of MB per file), so their tests are confirmation only.
-_RECORDED_RUNS = Path(
-    os.environ.get(
-        "FORGE_SIM_RECORDED_RUNS",
-        Path.home() / "Schindler/forge-sim_paper/End-to-end-verification/suzanne",
-    )
-)
+# repository (tens of MB per file), so their tests are confirmation only. An unset
+# or empty `FORGE_SIM_RECORDED_RUNS` means there are none.
+_RECORDED_RUNS_VALUE = os.environ.get("FORGE_SIM_RECORDED_RUNS", "")
+_RECORDED_RUNS = Path(_RECORDED_RUNS_VALUE)
 _RECORDED_IGA = _RECORDED_RUNS / "iga_heat_simulation" / "iga_heat.xdmf"
 _RECORDED_FEM = _RECORDED_RUNS / "fem_heat_simulation" / "fem_heat_gt.xdmf"
-_HAVE_RECORDED = _RECORDED_IGA.exists() and _RECORDED_FEM.exists()
-_SKIP_REASON = f"No recorded runs at {_RECORDED_RUNS} (set FORGE_SIM_RECORDED_RUNS)."
+_HAVE_RECORDED = (
+    _RECORDED_RUNS_VALUE != "" and _RECORDED_IGA.exists() and _RECORDED_FEM.exists()
+)
+_SKIP_REASON = (
+    f"No recorded runs at {_RECORDED_RUNS} (set FORGE_SIM_RECORDED_RUNS)."
+    if _RECORDED_RUNS_VALUE
+    else "FORGE_SIM_RECORDED_RUNS is not set."
+)
 
 
 class TestFormatCompatibility(unittest.TestCase):

@@ -22,16 +22,16 @@ from fem.shells.shell_element import ShellElement
 # Recorded end-to-end modal runs, if this machine has them. They live outside the
 # repository, so the tests against them skip by default: the explicit layout
 # assertions above are the guard, these are confirmation. Same convention (and
-# environment variable) as `test_format_compatibility.py`.
-_RECORDED_RUNS = Path(
-    os.environ.get(
-        "FORGE_SIM_RECORDED_RUNS",
-        Path.home() / "Schindler/forge-sim_paper/End-to-end-verification/suzanne",
-    )
-)
+# environment variable) as `test_format_compatibility.py`: an unset or empty
+# `FORGE_SIM_RECORDED_RUNS` means there are none.
+_RECORDED_RUNS_VALUE = os.environ.get("FORGE_SIM_RECORDED_RUNS", "")
+_RECORDED_RUNS = Path(_RECORDED_RUNS_VALUE)
 _RECORDED_MODAL = _RECORDED_RUNS / "fem_modal_simulation" / "eigenmodes.xdmf"
+_HAVE_RECORDED = _RECORDED_RUNS_VALUE != "" and _RECORDED_MODAL.exists()
 _SKIP_REASON = (
     f"No recorded modal run at {_RECORDED_MODAL} (set FORGE_SIM_RECORDED_RUNS)."
+    if _RECORDED_RUNS_VALUE
+    else "FORGE_SIM_RECORDED_RUNS is not set."
 )
 
 
@@ -251,7 +251,7 @@ class TestEigenmodeExport(unittest.TestCase):
         )
         self.assertFalse((self.folder / "eigenmodes.xdmf").exists())
 
-    @unittest.skipUnless(_RECORDED_MODAL.exists(), _SKIP_REASON)
+    @unittest.skipUnless(_HAVE_RECORDED, _SKIP_REASON)
     def test_recorded_archive_has_the_same_layout(self) -> None:
         """
         Confirmation against a file this code did not write. A writer change

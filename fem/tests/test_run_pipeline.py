@@ -1,7 +1,9 @@
 import dataclasses
+import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 # Imported for its module-level side effect: `_fem_fixtures` puts the
 # repository root on `sys.path`, so `fem` and `forge_sim` resolve.
@@ -21,7 +23,8 @@ from forge_sim.scripts.end_to_end.heat.thermal_sim_config import ThermalSimConfi
 from forge_sim.scripts.end_to_end.modal.modal_sim_config import ModalSimConfig
 from main_scripts.pipeline.stage import Stage
 from main_scripts.pipeline.stage_commands import StageCommands
-from main_scripts.run_pipeline import RunPipelineParameters
+from main_scripts.run_pipeline import RunPipelineParameters, main
+from main_scripts.scenes.e2e_scene import E2EScene
 
 
 class TestPipelineForwarding(unittest.TestCase):
@@ -52,6 +55,22 @@ class TestPipelineForwarding(unittest.TestCase):
     FIXTURE_NUM_MODES: int = 7
     """Mode count, diverged from the 20 both the driver and the configuration
     default to."""
+
+    RECONSTRUCT_MODULE: str = (
+        "forge_sim.scripts.end_to_end.reconstruction.reconstruct_surface"
+    )
+    """The module the `reconstruct` stage runs, which `run_pipeline` skips when a
+    pre-built spline is in use."""
+
+    DEDICATED_DRIVER_SCRIPTS: tuple[str, str] = (
+        "fem_heat_gt_mesh.py",
+        "fem_shell_modal_gt_mesh.py",
+    )
+    """The two stages whose argv is built from their own drivers' flags rather than
+    from `EndToEndConfig` and the forwarded dataset overrides."""
+
+    SUZANNE_SPLINE: str = "data/splines/spline_suzanne.json"
+    """Suzanne's recovered spline, which the repository ships."""
 
     def setUp(self) -> None:
         self._temporary = tempfile.TemporaryDirectory()
@@ -206,6 +225,98 @@ class TestPipelineForwarding(unittest.TestCase):
         self.assertEqual(parameters.field_degree, self.config.modal.fem_field_degree)
         self.assertIn("--use-bbar", arguments)
         self.assertFalse(parameters.use_psri)
+
+    @staticmethod
+    def executed_commands(**parameters: object) -> list[list[str]]:
+        """
+        Every argv `main` hands to `subprocess.run` for a full run, in order.
+
+        The subprocess is replaced by a stub that reports success, so no stage runs
+        and the argv is exactly what each stage would have been started with.
+        """
+        with mock.patch(
+            "main_scripts.run_pipeline.subprocess.run",
+            return_value=mock.Mock(returncode=0),
+        ) as run:
+            main(
+                RunPipelineParameters(
+                    conda_python=Path(sys.executable), use_gpu=False, **parameters
+                )
+            )
+        return [call.args[0] for call in run.call_args_list]
+
+    def stage_configs(self, commands: list[list[str]]) -> list[EndToEndConfig]:
+        """
+        The `EndToEndConfig` each dataset-config stage would parse from its argv.
+
+        Each stage reads the whole configuration from its own command line, so what a
+        stage simulates is what this parse returns, whatever `main` held itself. The
+        two DOLFINx ground-truth drivers take their own flags and are left out.
+        """
+        configs = []
+        for argv in commands:
+            if argv[1].endswith(self.DEDICATED_DRIVER_SCRIPTS):
+                continue
+            arguments = argv[3:] if argv[1] == "-m" else argv[2:]
+            configs.append(tyro.cli(EndToEndConfig, args=arguments))
+        return configs
+
+    def test_a_scene_without_a_spline_reconstructs_instead_of_using_suzannes(
+        self,
+    ) -> None:
+        """
+        `--scene BUNNY` must neither skip reconstruction nor hand any stage Suzanne's
+        spline.
+
+        The config default is Suzanne's spline, and the launcher only replaced it when
+        `--prebuilt-spline-path` was given, so a bunny run kept it: reconstruction was
+        skipped and every stage simulated Suzanne's surface against the bunny's ground
+        truth, with nothing to show for it in the outputs but plausible numbers. The
+        absence of a spline has to reach each stage's own configuration as an explicit
+        `None`, since a stage that is not told falls back to the same default.
+        """
+        commands = self.executed_commands(scene=E2EScene.BUNNY)
+
+        self.assertTrue(any(self.RECONSTRUCT_MODULE in argv for argv in commands))
+        configs = self.stage_configs(commands)
+        self.assertEqual(len(configs), len(Stage) - 2)
+        for config in configs:
+            self.assertIsNone(config.prebuilt_spline_path)
+
+    def test_the_suzanne_scene_forwards_its_own_spline_to_every_stage(self) -> None:
+        """
+        `--scene SUZANNE` skips reconstruction and names Suzanne's spline to every
+        stage explicitly, rather than leaving each to agree by default.
+        """
+        commands = self.executed_commands(scene=E2EScene.SUZANNE)
+
+        self.assertFalse(any(self.RECONSTRUCT_MODULE in argv for argv in commands))
+        forwarding = [
+            argv
+            for argv in commands
+            if not argv[1].endswith(self.DEDICATED_DRIVER_SCRIPTS)
+        ]
+        self.assertEqual(len(forwarding), len(Stage) - 3)
+        for argv in forwarding:
+            self.assertIn("--prebuilt-spline-path", argv)
+            self.assertEqual(
+                argv[argv.index("--prebuilt-spline-path") + 1], self.SUZANNE_SPLINE
+            )
+
+    def test_an_explicit_spline_outranks_the_scenes_own(self) -> None:
+        """
+        `--prebuilt-spline-path` wins over what `--scene` registers, in the run's own
+        skip decision and in every stage's configuration.
+        """
+        explicit = Path("data/splines/spline_sphere_16.json")
+
+        commands = self.executed_commands(
+            scene=E2EScene.BUNNY, prebuilt_spline_path=explicit
+        )
+
+        self.assertFalse(any(self.RECONSTRUCT_MODULE in argv for argv in commands))
+        for config in self.stage_configs(commands):
+            self.assertEqual(config.prebuilt_spline_path, explicit)
 
 
 class TestRunPipelineParametersStageOrder(unittest.TestCase):

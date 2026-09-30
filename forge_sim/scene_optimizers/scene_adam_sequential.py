@@ -92,7 +92,9 @@ class SceneAdamSequential(SceneAdam):
         total_reg_loss = mi.TensorXf(0.0)
 
         for param_config in param_optimization_configs:
-            for batch_indices in self.iteration_batch_indices(sensor_count):
+            for batch_indices in self._batch_maker.iteration_batch_indices(
+                sensor_count
+            ):
 
                 batch_image_loss, batch_reg_loss = self._objective_function(
                     scene=scene,

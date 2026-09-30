@@ -5,7 +5,6 @@ Estimates depth of eval and train images of the provided scene using MoGe-2
 import json
 import os
 import shutil
-import sys
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -14,16 +13,9 @@ import numpy.typing as npt
 import torch
 import torchvision
 import tyro
+from dataclasses_reverse_cli.reverse_cli import ReverseCli
 from moge.model.v2 import MoGeModel
 from PIL import Image
-
-# This is a hack so that the script work with azure sdkv2.
-# The root folder is _not_ added to the python path as it was in sdkv1
-# and thus, local imports of rebel_nerf are not found.
-# Remove when https://github.com/Azure/azure-sdk-for-python/issues/29724 is fixed
-sys.path.append("./")
-
-from dataclasses_reverse_cli.reverse_cli import ReverseCli
 
 
 @dataclass

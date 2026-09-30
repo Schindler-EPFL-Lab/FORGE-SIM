@@ -13,8 +13,8 @@ Two backends implement that need, and the faster one is not always installed:
   substantially faster on the FEM/IGA sparsity patterns assembled here and is
   used whenever it is importable.
 - `cholespy` is a declared core dependency and is used otherwise, so the
-  solvers stay functional on images that ship neither `scikit-sparse` nor the
-  system SuiteSparse (the Azure ML images, for instance).
+  solvers stay functional on machines that ship neither `scikit-sparse` nor the
+  system SuiteSparse.
 
 The two backends order the elimination differently, so they agree only to
 within floating-point rounding rather than bit for bit.

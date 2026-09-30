@@ -91,7 +91,8 @@ python -m forge_sim.scripts.end_to_end.heat.iga_heat_simulation \
 A stage reads the *whole* config, so switching target is not one flag: `--name` alone
 only renames artifacts. `--name`, `--mesh-path`, `--prebuilt-spline-path` and
 `--output-root` move together, which is why `run_pipeline` exposes exactly those four
-and forwards them to every stage it spawns.
+and forwards them to every stage it spawns. Its `--scene` fills the first two and the
+pre-built spline from a registry of the four targets.
 
 **Recovered geometry.** By default the recovered geometry is a pre-optimised spline at
 `data/splines/spline_suzanne.json` (config `prebuilt_spline_path`), and `run_pipeline`
@@ -100,6 +101,14 @@ then skips the `reconstruct` stage. The dataset's RGB views use a solid grey alb
 Set `prebuilt_spline_path = None` to reconstruct from the dataset instead, and
 `solid_albedo = None` with it, so the surface is textured with the checkerboard the
 reconstruction needs.
+
+A recovered spline is valid only for the scene it was recovered from. `run_pipeline
+--scene` therefore uses the spline registered for that scene: Suzanne's for `SUZANNE`,
+none for the other three, which makes the run reconstruct, and it forwards the choice
+(`--prebuilt-spline-path None` where there is none) to every stage so that no stage falls
+back to Suzanne's spline. An explicit `--prebuilt-spline-path` outranks the scene.
+`run_pipeline` does not forward `solid_albedo`, so a reconstructing run there uses the
+grey-albedo views.
 
 ## 4. Stages, and where their outputs land
 

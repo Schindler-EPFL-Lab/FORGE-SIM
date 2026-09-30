@@ -16,19 +16,12 @@ only `tf_cameras` to the reference (`eval_buildnet3d.py:175-178`).
 """
 
 import json
-import sys
 from dataclasses import dataclass
 from pathlib import Path
 
 import mitsuba as mi
 import tyro
 from dataclasses_reverse_cli.reverse_cli import ReverseCli
-
-# This is a hack so that the script work with azure sdkv2.
-# The root folder is _not_ added to the python path as it was in sdkv1
-# and thus, local imports of rebel_nerf are not found.
-# Remove when https://github.com/Azure/azure-sdk-for-python/issues/29724 is fixed
-sys.path.append("./")
 
 from forge_sim import logger
 from forge_sim.meshing.tessellated_spline_surface import TessellatedSplineSurface

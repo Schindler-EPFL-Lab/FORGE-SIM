@@ -24,6 +24,7 @@ run the individual stage modules directly (each is a `tyro` CLI over
 four sub-config modules.
 """
 
+import dataclasses
 import importlib.util
 import subprocess
 import sys
@@ -67,17 +68,21 @@ class RunPipelineParameters(ReverseCli):
     variant, e.g. to avoid the cuda_ad_mono PTX-compilation bug seen on some
     driver/toolkit combinations during inpainting/IGA modal."""
     scene: E2EScene | None = None
-    """One of the four registered targets. Fills `name`, `mesh_path` and the
-    ground-truth temperature rule from `E2ESceneProfile.SCENE_PROFILES`, so a target
-    is named once rather than restated as three flags that can disagree. Any of those
-    flags still wins where it is set. None -> the `EndToEndConfig` defaults."""
+    """One of the four registered targets. Fills `name`, `mesh_path`, the pre-built
+    spline and the ground-truth temperature rule from
+    `E2ESceneProfile.SCENE_PROFILES`, so a target is named once rather than restated
+    as several flags that can disagree. Any of those flags still wins where it is set.
+    A target with no registered spline reconstructs it. None -> the `EndToEndConfig`
+    defaults."""
     name: str | None = None
     """Dataset identifier. None -> `scene`'s own name, else the `EndToEndConfig`
     default (Suzanne)."""
     mesh_path: Path | None = None
     """Ground-truth source mesh. None -> the `EndToEndConfig` default."""
     prebuilt_spline_path: Path | None = None
-    """Pre-optimised recovered spline, skipping reconstruction. None -> the default."""
+    """Pre-optimised recovered spline, skipping reconstruction. None -> `scene`'s
+    registered spline (none for a scene that has not one, which reconstructs), else
+    the `EndToEndConfig` default."""
     output_root: Path | None = None
     """Root directory for all stage outputs. None -> the `EndToEndConfig` default."""
     temperature_field_source: ThermalSimConfig.TemperatureFieldSource | None = None
@@ -153,14 +158,23 @@ def main(params: RunPipelineParameters) -> None:
     field_source = params.temperature_field_source
     if field_source is None and profile is not None:
         field_source = profile.temperature_field_source
+    prebuilt_spline_path = params.prebuilt_spline_path
+    if prebuilt_spline_path is None and profile is not None:
+        prebuilt_spline_path = profile.prebuilt_spline_path
 
     overrides = DatasetOverrides(
         name=name,
         mesh_path=mesh_path,
-        prebuilt_spline_path=params.prebuilt_spline_path,
+        prebuilt_spline_path=prebuilt_spline_path,
         output_root=params.output_root,
     )
     flags = overrides.flags
+    # A spline recovered from one scene is not valid for another, so a registered
+    # scene that ships none must reconstruct rather than fall back to the config's
+    # default (Suzanne's spline), in this process and in every stage it spawns.
+    scene_without_spline = profile is not None and prebuilt_spline_path is None
+    if scene_without_spline:
+        flags += ["--prebuilt-spline-path", "None"]
     if field_source is not None:
         flags += ["--thermal.temperature-field-source", field_source.name]
     if params.binary_temperature is not None:
@@ -170,6 +184,8 @@ def main(params: RunPipelineParameters) -> None:
             else "--thermal.no-binary-temperature"
         )
     cfg = overrides.apply(EndToEndConfig())
+    if scene_without_spline:
+        cfg = dataclasses.replace(cfg, prebuilt_spline_path=None)
     commands = StageCommands(
         cfg=cfg,
         conda_python=str(params.resolved_conda_python),
@@ -189,12 +205,15 @@ def main(params: RunPipelineParameters) -> None:
         cfg.prebuilt_spline_path is not None
         and (REPO_ROOT / cfg.prebuilt_spline_path).exists()
     )
+    completed: list[str] = []
+    skipped: list[str] = []
     for stage in params.stages:
         if stage is Stage.RECONSTRUCT and use_prebuilt:
             logger.info(
                 f"===== [run_pipeline] skipping 'reconstruct' (using pre-built spline "
                 f"{cfg.prebuilt_spline_path.name}) ====="
             )
+            skipped.append(stage.value)
             continue
         logger.info(f"===== [run_pipeline] stage '{stage.value}' =====")
         result = subprocess.run(commands[stage], cwd=str(REPO_ROOT))
@@ -202,8 +221,10 @@ def main(params: RunPipelineParameters) -> None:
             raise RuntimeError(
                 f"Stage '{stage.value}' failed (exit {result.returncode}). Aborting."
             )
-    completed = [s.value for s in params.stages]
-    logger.info(f"===== [run_pipeline] completed stages: {completed} =====")
+        completed.append(stage.value)
+    logger.info(
+        f"===== [run_pipeline] completed stages: {completed}, skipped: {skipped} ====="
+    )
 
 
 if __name__ == "__main__":

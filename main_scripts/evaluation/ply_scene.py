@@ -3,7 +3,7 @@ from enum import Enum
 
 class PlyScene(Enum):
     """
-    One of the six PLY reference scenes the Chamfer sweeps evaluate, by identity
+    One of the four PLY reference scenes the Chamfer sweeps evaluate, by identity
     alone.
 
     `value` is the scene's stem under `EvalAllPlyParameters.DATASET_ROOT`
@@ -19,10 +19,6 @@ class PlyScene(Enum):
     """The armadillo mesh."""
     BUNNY = "bunny"
     """The Stanford bunny mesh."""
-    CAR_1 = "car_1"
-    """Car mesh, variant 1."""
-    CAR_24 = "car_24"
-    """Car mesh, variant 24."""
     SPOT = "spot"
     """The spot (cow) mesh."""
     SUZANNE = "suzanne"

@@ -10,7 +10,6 @@ setup in `optimize_suzanne_spline_texture.py`. The original single-PLY +
 the optimizer swap to compare against the old behavior.
 """
 
-import sys
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -18,13 +17,6 @@ from pathlib import Path
 import drjit as dr
 import mitsuba as mi
 import tyro
-
-# This is a hack so that the script work with azure sdkv2.
-# The root folder is _not_ added to the python path as it was in sdkv1
-# and thus, local imports of rebel_nerf are not found.
-# Remove when https://github.com/Azure/azure-sdk-for-python/issues/29724 is fixed
-sys.path.append("./")
-
 from dataclasses_reverse_cli.reverse_cli import ReverseCli
 
 from forge_sim import logger, tracking

@@ -5,21 +5,11 @@ style file that can be consumed by the mesh or spline shape+texture scripts.
 """
 
 import datetime
-import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 
 import mitsuba as mi
 import tyro
-
-from forge_sim.data_processing.silhouette_scene_loader import SilhouetteSceneLoader
-
-# This is a hack so that the script work with azure sdkv2.
-# The root folder is _not_ added to the python path as it was in sdkv1
-# and thus, local imports of rebel_nerf are not found.
-# Remove when https://github.com/Azure/azure-sdk-for-python/issues/29724 is fixed
-sys.path.append("./")
-
 from dataclasses_reverse_cli.reverse_cli import ReverseCli
 
 from forge_sim import logger, tracking
@@ -29,6 +19,7 @@ from forge_sim.data_processing.manual_initialization import (
     save_bounding_bbox_transforms,
 )
 from forge_sim.data_processing.masked_pose_image import MaskedPoseImage
+from forge_sim.data_processing.silhouette_scene_loader import SilhouetteSceneLoader
 from forge_sim.meshing.tessellated_spline_surface import TessellatedSplineSurface
 from forge_sim.plugin_wrappers.diffuse_bsdf import DiffuseBSDF
 from forge_sim.plugin_wrappers.perspective_camera import PerspectiveCamera

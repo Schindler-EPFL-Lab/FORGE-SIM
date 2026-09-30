@@ -4,20 +4,12 @@ Replicates the results shown in Mitsuba 3 tutorial on shape optimization and
 verifies that the `MeshOptimizer` class works as expected.
 """
 
-import sys
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
 
 import mitsuba as mi
 import tyro
-
-# This is a hack so that the script work with azure sdkv2.
-# The root folder is _not_ added to the python path as it was in sdkv1
-# and thus, local imports of rebel_nerf are not found.
-# Remove when https://github.com/Azure/azure-sdk-for-python/issues/29724 is fixed
-sys.path.append("./")
-
 from dataclasses_reverse_cli.reverse_cli import ReverseCli
 
 from forge_sim import logger, tracking
@@ -138,11 +130,11 @@ def initialize_scene(
         "integrator": integrator.mitsuba_dict,
         "emitter": {
             "type": "envmap",
-            "filename": str(script_dir / "../../data/test_scenes/textures/envmap2.exr"),
+            "filename": str(script_dir / "../../data/textures/envmap2.exr"),
         },
         "shape": {
             "type": "ply",
-            "filename": str(script_dir / "../../data/test_scenes/meshes/suzanne.ply"),
+            "filename": str(script_dir / "../../data/meshes/suzanne.ply"),
             "bsdf": DiffuseBSDF().mitsuba_dict,
         },
     }
@@ -171,7 +163,7 @@ def initialize_scene(
     logger.info(f"Rendered target images. Took {time.time() - start_time:.2f} seconds.")
 
     scene_dict["shape"]["filename"] = str(
-        script_dir / "../../data/test_scenes/meshes/ico_10k.ply"
+        script_dir / "../../data/meshes/ico_10k.ply"
     )
     scene_source: "mi.Scene" = mi.load_dict(scene_dict)
 

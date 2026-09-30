@@ -31,7 +31,7 @@ class TestTracking(unittest.TestCase):
     _TRACKING_ENV_VARS = (
         tracking.TRACKING_MODE_VARIABLE,
         tracking.TRACKING_URI_VARIABLE,
-        *tracking.AZURE_ML_JOB_VARIABLES,
+        *tracking.ATTACHED_RUN_VARIABLES,
     )
 
     @staticmethod
@@ -130,13 +130,11 @@ class TestTracking(unittest.TestCase):
         self.assertIsNone(config.tracking_uri)
 
     def test_auto_mode_enabled_by_any_destination_marker(self):
-        """AUTO must enable on a tracking URI alone, on `MLFLOW_RUN_ID` alone (the
-        variable `mlflow.start_run` itself consults), and on `AZUREML_RUN_ID` alone
-        (evidence a job harness is present even though MLflow does not read it)."""
+        """AUTO must enable on a tracking URI alone and on `MLFLOW_RUN_ID` alone (the
+        variable `mlflow.start_run` itself consults)."""
         cases = (
             ("tracking_uri", tracking.TRACKING_URI_VARIABLE, "http://tracking.local"),
             ("mlflow_run_id", "MLFLOW_RUN_ID", "run-123"),
-            ("azureml_run_id", "AZUREML_RUN_ID", "azure-run-456"),
         )
         for label, variable, value in cases:
             with self.subTest(label), self.tracking_environment(**{variable: value}):
@@ -516,8 +514,8 @@ class TestTracking(unittest.TestCase):
 
     def test_run_does_not_select_experiment_when_none_configured(self):
         """Without an explicit `experiment_name`, `run` must not call
-        `mlflow.set_experiment` at all, so the Azure ML routing via
-        `MLFLOW_EXPERIMENT_NAME` is never overridden."""
+        `mlflow.set_experiment` at all, so the routing via `MLFLOW_EXPERIMENT_NAME` is
+        never overridden."""
         tracking.configure(TrackingConfig(mode=TrackingMode.ON))
         with mock.patch.object(mlflow, "set_experiment") as set_experiment:
             with (

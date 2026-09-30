@@ -41,9 +41,8 @@ class EvalAllRealLargeStepsParameters(ReverseCli):
     validation_inputs_root: Path
     """
     Root directory holding the reconstructions to validate. Must contain a
-    `data/` subdirectory with one folder per scene (e.g. downloaded from
-    Azure using `download_dataset`) and a `large-steps/` subdirectory with
-    one folder per scene, holding that scene's reconstruction.
+    `data/` subdirectory with one folder per scene and a `large-steps/`
+    subdirectory with one folder per scene, holding that scene's reconstruction.
     """
     environment_map_path: Path = Path("./data/textures/overcast_soil_2_2k.exr")
     """Environment map used as background during training."""

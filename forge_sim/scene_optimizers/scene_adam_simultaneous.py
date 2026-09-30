@@ -90,7 +90,7 @@ class SceneAdamSimultaneous(SceneAdam):
         total_loss = mi.TensorXf(0.0)
         total_reg_loss = mi.TensorXf(0.0)
 
-        for batch_indices in self.iteration_batch_indices(sensor_count):
+        for batch_indices in self._batch_maker.iteration_batch_indices(sensor_count):
             batch_image_loss = mi.TensorXf(0.0)
             batch_reg_loss = mi.TensorXf(0.0)
 

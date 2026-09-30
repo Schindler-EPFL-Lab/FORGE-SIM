@@ -42,7 +42,7 @@ class Sam3ThermoScenesParams(ReverseCli):
     scene_dir: Path
     """Input scene folder (must contain transforms.json and images/)"""
     sam3_checkpoint_dir: Path
-    """Folder containing sam3.pt (e.g. mounted AzureML data asset)"""
+    """Folder containing sam3.pt"""
     text_prompt: Prompts | str
     """Prompt for SAM3 open-vocabulary segmentation"""
     confidence_threshold: float = 0.5

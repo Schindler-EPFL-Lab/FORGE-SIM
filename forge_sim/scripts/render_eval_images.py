@@ -3,25 +3,16 @@ This script assumes that shape optimization has already been performed and
 takes in an optimized spline. It renders the optimized spline from different eval views
 """
 
-import sys
 from dataclasses import dataclass
 from pathlib import Path
 
 import mitsuba as mi
 import tyro
-
-from forge_sim.data_processing.vggt_pose_scene_loader import VGGTPoseSceneLoader
-
-# This is a hack so that the script work with azure sdkv2.
-# The root folder is _not_ added to the python path as it was in sdkv1
-# and thus, local imports of rebel_nerf are not found.
-# Remove when https://github.com/Azure/azure-sdk-for-python/issues/29724 is fixed
-sys.path.append("./")
-
 from dataclasses_reverse_cli.reverse_cli import ReverseCli
 
 from forge_sim import logger
 from forge_sim.data_processing.pose_scene_loader import PoseSceneLoader
+from forge_sim.data_processing.vggt_pose_scene_loader import VGGTPoseSceneLoader
 from forge_sim.meshing.tessellated_spline_surface import TessellatedSplineSurface
 from forge_sim.plugin_wrappers.sampler import Sampler
 from forge_sim.render.render import Render

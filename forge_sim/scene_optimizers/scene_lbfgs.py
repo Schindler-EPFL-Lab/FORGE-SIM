@@ -48,8 +48,7 @@ class SceneLBFGS(SceneOptimizer):
     By default, it expects to use full gradients, i.e. all images are considered when
     computing the gradient leading to a single update at each iteration (epoch).
     This is memory intensive: in practical experiments about 50 images can be optimized
-    while fitting into a 16 GB memory buffer (GPU memory of an NVIDIA T4 Azure
-    instance).
+    while fitting into a 16 GB memory buffer (the GPU memory of an NVIDIA T4).
 
     Furthermore, if there are many input images it is likely that they will overlap
     significantly, meaning that most images do not contribute significantly to the

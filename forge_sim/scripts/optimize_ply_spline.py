@@ -3,7 +3,6 @@ Example script for optimizing an arbitrary ply shape as a multi-patch B-spline s
 Verifies the implementation of the `SplineOptimizer` class.
 """
 
-import sys
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -11,13 +10,6 @@ from pathlib import Path
 import mitsuba as mi
 import tyro
 from dataclasses_reverse_cli.reverse_cli import ReverseCli
-
-# This is a hack so that the script work with azure sdkv2.
-# The root folder is _not_ added to the python path as it was in sdkv1
-# and thus, local imports of rebel_nerf are not found.
-# Remove when https://github.com/Azure/azure-sdk-for-python/issues/29724 is fixed
-sys.path.append("./")
-
 
 from forge_sim import logger, tracking
 from forge_sim.data_processing.masked_pose_image import MaskedPoseImage

@@ -4,7 +4,6 @@ Segments foreground and background masks of a scene based on depths and objects 
 
 import json
 import shutil
-import sys
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -12,13 +11,6 @@ import cv2
 import numpy as np
 import numpy.typing as npt
 import tyro
-
-# This is a hack so that the script work with azure sdkv2.
-# The root folder is _not_ added to the python path as it was in sdkv1
-# and thus, local imports of rebel_nerf are not found.
-# Remove when https://github.com/Azure/azure-sdk-for-python/issues/29724 is fixed
-sys.path.append("./")
-
 from dataclasses_reverse_cli.reverse_cli import ReverseCli
 
 from forge_sim.scripts.segmentation.extract_foreground_and_background import (  # noqa: E501

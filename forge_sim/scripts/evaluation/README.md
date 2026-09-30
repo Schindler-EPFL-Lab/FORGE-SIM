@@ -86,13 +86,13 @@ The script calculates Chamfer distance between the optimized spline and the orig
 1. Create a folder where to store data required for evaluation, let's say it's EVAL_ROOT. Every driver below takes it as `--validation-inputs-root`.
 1. Download the "Baseline-Large-Steps" folder and place it in the EVAL_ROOT with name "large-steps"
 2. Download the "BuildNet3DCorrectedMeshes" folder and place it in the EVAL_ROOT with name "BuildNet3DCorrectedMeshes"
-3. Download scenes from Azure using `download_dataset` command from azure-ml-utils. The scenes must be located in the EVAL_ROOT/data. 
+3. Place the scenes in EVAL_ROOT/data, one folder per scene.
 4. Run the scripts:
 
     ```bash
     # evaluation on PLY meshes
     python3 main_scripts/evaluation/eval_all_ply_large_steps.py \
-        --scenes-names ARMADILLO BUNNY CAR_1 CAR_24 SPOT SUZANNE
+        --scenes-names ARMADILLO BUNNY SPOT SUZANNE
     
     # evaluation on buildnet3d scenes
     python3 main_scripts/evaluation/eval_all_buildnet3d_large_steps.py \

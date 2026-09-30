@@ -12,7 +12,7 @@ Its main capabilities include:
 - Implements isogeometric analysis (IGA) tools for simulation tasks with the optimized spline surfaces, covering both transient heat transport and Reissner-Mindlin shell modal analysis
 - Ships an independent DOLFINx finite-element implementation of the same two problems, so every IGA result can be cross-validated against a discretisation that shares no solver code with it
 - Facilitates data processing for both synthetic and real datasets, including compatibility with nerfstudio scenes.
-- Supplies scripts for data preprocessing, optimization, simulation, and Azure job management.
+- Supplies scripts for data preprocessing, optimization and simulation.
 
 ## Installation
 
@@ -72,7 +72,7 @@ and the two agree to about 2e-12, so results are unaffected.
   python3 forge_sim/scripts/optimize_thermoscenes_spline_manual_initial_pose.py --scene-path dataset-path --environment-map-path data/textures/checkerboard_lighter.exr --bbox-transforms-path bbox-path --use-gpu --shape-params.batch-size 200 --shape-params.learning-rate-start 0.5 --shape-params.learning-rate-end 1
   ```
 
-Run every script from the repository root: the package writes `outputs/forge_sim.log` relative to the working directory on import, and the scripts resolve their local imports the same way.
+Run every script from the repository root: the package writes `outputs/forge_sim.log` relative to the working directory on import.
 
 These scripts can be run locally on the CPU, but the default setting are tuned for GPU execution, so adjusting the parameters is necessary.
 Reducing the number of samples per pixel to 4-9 can yield reasonable execution time without compromising the optimization procedure.
@@ -151,8 +151,6 @@ forge-sim/
 │       ├── end_to_end/                     # The synthetic end-to-end validation, venv half
 ├── fem/                    # Independent DOLFINx FEM implementations of the same problems, for cross-validation
 ├── main_scripts/           # Drivers that span both Python environments and sweep the entry points across scenes
-├── azure_scripts/          # Scripts to launch Azure jobs (execute code from forge_sim/scripts)
-├── build_context/          # Docker build context for the Azure ML image
 ├── tests/                  # Unit tests
 ├── data/                   # Meshes, splines, textures and bounding-box transforms
 └── docs/                   # Design and paper notes
@@ -350,17 +348,11 @@ See [`fem/README.md`](./fem/README.md) for the environment, the layout and the e
 
 ### Scripts
 
-There are two flavors of scripts: Azure scripts and "training" scripts.
-Since this library does not really train any neural networks, and sometimes the scripts do not even perform optimization, they will be referred to as simply scripts.
+This library does not train any neural networks, and some of its scripts do not even perform optimization, so they are referred to simply as scripts.
 
 Scripts are used to perform shape optimization, preprocess data, visualize data, apply initial conditions to the optimized shape, and carry out IGA simulation.
 They are the consumer of all functionality described above.
 Since this library supports handling both meshes and splines, there are distinct scripts for carrying out shape optimization based on triangle meshes and composite splines.
-These scripts can be executed locally or on Azure.
-
-These scripts can also be executed on Azure using the Azure scripts.
-Azure scripts are formally not part of the library and are thus situated outside, at the same level as unit tests.
-Each Azure script should have the same name as the script that it launches.
 
 Every one of these scripts is generic: it handles one scene at a time, takes its paths from the caller, and hardcodes no dataset.
 The list of scenes lives one level up, in `main_scripts/`, which sweeps the entry points across them and is the only place a single command may span both the uv and the conda environment.
@@ -379,7 +371,6 @@ The baseline ThermoScenes datasets are not yet ready for optimization - the obje
 We use [Segment Anything Model 3 (SAM 3)](https://github.com/facebookresearch/sam3) to generate precise masks using textual prompts.
 
 This is done in the [`mask_with_sam3.py`](./forge_sim/scripts/segmentation/mask_with_sam3.py) script.
-At the time of writing, this part is expected to be done locally and there is no Azure script.
 
 ```bash
 python ./forge_sim/scripts/segmentation/mask_with_sam3.py --scene-dir dataset-path --sam3-checkpoint-dir model/sam3/ --text-prompt PROMPT
@@ -444,8 +435,7 @@ Spline-based optimization returns a .json file that is a [jsonpickle](https://js
 The tessellated spline surface typically contains a compact representation and a mesh representation can be obtained from it.
 
 The optimized mesh/spline is then provided as an input to inpainting script.
-It can either be stored as a data asset on Azure or put into the [optimized_scenes](optimized_scenes) folder.
-The latter is a good solution for validating scripts and debugging purposes while the former is a more long term solution.
+It can be put into the [optimized_scenes](optimized_scenes) folder, which is a good solution for validating scripts and for debugging.
 
 ### Inpainting
 

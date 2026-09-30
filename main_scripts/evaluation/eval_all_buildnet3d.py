@@ -49,8 +49,7 @@ class EvalAllBuildNet3DParameters(ReverseCli):
     validation_inputs_root: Path
     """
     Root directory holding the reconstructions to validate. Must contain a
-    `data/` subdirectory with one folder per scene (e.g. downloaded from
-    Azure using `download_dataset`) and its own
+    `data/` subdirectory with one folder per scene and its own
     `BuildNet3DCorrectedMeshes/` subdirectory of ground-truth meshes, and a
     `splines/` subdirectory with one folder per scene, holding that scene's
     spline reconstructions and their cube-face textures.
