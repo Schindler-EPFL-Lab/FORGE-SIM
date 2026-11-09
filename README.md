@@ -1,8 +1,18 @@
 # Forge Sim
 
-Forge Sim is a library for spline-based shape and texture optimization as well as simulation based on Isogeometric
-Analysis (IGA).
-It builds on top of the Mitsuba 3 differentiable renderer and Dr.Jit Automatic Differentiation framework.
+> Forge Sim is a library for spline-based shape and texture optimization as well as simulation based on Isogeometric Analysis (IGA).
+
+First, **shape optimization**:
+
+<img src="images/training_progress.gif" alt="Training progress" width="557">
+
+Then, **simulations** with no pre-processing. E.g. thermal:
+
+<img src="images/buildinga.gif" alt="Building A thermal analysis" height="200"> <img src="images/bunny.gif" alt="Bunny thermal analysis" height="200">
+
+or modal:
+
+<img src="images/buildinga_modal.gif" alt="Building A modal analysis" height="200"> <img src="images/bunny_modal.gif" alt="Bunny modal analysis" height="200">
 
 Its main capabilities include:
 
